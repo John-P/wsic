@@ -1,5 +1,6 @@
 """Console script for wsic."""
 import sys
+
 import click
 
 

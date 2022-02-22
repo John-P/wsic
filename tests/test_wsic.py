@@ -3,11 +3,9 @@
 """Tests for `wsic` package."""
 
 import pytest
-
 from click.testing import CliRunner
 
-from wsic import wsic
-from wsic import cli
+from wsic import cli, wsic
 
 
 @pytest.fixture
