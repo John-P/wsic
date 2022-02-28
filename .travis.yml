@@ -1,28 +1,27 @@
-# Config file for automatic testing at travis-ci.com
-
 language: python
 python:
-  - 3.8
-  - 3.7
-  - 3.6
-
-# Command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
+- 3.9
+- 3.8
+- 3.7
 install: pip install -U tox-travis
-
-# Command to run tests, e.g. python setup.py test
 script: tox
-
-# Assuming you have installed the travis-ci CLI tool, after you
-# create the Github repo and add it to Travis, run the
-# following command to finish PyPI deployment setup:
-# $ travis encrypt --add deploy.password
 deploy:
-  provider: pypi
-  distributions: sdist bdist_wheel
-  user: john_p
-  password:
-    secure: PLEASE_REPLACE_ME
-  on:
-    tags: true
-    repo: john-p/wsic
-    python: 3.8
+  - provider: pypi
+    server: https://test.pypi.org/legacy/
+    distributions: sdist bdist_wheel
+    user: __token__
+    password:
+      secure: NoQ7PcqB0VDF9yycRHaBGIZoOfDWXDpMVEM+M2z7zVfKxQZIaDYMZxGJ05D5fTTVw7ZYldDWKg+VX4p0RedKuVadESdubVZzLiqzuVkHH7pgX8pIsRjM2GkGPZ6tQxzCczYUTBcr8bqQ7wHy6Xu1LG1oEUAdLfCH/9gQZoAlmIEgxQN62RdZub5cRLh+T7FnlXb1GwLVjzbub0O7CVNTSkoh+F7OOtzvxicVf007i30CTtTs3ypj59OEkKQB+0Zv8wbvInAW2s9NPt2OXhXLKQ7Ltoxe+/HhBg8urfcCFhezOUIywe48LTm9j0S4K/OjgieunBLkopx2yCqYW7yO/TwjC4NLkNIXKnmuyW1TS7QCHqlFDLILitJxaBhNH8IX0ZjNCi5W1zRn6p5fdDu8o5nGq0MLYM9jm37FYydioRN3lSlqukYoOFPJL/y/xgynvigfi1jvkLczjnaNovT0+hL075qFx6Gs4jUry10/P+SnrrS9r+EcdiCcsCs8zsEW1yiOD1Rvnu8eN/Tj1QNGGqCEOXYCjqVnG/sh1BJbAvGhVQV8OHQMjzTZzRJw+SD38uqvApFRzcvXu5jvyAWd1n0t9LHxeYx8Ko7pnc5VLFl2Irp3SrHKxeCc2El7Rn/SSsbQVE9Ja9WF6DSywxsSrO7X09sxzFxlz4udMJfm6Ts=
+    on:
+      branch: pre-release
+      repo: John-P/wsic
+      python: 3.9
+  - provider: pypi
+    distributions: sdist bdist_wheel
+    user: __token__
+    password:
+      secure: RVmFVDi6r4btduMXcHGrYH15RwCC0tqnTqIb60SOxcdTfPzLq61E/QcvFvh7jDSve+30DnLGlBm3eOYgXIN/NzpIeyjP3V8hI52BiddptdvWPEaAKSirTB+Sn4W2goXCQtX22mrwTS30z5pXHbkB0gL+p9vCJfhn/7dHkiHxsKyv5cl2B9lxTm7joVrhqkoDz8RLfp6Y3pOa7M+CP8yV1a7L4gCUYoqo2DYhm5UM+TyWc8mOvZhjLIHKRDtRL4glikDApdPk3014bx/sVh+f3Srip6iJlJ8eI48PXi1D2WcpUCRKXMFPgyblyvlSZ5NuTihHEkqJ0oOj3qyK+zrrWTEYRh2aPTTneLrISW6YG/w535hCrF4R0DO9ttIfAgpDtLkQN3aag3umSSWbjvNtjQ4ACPfFJwEn3JMFqNxwn+LyJRFcgYGcvpGdcj54GdEF9aIAKECtgqQGnrzPZON5HaVXipG6FivOKP0a7tMD5uDFjbK12FcGiEbrcEJwOzjv669EaMxAF/sLZ3PIRFZzmIir2lypeHmgn2xVOOKPXWqTp3Jf2fBpVrYrEEiYxxL5OrdADiMH/UQzz7Q698xoBczKntJ9/0WS3Z2dNYcR9yFmhZijKjznHx2kiSGk8ZIIFMUcTelcwm4KOXCKzqCL2Ke4LvI3bXwjBiyIOr5x9J0=
+    on:
+      tags: true
+      repo: John-P/wsic
+      python: 3.9
