@@ -3,7 +3,27 @@ wsic
 ====
 
 
-Whole Slide Image (WSI) conversion for brightfield histology images
+Whole Slide Image (WSI) conversion for brightfield histology images.
+
+Provides a command line interface (CLI) for easy convertion between formats::
+
+    Usage: wsic convert [OPTIONS]
+
+      Convert a WSI.
+
+    Options:
+      -i, --in-path PATH              Path to WSI to read from.
+      -o, --out-path PATH             The path to output to.
+      -t, --tile-size <INTEGER INTEGER>...
+                                      The size of the tiles to write.
+      -r, --read-tile-size <INTEGER INTEGER>...
+                                      The size of the tiles to read.
+      -w, --workers INTEGER           The number of workers to use.
+      --compression [deflate|webp|jpeg|jpeg2000]
+                                      The compression to use.
+      --compression-level INTEGER     The compression level to use.
+      --overwrite / --no-overwrite    Whether to overwrite the output file.
+      -h, --help                      Show this message and exit.
 
 
 
