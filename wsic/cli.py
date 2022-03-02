@@ -44,14 +44,61 @@ def main(ctx, debug):
     type=click.Tuple([int, int]),
     default=(256, 256),
 )
-def convert(in_path: str, out_path: str, tile_size: Tuple[int, int]):
+@click.option(
+    "-r",
+    "--read-tile-size",
+    help="The size of the tiles to read.",
+    type=click.Tuple([int, int]),
+    default=(512, 512),
+)
+@click.option(
+    "-w",
+    "--workers",
+    help="The number of workers to use.",
+    type=int,
+    default=3,
+)
+@click.option(
+    "--compression",
+    help="The compression to use.",
+    type=click.Choice(["deflate", "webp", "jpeg", "jpeg2000"]),
+    default="deflate",
+)
+@click.option(
+    "--compression-level",
+    help="The compression level to use.",
+    type=int,
+    default=0,
+)
+@click.option(
+    "--overwrite/--no-overwrite",
+    help="Whether to overwrite the output file.",
+    default=False,
+)
+def convert(
+    in_path: str,
+    out_path: str,
+    tile_size: Tuple[int, int],
+    read_tile_size: Tuple[int, int],
+    workers: int,
+    compression: str,
+    compression_level: int,
+    overwrite: bool,
+):
     """Convert a WSI."""
     in_path = Path(in_path)
     out_path = Path(out_path)
     reader = wsic.readers.Reader.from_file(in_path)
     writer_cls = ext2writer[out_path.suffix]
-    writer = writer_cls(out_path, shape=reader.shape, tile_size=tile_size)
-    writer.copy_from_reader(reader)
+    writer = writer_cls(
+        out_path,
+        shape=reader.shape,
+        tile_size=tile_size,
+        compression=compression,
+        compression_level=compression_level,
+        overwrite=overwrite,
+    )
+    writer.copy_from_reader(reader, read_tile_size=read_tile_size, num_workers=workers)
 
 
 if __name__ == "__main__":

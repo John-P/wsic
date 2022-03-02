@@ -305,6 +305,11 @@ class ZarrReaderWriter(Reader, Writer):
 
             compressor = Blosc(clevel=compression_level)
 
+        if compression == "deflate":
+            from imagecodecs.numcodecs import Deflate
+
+            compressor = Deflate(level=compression_level)
+
         if compression == "webp":
             from imagecodecs.numcodecs import Webp
 
