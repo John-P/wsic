@@ -139,9 +139,11 @@ class JP2Writer(Writer):
         self.image = None
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
+        """Write pixel data at index. Not supported for JP2Writer."""
         raise NotImplementedError("JP2 files do not support random access writes.")
 
     def copy_from_reader(self, reader: Reader, verbose: bool = False) -> None:
+        """Copy pixel data from a reader."""
         import glymur
 
         jp2 = glymur.Jp2k(
@@ -192,7 +194,7 @@ class TiledTIFFWriter(Writer):
         self.microns_per_pixel = microns_per_pixel
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
-        """Setting pixels/tiles is not (currently) supported.
+        """Write pixel data at index. Not supported for TIFFWriter.
 
         In theory this is possible but it can be complex. If the new tile
         is larger in bytes, the tile will have to be added to the end of the
@@ -210,6 +212,7 @@ class TiledTIFFWriter(Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
     ) -> None:
+        """Copy pixel data from a reader."""
         import tifffile
 
         with ZarrIntermediate(None, reader.shape, zero_after_read=True) as intermediate:
@@ -366,9 +369,11 @@ class ZarrReaderWriter(Reader, Writer):
         return compressor
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
+        """Write pixel data at index."""
         self.image[index] = value
 
     def __getitem__(self, index: Tuple[int, ...]) -> np.ndarray:
+        """Read pixel data at index."""
         return self.image[index]
 
     def copy_from_reader(
@@ -378,6 +383,7 @@ class ZarrReaderWriter(Reader, Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
     ) -> None:
+        """Copy pixel data from a reader."""
         lossy = self.compression == "jpeg" or (
             self.compression in ["jpeg2000", "webp", "jpegls"]
             and self.compression_level > 0
@@ -482,21 +488,26 @@ class ZarrIntermediate(Reader, Writer):
     def __setitem__(
         self, index: Tuple[Union[int, slice], ...], value: np.ndarray
     ) -> None:
+        """Write pixel data at index."""
         self.zarr[index] = value
 
     def __getitem__(self, index: Tuple[int, ...]) -> np.ndarray:
+        """Read pixel data at index."""
         result = self.zarr[index]
         if self.zero_after_read:
             self.zarr[index] = 0
         return result
 
     def __enter__(self) -> "ZarrIntermediate":
+        """Enter the context manager."""
         return self
 
     def __exit__(self, type, value, traceback) -> None:
+        """Exit the context manager."""
         shutil.rmtree(self.path)
 
     def copy_from_reader(
         self, data: bytes, verbose: bool = False, num_workers: int = 2
     ) -> None:
+        """Copy pixel data from a reader."""
         raise NotImplementedError()

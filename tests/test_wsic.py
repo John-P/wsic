@@ -13,6 +13,7 @@ from wsic import cli, readers, writers
 
 @pytest.fixture()
 def samples_path():
+    """Return the path to the samples."""
     return Path(__file__).parent / "samples"
 
 

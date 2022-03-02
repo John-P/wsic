@@ -25,7 +25,7 @@ class Reader(ABC):
         self.path = Path(path)
 
     def __getitem__(index: Tuple[Union[int, slice], ...]) -> np.ndarray:
-        """Return pixel data at index."""
+        """Get pixel data at index."""
         raise NotImplementedError
 
     @classmethod
@@ -155,14 +155,17 @@ class MultiProcessTileIterator:
             )
 
     def __len__(self) -> int:
+        """Return the number of tiles in the reader."""
         return int(np.prod(self.yield_tile_shape))
 
     def __iter__(self) -> Iterator:
+        """Return an iterator for the reader."""
         self.read_j = 0
         self.read_i = 0
         return self
 
     def __next__(self) -> np.ndarray:
+        """Return the next tile from the reader."""
         # Increment the read ij index
         if self.read_i >= self.read_tiles_shape[1]:
             self.read_i = 0
@@ -275,7 +278,7 @@ class JP2Reader(Reader):
         self.axes = "YXS"
 
     def __getitem__(self, index: tuple) -> np.ndarray:
-        """Return pixel data at index."""
+        """Get pixel data at index."""
         return self.jp2[index]
 
 
@@ -298,7 +301,7 @@ class TIFFReader(Reader):
         self.axes = self.tiff.series[0].axes
 
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
-        """Return pixel data at index."""
+        """Get pixel data at index."""
         return self.array[index]
 
 
@@ -314,6 +317,7 @@ class OpenSlideReader(Reader):
         self.dtype = np.uint8
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
+        """Get pixel data at index."""
         xs: slice = index[1]
         ys: slice = index[0]
         start_x = xs.start or 0
