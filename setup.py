@@ -12,6 +12,10 @@ with open("HISTORY.rst") as history_file:
 
 requirements = [
     "Click>=7.0",
+    "numcodecs",
+    "numpy",
+    "imagecodecs",
+    "zarr",
 ]
 
 test_requirements = [
@@ -30,6 +34,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     description="Whole Slide Image (WSI) conversion for brightfield histology images",
     entry_points={
