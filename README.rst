@@ -31,6 +31,7 @@ Features
 To-Dos
 ------
 
+* Add pyramid generation (for TIFF and zarr)
 * Add support for other formats:
 
   * Write OME-TIFF (via tifffile)
