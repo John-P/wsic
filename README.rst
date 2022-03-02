@@ -10,16 +10,20 @@ Whole Slide Image (WSI) conversion for brightfield histology images
 Features
 --------
 
-* Read image data from
+* Read image data from:
+
   * OpenSlide Formats (e.g. SVS, MRXS, Tiled TIFF)
   * Other Tiled TIFFs (tifffile supported formats)
   * OME-TIFF
   * JP2
   * Zarr
-* Write image data to
-    * Tiled TIFF
-    * JP2
-    * Zarr
+
+* Write image data to:
+
+  * Tiled TIFF
+  * JP2
+  * Zarr
+
 * Custom tile size
 * Compression codecs
 
@@ -28,6 +32,7 @@ To-Dos
 ------
 
 * Add support for other formats:
+
   * Write OME-TIFF (via tifffile)
   * Read/Write OME-NGFF
   * Read/Write WSI DICOM (via wsidicom)
