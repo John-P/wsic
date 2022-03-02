@@ -3,6 +3,11 @@ python:
 - 3.9
 - 3.8
 - 3.7
+# Install dependencies through apt
+before_install:
+  - sudo apt-get -y -qq update
+  - sudo apt-get -y -qq install openslide-tools
+  - sudo apt-get -y -qq install libopenjpeg5 libopenjpeg-dev
 install: pip install -U tox-travis
 script: tox
 deploy:
