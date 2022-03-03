@@ -1,4 +1,5 @@
 language: python
+dist: bionic  # Ubuntu 18.04
 python:
 - "3.10"
 - "3.9"
