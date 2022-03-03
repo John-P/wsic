@@ -7,7 +7,7 @@ glymur>=0.9.4
 imagecodecs>=2021.11.20
 numpy>=1.22.0
 openslide-python>=1.1.2
-pip==19.2.3
+pip==21.1
 pytest==6.2.4
 Sphinx==1.8.5
 tifffile>=2022.2.9
