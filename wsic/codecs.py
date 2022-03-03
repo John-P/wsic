@@ -26,7 +26,7 @@ class QOI(Codec):
 
         if out is not None:
             out = qoi.decode(ensure_ndarray(buf).tobytes())
-            return
+            return out  # noqa: PIE781, R504
         return qoi.decode(buf)
 
 
@@ -52,7 +52,7 @@ def register_codecs() -> None:
 
     # Register wsci codecs
     try:
-        import qoi
+        import qoi  # noqa: F401
 
         numcodecs.register_codec(QOI)
     except ImportError:

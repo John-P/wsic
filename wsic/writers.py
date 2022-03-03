@@ -295,7 +295,6 @@ class ZarrReaderWriter(Reader, Writer):
         compression_level: int,
     ) -> Callable[[bytes], bytes]:
         """Get a codec for the given compression method and compression level."""
-        import numcodecs
         from numcodecs import LZ4, LZMA, Blosc, Zlib, Zstd
 
         compressor = None
@@ -417,7 +416,10 @@ class ZarrReaderWriter(Reader, Writer):
             if verbose:
                 print(f"Writing tile ({j}, {i}) of {tiles_shape}")
                 print(
-                    f"[{j * read_tile_size[1]}:{(j * read_tile_size[1]) + tile.shape[0]},{i * read_tile_size[0]}:{(i * read_tile_size[0]) + tile.shape[1]}]"
+                    f"[{j * read_tile_size[1]}"
+                    f":{(j * read_tile_size[1]) + tile.shape[0]},"
+                    f"{i * read_tile_size[0]}"
+                    f":{(i * read_tile_size[0]) + tile.shape[1]}]"
                     f" of {reader.shape}"
                 )
                 print(f"Tile Shape: {tile.shape}")
@@ -498,13 +500,13 @@ class ZarrIntermediate(Reader, Writer):
         result = self.zarr[index]
         if self.zero_after_read:
             self.zarr[index] = 0
-        return result
+        return result  # noqa: R504
 
     def __enter__(self) -> "ZarrIntermediate":
         """Enter the context manager."""
         return self
 
-    def __exit__(self, type, value, traceback) -> None:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Exit the context manager."""
         shutil.rmtree(self.path)
 
