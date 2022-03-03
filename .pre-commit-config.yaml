@@ -27,7 +27,6 @@ repos:
           flake8-pytest-style, # Check against pytest style guide
           flake8-return, # Check return statements
           flake8-simplify, # Suggestions to simplify code
-          flake8-spellcheck, # Spelling checker
           flake8-sql, # Check SQL statement style
           flake8-use-fstring, # Encourages use of f-strings vs old style
           nitpick, # Check that black, flake8, isort have compaible options
