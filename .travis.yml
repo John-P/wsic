@@ -8,6 +8,7 @@ before_install:
   - sudo apt-get -y -qq update
   - sudo apt-get -y -qq install openslide-tools
   - sudo apt-get -y -qq install libopenjpeg5 libopenjpeg-dev
+  - sudo apt list libopenjpeg5 libopenjpeg-dev
 install: pip install -U tox-travis
 script: tox
 deploy:
