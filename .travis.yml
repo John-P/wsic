@@ -15,6 +15,7 @@ deploy:
   - provider: pypi
     server: https://test.pypi.org/legacy/
     distributions: sdist bdist_wheel
+    skip_existing: true
     user: __token__
     password:
       secure: NoQ7PcqB0VDF9yycRHaBGIZoOfDWXDpMVEM+M2z7zVfKxQZIaDYMZxGJ05D5fTTVw7ZYldDWKg+VX4p0RedKuVadESdubVZzLiqzuVkHH7pgX8pIsRjM2GkGPZ6tQxzCczYUTBcr8bqQ7wHy6Xu1LG1oEUAdLfCH/9gQZoAlmIEgxQN62RdZub5cRLh+T7FnlXb1GwLVjzbub0O7CVNTSkoh+F7OOtzvxicVf007i30CTtTs3ypj59OEkKQB+0Zv8wbvInAW2s9NPt2OXhXLKQ7Ltoxe+/HhBg8urfcCFhezOUIywe48LTm9j0S4K/OjgieunBLkopx2yCqYW7yO/TwjC4NLkNIXKnmuyW1TS7QCHqlFDLILitJxaBhNH8IX0ZjNCi5W1zRn6p5fdDu8o5nGq0MLYM9jm37FYydioRN3lSlqukYoOFPJL/y/xgynvigfi1jvkLczjnaNovT0+hL075qFx6Gs4jUry10/P+SnrrS9r+EcdiCcsCs8zsEW1yiOD1Rvnu8eN/Tj1QNGGqCEOXYCjqVnG/sh1BJbAvGhVQV8OHQMjzTZzRJw+SD38uqvApFRzcvXu5jvyAWd1n0t9LHxeYx8Ko7pnc5VLFl2Irp3SrHKxeCc2El7Rn/SSsbQVE9Ja9WF6DSywxsSrO7X09sxzFxlz4udMJfm6Ts=
