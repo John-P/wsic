@@ -9,6 +9,7 @@ from typing import Callable, Iterator, Optional, Tuple, Union
 import numpy as np
 import zarr
 
+from wsic.codecs import register_codecs
 from wsic.readers import MultiProcessTileIterator, Reader
 from wsic.types import PathLike
 
@@ -259,6 +260,7 @@ class ZarrReaderWriter(Reader, Writer):
         self.overwrite = overwrite
         self.compression = compression
         self.compression_level = compression_level
+        register_codecs()
         self.compressor = self.get_codec(compression, compression_level)
         self.verbose = verbose
         if self.path.exists() and not self.path.is_dir():
@@ -293,20 +295,30 @@ class ZarrReaderWriter(Reader, Writer):
         compression_level: int,
     ) -> Callable[[bytes], bytes]:
         """Get a codec for the given compression method and compression level."""
+        import numcodecs
+        from numcodecs import LZ4, LZMA, Blosc, Zlib, Zstd
 
         compressor = None
 
         if compression == "blosc-zstd":
-            from numcodecs import Blosc
-
             compressor = Blosc(
                 cname="zstd", clevel=compression_level, shuffle=Blosc.BITSHUFFLE
             )
 
         if compression == "blosc":
-            from numcodecs import Blosc
-
             compressor = Blosc(clevel=compression_level)
+
+        if compression == "zstd":
+            compressor = Zstd(level=compression_level)
+
+        if compression == "lz4":
+            compressor = LZ4()
+
+        if compression == "lzma":
+            compressor = LZMA()
+
+        if compression == "zlib":
+            compressor = Zlib(level=compression_level)
 
         if compression == "deflate":
             from imagecodecs.numcodecs import Deflate
@@ -347,16 +359,6 @@ class ZarrReaderWriter(Reader, Writer):
             from imagecodecs.numcodecs import Zfp
 
             compressor = Zfp(level=compression_level)
-
-        if compression == "zstd":
-            from numcodecs import Zstd
-
-            compressor = Zstd(level=compression_level)
-
-        if compression == "lz4":
-            from numcodecs import LZ4
-
-            compressor = LZ4()
 
         if compression == "qoi":
             from wsic.codecs import QOI
