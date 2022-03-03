@@ -59,12 +59,14 @@ def main(ctx, debug):
     default=3,
 )
 @click.option(
+    "-c",
     "--compression",
     help="The compression to use.",
     type=click.Choice(["deflate", "webp", "jpeg", "jpeg2000"]),
     default="deflate",
 )
 @click.option(
+    "-l",
     "--compression-level",
     help="The compression level to use.",
     type=int,
