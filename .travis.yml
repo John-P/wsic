@@ -7,8 +7,8 @@ python:
 before_install:
   - sudo apt-get -y -qq update
   - sudo apt-get -y -qq install openslide-tools
-  - sudo apt-get -y -qq install libopenjpeg5 libopenjpeg-dev
-  - sudo apt list libopenjpeg5 libopenjpeg-dev
+  - sudo apt-get -y -qq install libopenjp2-7 libopenjp2-tools
+  - sudo apt list libopenjp2-7 libopenjp2-tools
 install: pip install -U tox-travis
 script: tox
 deploy:
