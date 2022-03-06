@@ -4,7 +4,7 @@ import uuid
 from abc import ABC, abstractmethod
 from math import ceil
 from pathlib import Path
-from typing import Callable, Iterator, Optional, Tuple, Union
+from typing import Callable, Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -113,6 +113,36 @@ class Writer(ABC):
         if self.path.exists() and not self.overwrite:
             raise FileExistsError(f"{self.path} exists and overwrite is False.")
 
+    @staticmethod
+    def progress_bar(iterable: Iterable, **kwargs) -> Iterator:
+        """Wrap a tile reader iterable in a progress bar.
+
+        Used to display progress when copying from a reader.
+
+        Some of the tqdm defaults are overridden but can be changed by
+        passing values as kwargs. Parameters which differ to the tqdm
+        defaults here are:
+        - `smoothing = 0`
+        - `colour = "magenta"`
+
+        Args:
+            iterable (Iterable):
+                The iterable to wrap.
+            **kwargs (dict):
+                Extra kwargs for tqdm. Overrides defaults.
+        """
+        tqdm_kwargs = {
+            "colour": "magenta",
+            "smoothing": 0,
+        }
+        tqdm_kwargs.update(kwargs)
+        try:
+            from tqdm.auto import tqdm
+
+            return tqdm(iterable, **tqdm_kwargs)
+        except ImportError:
+            return iterable
+
 
 class JP2Writer(Writer):
     """Tile-wise JP2 writer using glymur.
@@ -143,20 +173,25 @@ class JP2Writer(Writer):
         """Write pixel data at index. Not supported for JP2Writer."""
         raise NotImplementedError("JP2 files do not support random access writes.")
 
-    def copy_from_reader(self, reader: Reader, verbose: bool = False) -> None:
+    def copy_from_reader(
+        self,
+        reader: Reader,
+        num_workers: int = 2,
+        read_tile_size: Optional[Tuple[int, int]] = None,
+        verbose: bool = False,
+    ) -> None:
         """Copy pixel data from a reader."""
         import glymur
 
         jp2 = glymur.Jp2k(
             self.path, shape=reader.shape, tilesize=self.tile_size, verbose=verbose
         )
-        reader_tile_iterator = self.reader_tile_iterator(reader)
-        try:
-            from tqdm.auto import tqdm
-
-            reader_tile_iterator = tqdm(reader_tile_iterator, smoothing=0)
-        except ImportError:
-            pass
+        reader_tile_iterator = self.reader_tile_iterator(
+            reader=reader,
+            num_workers=num_workers,
+            read_tile_size=read_tile_size or self.tile_size,
+        )
+        reader_tile_iterator = self.progress_bar(reader_tile_iterator)
         for tile_writer in jp2.get_tilewriters():
             tile_writer[:] = next(reader_tile_iterator)
 
@@ -223,12 +258,7 @@ class TiledTIFFWriter(Writer):
                 intermediate=intermediate,
                 read_tile_size=read_tile_size or self.tile_size,
             )
-            try:
-                from tqdm.auto import tqdm
-
-                reader_tile_iterator = tqdm(reader_tile_iterator, smoothing=0)
-            except ImportError:
-                pass
+            reader_tile_iterator = self.progress_bar(reader_tile_iterator)
             tifffile.imwrite(
                 self.path,
                 reader_tile_iterator,
@@ -401,17 +431,12 @@ class ZarrReaderWriter(Reader, Writer):
             yield_tile_size=read_tile_size,
             num_workers=num_workers,
         )
+        reader_tile_iterator = self.progress_bar(reader_tile_iterator)
         tiles_shape = (
             ceil(reader.shape[0] / read_tile_size[0]),
             ceil(reader.shape[1] / read_tile_size[1]),
         )
         tiles_index = np.ndindex(tiles_shape)
-        try:
-            from tqdm.auto import tqdm
-
-            reader_tile_iterator = tqdm(reader_tile_iterator, smoothing=0)
-        except ImportError:
-            pass
         for (j, i), tile in zip(tiles_index, reader_tile_iterator):
             if verbose:
                 print(f"Writing tile ({j}, {i}) of {tiles_shape}")
