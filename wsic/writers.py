@@ -331,7 +331,7 @@ class ZarrReaderWriter(Reader, Writer):
             "lz4": LZ4,
             "lzma": LZMA,
             "blosc": Blosc,
-            "blosc-zstd": partial(Blosc, cname="zstd", shuddle=Blosc.BITSHUFFLE),
+            "blosc-zstd": partial(Blosc, cname="zstd", shuffle=Blosc.BITSHUFFLE),
             "zlib": Zlib,
             "zstd": Zstd,
         }
