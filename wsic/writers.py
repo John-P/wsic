@@ -302,7 +302,6 @@ class ZarrReaderWriter(Reader, Writer):
             self.image = zarr.open(
                 self.path,
                 mode="r+",
-                dimension_separator="/",
             )
             self.shape = self.image.shape
             self.dtype = self.image.dtype
@@ -310,13 +309,12 @@ class ZarrReaderWriter(Reader, Writer):
             self.dtype = dtype
             self.shape = shape
             self.image = zarr.open(
-                self.path,
+                zarr.NestedDirectoryStore(self.path),
                 mode="a",
                 shape=self.shape,
                 chunks=self.tile_size,
                 dtype=self.dtype,
                 compressor=self.compressor,
-                dimension_separator="/",
             )
 
     def get_codec(
@@ -503,12 +501,11 @@ class ZarrIntermediate(Reader, Writer):
         self.tile_size = tile_size
         self.path.mkdir(parents=True, exist_ok=True)
         self.zarr = zarr.open(
-            path,
+            store=zarr.NestedDirectoryStore(path),
             mode="a",
             shape=self.shape,
             chunks=self.tile_size,
             dtype=self.dtype,
-            dimension_separator="/",
         )
         self.zero_after_read = zero_after_read
         self.overwrite = overwrite
