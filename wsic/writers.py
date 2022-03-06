@@ -389,13 +389,13 @@ class ZarrReaderWriter(Reader, Writer):
         lossy = self.compression in lossy_codecs or (
             self.compression in optionally_lossy_codecs and self.compression_level > 0
         )
+        read_tile_size = read_tile_size or self.tile_size
         write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
         if lossy and not write_multiple_of_read:
             raise ValueError(
                 "Lossy compression requires that the tile write size is a "
                 "multiple of the read tile size."
             )
-        read_tile_size = read_tile_size or self.tile_size
         # Create a reader tile iterator
         reader_tile_iterator = self.reader_tile_iterator(
             reader,
