@@ -247,6 +247,7 @@ class TiledTIFFWriter(Writer):
         reader: Reader,
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
+        verbose: bool = False,
     ) -> None:
         """Copy pixel data from a reader."""
         import tifffile
