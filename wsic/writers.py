@@ -2,6 +2,7 @@ import shutil
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
+from functools import partial
 from math import ceil
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Optional, Tuple, Union
@@ -326,77 +327,45 @@ class ZarrReaderWriter(Reader, Writer):
         """Get a codec for the given compression method and compression level."""
         from numcodecs import LZ4, LZMA, Blosc, Zlib, Zstd
 
-        compressor = None
+        numcodecs_codecs = {
+            "lz4": LZ4,
+            "lzma": LZMA,
+            "blosc": Blosc,
+            "blosc-zstd": partial(Blosc, cname="zstd", shuddle=Blosc.BITSHUFFLE),
+            "zlib": Zlib,
+            "zstd": Zstd,
+        }
 
-        if compression == "blosc-zstd":
-            compressor = Blosc(
-                cname="zstd", clevel=compression_level, shuffle=Blosc.BITSHUFFLE
-            )
+        try:
+            import imagecodecs
 
-        if compression == "blosc":
-            compressor = Blosc(clevel=compression_level)
+            imagecodecs_codecs = {
+                "deflate": imagecodecs.numcodecs.Deflate,
+                "webp": imagecodecs.numcodecs.Webp,
+                "jpeg": imagecodecs.numcodecs.Jpeg,
+                "jpegls": imagecodecs.numcodecs.Jpegls,
+                "jpeg2000": imagecodecs.numcodecs.Jpeg2k,
+                "jpegxl": imagecodecs.numcodecs.Jpegxl,
+                "png": imagecodecs.numcodecs.Png,
+                "zfp": imagecodecs.numcodecs.Zfp,
+            }
+        except ImportError:
+            if self.verbose:
+                print("imagecodecs not installed")
+            imagecodecs_codecs = {}
 
-        if compression == "zstd":
-            compressor = Zstd(level=compression_level)
+        if compression in numcodecs_codecs:
+            return numcodecs_codecs[compression](clevel=compression_level)
 
-        if compression == "lz4":
-            compressor = LZ4()
-
-        if compression == "lzma":
-            compressor = LZMA()
-
-        if compression == "zlib":
-            compressor = Zlib(level=compression_level)
-
-        if compression == "deflate":
-            from imagecodecs.numcodecs import Deflate
-
-            compressor = Deflate(level=compression_level)
-
-        if compression == "webp":
-            from imagecodecs.numcodecs import Webp
-
-            compressor = Webp(level=compression_level)
-
-        if compression == "jpeg":
-            from imagecodecs.numcodecs import Jpeg
-
-            compressor = Jpeg(level=compression_level)
-
-        if compression == "jpeg2000":
-            from imagecodecs.numcodecs import Jpeg2k
-
-            compressor = Jpeg2k(level=compression_level)
-
-        if compression == "jpegls":
-            from imagecodecs.numcodecs import JpegLs
-
-            compressor = JpegLs(level=compression_level)
-
-        if compression == "jpegxl":
-            from imagecodecs.numcodecs import JpegXl
-
-            compressor = JpegXl(level=compression_level)
-
-        if compression == "png":
-            from imagecodecs.numcodecs import Png
-
-            compressor = Png(level=compression_level)
-
-        if compression == "zfp":
-            from imagecodecs.numcodecs import Zfp
-
-            compressor = Zfp(level=compression_level)
+        if compression in imagecodecs_codecs:
+            return imagecodecs_codecs[compression](level=compression_level)
 
         if compression == "qoi":
             from wsic.codecs import QOI
 
-            compressor = QOI()
+            return QOI()
 
-        if compression and not compressor:
-            raise ValueError(f"Compression {compression} not supported.")
-
-        return compressor
+        raise ValueError(f"Compression {compression} not supported.")
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index."""
@@ -414,16 +383,20 @@ class ZarrReaderWriter(Reader, Writer):
         read_tile_size: Optional[Tuple[int, int]] = None,
     ) -> None:
         """Copy pixel data from a reader."""
-        lossy = self.compression == "jpeg" or (
-            self.compression in ["jpeg2000", "webp", "jpegls"]
-            and self.compression_level > 0
+        # Validate and normalise inputs
+        lossy_codecs = ["jpeg"]
+        optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
+        lossy = self.compression in lossy_codecs or (
+            self.compression in optionally_lossy_codecs and self.compression_level > 0
         )
-        if lossy and np.mod(read_tile_size, self.tile_size).sum() > 0:
+        write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
+        if lossy and not write_multiple_of_read:
             raise ValueError(
-                "Lossy compression requires that the tile size is a "
+                "Lossy compression requires that the tile write size is a "
                 "multiple of the read tile size."
             )
         read_tile_size = read_tile_size or self.tile_size
+        # Create a reader tile iterator
         reader_tile_iterator = self.reader_tile_iterator(
             reader,
             read_tile_size=read_tile_size,
@@ -431,22 +404,13 @@ class ZarrReaderWriter(Reader, Writer):
             num_workers=num_workers,
         )
         reader_tile_iterator = self.progress_bar(reader_tile_iterator)
+        # Write the reader tile iterator to the writer
         tiles_shape = (
             ceil(reader.shape[0] / read_tile_size[0]),
             ceil(reader.shape[1] / read_tile_size[1]),
         )
         tiles_index = np.ndindex(tiles_shape)
         for (j, i), tile in zip(tiles_index, reader_tile_iterator):
-            if verbose:
-                print(f"Writing tile ({j}, {i}) of {tiles_shape}")
-                print(
-                    f"[{j * read_tile_size[1]}"
-                    f":{(j * read_tile_size[1]) + tile.shape[0]},"
-                    f"{i * read_tile_size[0]}"
-                    f":{(i * read_tile_size[0]) + tile.shape[1]}]"
-                    f" of {reader.shape}"
-                )
-                print(f"Tile Shape: {tile.shape}")
             self.image[
                 j * read_tile_size[1] : (j * read_tile_size[1]) + tile.shape[0],
                 i * read_tile_size[0] : (i * read_tile_size[0]) + tile.shape[1],
@@ -534,7 +498,11 @@ class ZarrIntermediate(Reader, Writer):
         shutil.rmtree(self.path)
 
     def copy_from_reader(
-        self, data: bytes, verbose: bool = False, num_workers: int = 2
+        self,
+        reader: Reader,
+        verbose: bool = False,
+        num_workers: int = 2,
+        read_tile_size: Optional[Tuple[int, int]] = None,
     ) -> None:
         """Copy pixel data from a reader."""
         raise NotImplementedError()
