@@ -1,11 +1,12 @@
+import multiprocessing
 import shutil
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial
-from math import ceil
+from math import ceil, floor
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, Optional, Tuple, Union
+from typing import Callable, Iterable, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -13,6 +14,11 @@ import zarr
 from wsic.codecs import register_codecs
 from wsic.readers import MultiProcessTileIterator, Reader
 from wsic.types import PathLike
+
+
+def mpp2ppcm(mpp: float) -> float:
+    """Convert microns per pixel (mpp) to pixels per centimeter."""
+    return (1 / mpp) * 1e4
 
 
 class Writer(ABC):
@@ -115,8 +121,38 @@ class Writer(ABC):
             raise FileExistsError(f"{self.path} exists and overwrite is False.")
 
     @staticmethod
-    def progress_bar(iterable: Iterable, **kwargs) -> Iterator:
+    def tile_progress(iterable: Iterable, **kwargs) -> Iterator:
         """Wrap a tile reader iterable in a progress bar.
+
+        Used to display progress when copying from a reader.
+
+        Some of the tqdm defaults are overridden but can be changed by
+        passing values as kwargs. Parameters which differ to the tqdm
+        defaults here are:
+        - `smoothing = 0.1`
+        - `colour = "magenta"`
+
+        Args:
+            iterable (Iterable):
+                The iterable to wrap.
+            **kwargs (dict):
+                Extra kwargs for tqdm. Overrides defaults.
+        """
+        tqdm_kwargs = {
+            "colour": "magenta",
+            "smoothing": 0.1,
+        }
+        tqdm_kwargs.update(kwargs)
+        try:
+            from tqdm.auto import tqdm
+
+            return tqdm(iterable, **tqdm_kwargs)
+        except ImportError:
+            return iterable
+
+    @staticmethod
+    def pyramid_progress(iterable: Iterable, **kwargs) -> Iterator:
+        """Wrap an iterable in a progress bar.
 
         Used to display progress when copying from a reader.
 
@@ -133,8 +169,9 @@ class Writer(ABC):
                 Extra kwargs for tqdm. Overrides defaults.
         """
         tqdm_kwargs = {
-            "colour": "magenta",
-            "smoothing": 0,
+            "colour": "blue",
+            # Bar format with no ETA
+            "bar_format": "{l_bar}{bar}| {n_fmt}/{total_fmt}",
         }
         tqdm_kwargs.update(kwargs)
         try:
@@ -192,7 +229,7 @@ class JP2Writer(Writer):
             num_workers=num_workers,
             read_tile_size=read_tile_size or self.tile_size,
         )
-        reader_tile_iterator = self.progress_bar(reader_tile_iterator)
+        reader_tile_iterator = self.tile_progress(reader_tile_iterator)
         for tile_writer in jp2.get_tilewriters():
             tile_writer[:] = next(reader_tile_iterator)
 
@@ -214,8 +251,10 @@ class TiledTIFFWriter(Writer):
         verbose: bool = False,
         photometric: str = "rgb",
         compression: str = "jpeg",
-        compression_level: int = 95,
-        microns_per_pixel: float = None,  # Currently unused
+        compression_level: int = 95,  # Currently unused
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
+        ome: bool = True,
     ) -> None:
         super().__init__(
             path=path,
@@ -229,6 +268,8 @@ class TiledTIFFWriter(Writer):
         self.compression = compression
         self.compression_level = compression_level
         self.microns_per_pixel = microns_per_pixel
+        self.pyramid_downsamples = pyramid_downsamples or []
+        self.ome = ome
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index. Not supported for TIFFWriter.
@@ -253,24 +294,95 @@ class TiledTIFFWriter(Writer):
         """Copy pixel data from a reader."""
         import tifffile
 
-        with ZarrIntermediate(None, reader.shape, zero_after_read=True) as intermediate:
+        resolution = (
+            (
+                mpp2ppcm(self.microns_per_pixel[0]),
+                mpp2ppcm(self.microns_per_pixel[1]),
+                "CENTIMETER",
+            )
+            if self.microns_per_pixel
+            else None
+        )
+
+        with ZarrIntermediate(
+            None, reader.shape, zero_after_read=False
+        ) as intermediate:
             reader_tile_iterator = self.reader_tile_iterator(
                 reader=reader,
                 num_workers=num_workers,
                 intermediate=intermediate,
                 read_tile_size=read_tile_size or self.tile_size,
             )
-            reader_tile_iterator = self.progress_bar(reader_tile_iterator)
-            tifffile.imwrite(
-                self.path,
-                reader_tile_iterator,
-                tile=self.tile_size,
-                shape=reader.shape,
-                dtype=reader.dtype,
-                photometric=self.photometric,
-                compression=self.compression,
-                bigtiff=True,
+            reader_tile_iterator = self.tile_progress(
+                reader_tile_iterator, desc="Writing"
             )
+            # Write baseline (level 0)
+            with tifffile.TiffWriter(
+                file=self.path,
+                bigtiff=True,
+                ome=self.ome,
+            ) as tif:
+
+                metadata = {}
+                if self.ome and self.microns_per_pixel:
+                    metadata["PhysicalSizeXUnit"] = "µm"
+                    metadata["PhysicalSizeYUnit"] = "µm"
+                    metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
+                    metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
+
+                tif.write(
+                    data=reader_tile_iterator,
+                    tile=self.tile_size,
+                    shape=reader.shape,
+                    dtype=reader.dtype,
+                    photometric=self.photometric,
+                    compression=self.compression,
+                    resolution=resolution,
+                    subifds=len(self.pyramid_downsamples),
+                    metadata=metadata,
+                )
+                # Write pyramid resolutions
+                with multiprocessing.Pool(num_workers) as pool:
+                    for _, downsample in self.pyramid_progress(
+                        enumerate(self.pyramid_downsamples),
+                        total=len(self.pyramid_downsamples),
+                        desc="Building Pyramid",
+                    ):
+                        level_shape = tuple(
+                            floor(s / downsample) for s in reader.shape[:2]
+                        ) + (3,)
+                        level_tiles_shape = tuple(
+                            ceil(x / (s * downsample))
+                            for x, s in zip(reader.shape[:2], self.tile_size[::-1])
+                        )
+
+                        func = partial(
+                            get_level_tile,
+                            tile_size=self.tile_size,
+                            downsample=downsample,
+                            read_intermediate_path=intermediate.path,
+                        )
+
+                        tile_generator = pool.imap(
+                            func=func,
+                            iterable=np.ndindex(level_tiles_shape),
+                        )
+
+                        tile_generator = self.tile_progress(
+                            tile_generator,
+                            total=int(np.product(level_tiles_shape)),
+                            leave=False,
+                        )
+
+                        tif.write(
+                            data=tile_generator,
+                            tile=self.tile_size,
+                            shape=level_shape,
+                            dtype=reader.dtype,
+                            photometric=self.photometric,
+                            compression=self.compression,
+                            subfiletype=1,  # Subfile type: reduced resolution
+                        )
 
 
 class ZarrReaderWriter(Reader, Writer):
@@ -403,7 +515,7 @@ class ZarrReaderWriter(Reader, Writer):
             yield_tile_size=read_tile_size,
             num_workers=num_workers,
         )
-        reader_tile_iterator = self.progress_bar(reader_tile_iterator)
+        reader_tile_iterator = self.tile_progress(reader_tile_iterator)
         # Write the reader tile iterator to the writer
         tiles_shape = (
             ceil(reader.shape[0] / read_tile_size[0]),
@@ -506,3 +618,38 @@ class ZarrIntermediate(Reader, Writer):
     ) -> None:
         """Copy pixel data from a reader."""
         raise NotImplementedError()
+
+
+def downsample_tile(image, factor: int):
+    """Downsample an image by a factor.
+
+    Args:
+        image (np.ndarray):
+            The image to downsample.
+        factor (int):
+            The downsampling factor.
+    """
+    import cv2
+
+    return cv2.resize(image, (image.shape[1] // factor, image.shape[0] // factor))
+
+
+def get_level_tile(
+    yx: Tuple[int, int],
+    tile_size: Tuple[int, int],
+    downsample: int,
+    read_intermediate_path: PathLike,
+    write_intermediate_path: Optional[PathLike] = None,
+) -> np.ndarray:
+    """Generate tiles for a downsampled level."""
+    import zarr
+
+    y, x = yx
+    w, h = tile_size
+    tile_index = (
+        slice(y * h * downsample, (y + 1) * h * downsample),
+        slice(x * w * downsample, (x + 1) * w * downsample),
+    )
+    reader = zarr.open(read_intermediate_path, mode="r")
+    tile = reader[tile_index]
+    return downsample_tile(tile, downsample)

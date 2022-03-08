@@ -36,6 +36,28 @@ def test_jp2_to_deflate_tiled_tiff(samples_path, tmp_path):
     assert np.all(reader[:512, :512] == output[:512, :512])
 
 
+def test_jp2_to_deflate_pyramid_tiff(samples_path, tmp_path):
+    """Test that we can convert a JP2 to a DEFLATE compressed pyramid TIFF."""
+    reader = readers.Reader.from_file(samples_path / "XYC.jp2")
+    pyramid_downsamples = [2, 4]
+    writer = writers.TiledTIFFWriter(
+        path=tmp_path / "XYC.tiff",
+        shape=reader.shape,
+        overwrite=False,
+        tile_size=(256, 256),
+        compression="deflate",
+        pyramid_downsamples=pyramid_downsamples,
+    )
+    writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
+    assert writer.path.exists()
+    assert writer.path.is_file()
+    assert writer.path.stat().st_size > 0
+    output = tifffile.imread(writer.path)
+    assert np.all(reader[:512, :512] == output[:512, :512])
+    tif = tifffile.TiffFile(writer.path)
+    assert len(tif.series[0].levels) == len(pyramid_downsamples) + 1
+
+
 def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
     """Test that we can convert a JP2 to a WebP compressed tiled TIFF."""
     reader = readers.Reader.from_file(samples_path / "XYC.jp2")

@@ -45,7 +45,7 @@ def main(ctx, debug):
     default=(256, 256),
 )
 @click.option(
-    "-r",
+    "-rt",
     "--read-tile-size",
     help="The size of the tiles to read.",
     type=click.Tuple([int, int]),
@@ -66,11 +66,30 @@ def main(ctx, debug):
     default="deflate",
 )
 @click.option(
-    "-l",
+    "-cl",
     "--compression-level",
     help="The compression level to use.",
     type=int,
     default=0,
+)
+@click.option(
+    "-d",
+    "--downsample",
+    help="The downsample factor to use.",
+    multiple=True,
+    type=int,
+)
+@click.option(
+    "-mpp",
+    "--microns-per-pixel",
+    help="The microns per pixel to use.",
+    type=click.Tuple([float, float]),
+)
+@click.option(
+    "-ome",
+    "--ome/--no-ome",
+    help="Save with OME-TIFF metadata (OME-XML).",
+    default=False,
 )
 @click.option(
     "--overwrite/--no-overwrite",
@@ -85,6 +104,9 @@ def convert(
     workers: int,
     compression: str,
     compression_level: int,
+    downsample: Tuple[int, ...],
+    microns_per_pixel: float,
+    ome: bool,
     overwrite: bool,
 ):
     """Convert a WSI."""
@@ -98,7 +120,10 @@ def convert(
         tile_size=tile_size,
         compression=compression,
         compression_level=compression_level,
+        pyramid_downsamples=downsample,
         overwrite=overwrite,
+        microns_per_pixel=microns_per_pixel,
+        ome=ome,
     )
     writer.copy_from_reader(reader, read_tile_size=read_tile_size, num_workers=workers)
 
