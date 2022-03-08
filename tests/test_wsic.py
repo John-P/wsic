@@ -20,7 +20,7 @@ def samples_path():
 def test_jp2_to_deflate_tiled_tiff(samples_path, tmp_path):
     """Test that we can convert a JP2 to a DEFLATE compressed tiled TIFF."""
     reader = readers.Reader.from_file(samples_path / "XYC.jp2")
-    writer = writers.TiledTIFFWriter(
+    writer = writers.TIFFWriter(
         path=tmp_path / "XYC.tiff",
         shape=reader.shape,
         overwrite=False,
@@ -40,7 +40,7 @@ def test_jp2_to_deflate_pyramid_tiff(samples_path, tmp_path):
     """Test that we can convert a JP2 to a DEFLATE compressed pyramid TIFF."""
     reader = readers.Reader.from_file(samples_path / "XYC.jp2")
     pyramid_downsamples = [2, 4]
-    writer = writers.TiledTIFFWriter(
+    writer = writers.TIFFWriter(
         path=tmp_path / "XYC.tiff",
         shape=reader.shape,
         overwrite=False,
@@ -61,7 +61,7 @@ def test_jp2_to_deflate_pyramid_tiff(samples_path, tmp_path):
 def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
     """Test that we can convert a JP2 to a WebP compressed tiled TIFF."""
     reader = readers.Reader.from_file(samples_path / "XYC.jp2")
-    writer = writers.TiledTIFFWriter(
+    writer = writers.TIFFWriter(
         path=tmp_path / "XYC.tiff",
         shape=reader.shape,
         overwrite=False,

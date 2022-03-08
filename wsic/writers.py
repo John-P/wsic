@@ -4,7 +4,7 @@ import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial
-from math import ceil, floor
+from math import floor
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, List, Optional, Tuple, Union
 
@@ -14,11 +14,7 @@ import zarr
 from wsic.codecs import register_codecs
 from wsic.readers import MultiProcessTileIterator, Reader
 from wsic.types import PathLike
-
-
-def mpp2ppcm(mpp: float) -> float:
-    """Convert microns per pixel (mpp) to pixels per centimeter."""
-    return (1 / mpp) * 1e4
+from wsic.utils import mpp2ppcm, tile_cover_shape
 
 
 class Writer(ABC):
@@ -234,7 +230,7 @@ class JP2Writer(Writer):
             tile_writer[:] = next(reader_tile_iterator)
 
 
-class TiledTIFFWriter(Writer):
+class TIFFWriter(Writer):
     """Tile-wise TIFF writer using tifffile.
 
     Note that when writing tiled TIFF files, the tiles must all be the
@@ -351,9 +347,10 @@ class TiledTIFFWriter(Writer):
                         level_shape = tuple(
                             floor(s / downsample) for s in reader.shape[:2]
                         ) + (3,)
-                        level_tiles_shape = tuple(
-                            ceil(x / (s * downsample))
-                            for x, s in zip(reader.shape[:2], self.tile_size[::-1])
+
+                        level_tiles_shape = tile_cover_shape(
+                            level_shape,
+                            self.tile_size,
                         )
 
                         func = partial(
@@ -517,9 +514,9 @@ class ZarrReaderWriter(Reader, Writer):
         )
         reader_tile_iterator = self.tile_progress(reader_tile_iterator)
         # Write the reader tile iterator to the writer
-        tiles_shape = (
-            ceil(reader.shape[0] / read_tile_size[0]),
-            ceil(reader.shape[1] / read_tile_size[1]),
+        tiles_shape = tile_cover_shape(
+            reader.shape,
+            read_tile_size[::-1],
         )
         tiles_index = np.ndindex(tiles_shape)
         for (j, i), tile in zip(tiles_index, reader_tile_iterator):
@@ -639,7 +636,6 @@ def get_level_tile(
     tile_size: Tuple[int, int],
     downsample: int,
     read_intermediate_path: PathLike,
-    write_intermediate_path: Optional[PathLike] = None,
 ) -> np.ndarray:
     """Generate tiles for a downsampled level."""
     import zarr

@@ -9,7 +9,7 @@ import wsic
 
 ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
-    ".tiff": wsic.writers.TiledTIFFWriter,
+    ".tiff": wsic.writers.TIFFWriter,
     ".zarr": wsic.writers.ZarrReaderWriter,
 }
 

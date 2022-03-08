@@ -10,6 +10,7 @@ import numpy as np
 
 from wsic.magic import summon_file_types
 from wsic.types import PathLike
+from wsic.utils import tile_cover_shape, tile_slices, wrap_index
 
 
 class Reader(ABC):
@@ -24,7 +25,7 @@ class Reader(ABC):
         """
         self.path = Path(path)
 
-    def __getitem__(index: Tuple[Union[int, slice], ...]) -> np.ndarray:
+    def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
         raise NotImplementedError
 
@@ -135,13 +136,13 @@ class MultiProcessTileIterator:
         self.yield_i = 0
         self.yield_j = 0
         self.num_workers = num_workers or os.cpu_count() or 2
-        self.read_tiles_shape = (
-            int(np.ceil(self.shape[0] / self.read_tile_size[1])),
-            int(np.ceil(self.shape[1] / self.read_tile_size[0])),
+        self.read_tiles_shape = tile_cover_shape(
+            self.shape,
+            self.read_tile_size[::-1],
         )
-        self.yield_tile_shape = (
-            int(np.ceil(self.shape[0] / self.yield_tile_size[1])),
-            int(np.ceil(self.shape[1] / self.yield_tile_size[0])),
+        self.yield_tiles_shape = tile_cover_shape(
+            self.shape,
+            self.yield_tile_size[::-1],
         )
         self.remaining_reads = list(np.ndindex(self.read_tiles_shape))
 
@@ -150,13 +151,13 @@ class MultiProcessTileIterator:
             raise ValueError(
                 f"read_tile_size ({self.read_tile_size})"
                 f" != yield_tile_size ({self.yield_tile_size})"
-                " and intermediate is not set. An intermediate is required when the read"
-                " and yield tile size differ."
+                " and intermediate is not set. An intermediate is"
+                " required when the read and yield tile size differ."
             )
 
     def __len__(self) -> int:
         """Return the number of tiles in the reader."""
-        return int(np.prod(self.yield_tile_shape))
+        return int(np.prod(self.yield_tiles_shape))
 
     def __iter__(self) -> Iterator:
         """Return an iterator for the reader."""
@@ -164,24 +165,46 @@ class MultiProcessTileIterator:
         self.read_i = 0
         return self
 
+    @property
+    def read_index(self) -> Tuple[int, int]:
+        """Return the current read index."""
+        return self.read_j, self.read_i
+
+    @read_index.setter
+    def read_index(self, value: Tuple[int, int]) -> None:
+        """Set the current read index."""
+        self.read_j, self.read_i = value
+
+    @property
+    def yield_index(self) -> Tuple[int, int]:
+        """Return the current yield index."""
+        return self.yield_j, self.yield_i
+
+    @yield_index.setter
+    def yield_index(self, value: Tuple[int, int]) -> None:
+        """Set the current yield index."""
+        self.yield_j, self.yield_i = value
+
+    def wrap_indexes(self) -> None:
+        """Wrap the read and yield indexes."""
+        self.read_index, overflow = wrap_index(self.read_index, self.read_tiles_shape)
+        if overflow and self.verbose:
+            print("All tiles read.")
+        self.yield_index, overflow = wrap_index(
+            self.yield_index, self.yield_tiles_shape
+        )
+        if overflow and self.verbose:
+            print("All tiles yielded.")
+        elif overflow:
+            raise StopIteration
+
     def __next__(self) -> np.ndarray:
         """Return the next tile from the reader."""
         # Increment the read ij index
-        if self.read_i >= self.read_tiles_shape[1]:
-            self.read_i = 0
-            self.read_j += 1
-        if self.read_j >= self.read_tiles_shape[0]:
-            if self.verbose:
-                print(f"Read all tiles")
+        self.wrap_indexes()
 
-        # Increment the yield ij index
-        if self.yield_i >= self.yield_tile_shape[1]:
-            self.yield_i = 0
-            self.yield_j += 1
-        if self.yield_j >= self.yield_tile_shape[0]:
-            raise StopIteration
-
-        # Add tile reads to the queue until the maximum number of workers is reached
+        # Add tile reads to the queue until the maximum number of
+        # workers is reached
         self.fill_queue()
 
         # Get the next yield tile from the queue
@@ -189,53 +212,42 @@ class MultiProcessTileIterator:
             # Remove all tiles from the queue into the reordering dict
             self.empty_queue()
 
-            # Remove the next tile from the reordering dict
-            if (self.read_j, self.read_i) in self.reordering_dict:
-                self.enqueued.remove((self.read_j, self.read_i))
-                tile = self.reordering_dict.pop((self.read_j, self.read_i))
+            # Remove the next read tile from the reordering dict. May be
+            # None if the read tile is not in the reordering dict or if
+            # an intermediate is used.
+            tile = self.pop_next_read_tile()
 
-                # If no intermediate is required, return the tile
-                if not self.intermediate:
-                    self.read_i += 1
-                    self.yield_i += 1
-                    return tile
+            # Return the tile if no intermediate is being used and the
+            # tile was in the reordering dict.
+            if not self.intermediate and tile is not None:
+                return tile
 
-                # Otherwise, write the tile to the intermediate
-                intermediate_write_index = (
-                    slice(
-                        self.read_j * self.read_tile_size[1],
-                        self.read_j * self.read_tile_size[1] + tile.shape[0],
-                    ),
-                    slice(
-                        self.read_i * self.read_tile_size[0],
-                        self.read_i * self.read_tile_size[0] + tile.shape[1],
-                    ),
-                )
-                self.intermediate[intermediate_write_index] = tile
-                self.read_i += 1
-
-            # Return the next tile from the intermediate
-            if self.intermediate:
-                intermediate_read_index = (
-                    slice(
-                        self.yield_j * self.yield_tile_size[1],
-                        (self.yield_j + 1) * self.yield_tile_size[1],
-                    ),
-                    slice(
-                        self.yield_i * self.yield_tile_size[0],
-                        (self.yield_i + 1) * self.yield_tile_size[0],
-                    ),
-                )
-                tile = self.intermediate[intermediate_read_index]
-                if np.count_nonzero(tile) > 0:
-                    self.yield_i += 1
-                    return tile
+            # Get the next tile from the intermediate. Returns None if
+            # intermediate is None or the tile is not in the
+            # intermediate.
+            tile = self.read_next_from_intermediate()
+            if tile is not None:
+                return tile
 
             # Ensure the queue is kept full
             self.fill_queue()
 
             # Sleep and try again
             time.sleep(0.1)
+
+    def read_next_from_intermediate(self) -> Optional[np.ndarray]:
+        """Read the next tile from the intermediate file."""
+        if self.intermediate is None:
+            return None
+        intermediate_read_index = tile_slices(
+            index=(self.yield_j, self.yield_i),
+            shape=self.yield_tile_size[::-1],
+        )
+        tile = self.intermediate[intermediate_read_index]
+        if np.count_nonzero(tile) > 0:
+            self.yield_i += 1
+            return tile
+        return None
 
     def empty_queue(self) -> None:
         """Remove all tiles from the queue into the reordering dict."""
@@ -244,7 +256,7 @@ class MultiProcessTileIterator:
             self.reordering_dict[ji] = tile
 
     def fill_queue(self) -> None:
-        """Add tile reads to the queue until the maximum number of workers is reached."""
+        """Add tile reads to the queue until the max number of workers is reached."""
         while len(self.enqueued) < self.num_workers and len(self.remaining_reads) > 0:
             next_ji = self.remaining_reads.pop(0)
             proc = multiprocessing.Process(
@@ -258,6 +270,35 @@ class MultiProcessTileIterator:
             )
             proc.start()
             self.enqueued.add(next_ji)
+
+    def pop_next_read_tile(self) -> Optional[np.ndarray]:
+        """Remove the next tile from the reordering dict.
+
+        Returns:
+            Optional[np.ndarray]:
+                The next tile from the reordering dict if available.
+                If an intermediate is being used, or the tile is not
+                in the reordering dict, this will be None.
+        """
+        read_ji = (self.read_j, self.read_i)
+        if read_ji in self.reordering_dict:
+            self.enqueued.remove(read_ji)
+            tile = self.reordering_dict.pop(read_ji)
+
+            # If no intermediate is required, return the tile
+            if not self.intermediate:
+                self.read_i += 1
+                self.yield_i += 1
+                return tile
+
+            # Otherwise, write the tile to the intermediate
+            intermediate_write_index = tile_slices(
+                index=read_ji,
+                shape=tile.shape,
+            )
+            self.intermediate[intermediate_write_index] = tile
+            self.read_i += 1
+        return None
 
 
 class JP2Reader(Reader):
