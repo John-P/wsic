@@ -11,19 +11,22 @@ Provides a command line interface (CLI) for easy convertion between formats::
 
     Usage: wsic convert [OPTIONS]
 
-      Convert a WSI.
-
     Options:
       -i, --in-path PATH              Path to WSI to read from.
       -o, --out-path PATH             The path to output to.
       -t, --tile-size <INTEGER INTEGER>...
                                       The size of the tiles to write.
-      -r, --read-tile-size <INTEGER INTEGER>...
+      -rt, --read-tile-size <INTEGER INTEGER>...
                                       The size of the tiles to read.
       -w, --workers INTEGER           The number of workers to use.
-      --compression [deflate|webp|jpeg|jpeg2000]
+      -c, --compression [deflate|webp|jpeg|jpeg2000]
                                       The compression to use.
-      --compression-level INTEGER     The compression level to use.
+      -cl, --compression-level INTEGER
+                                      The compression level to use.
+      -d, --downsample INTEGER        The downsample factor to use.
+      -mpp, --microns-per-pixel <FLOAT FLOAT>...
+                                      The microns per pixel to use.
+      -ome, --ome / --no-ome          Save with OME-TIFF metadata (OME-XML).
       --overwrite / --no-overwrite    Whether to overwrite the output file.
       -h, --help                      Show this message and exit.
 
@@ -43,6 +46,8 @@ Features
 * Write image data to:
 
   * Tiled TIFF
+  * Pyramid TIFF
+  * OME-TIFF
   * JP2
   * Zarr
 
@@ -53,10 +58,9 @@ Features
 To-Dos
 ------
 
-* Add pyramid generation (for TIFF and zarr)
+* Add pyramid generation for zarr
 * Add support for other formats:
 
-  * Write OME-TIFF (via tifffile)
   * Read/Write OME-NGFF
   * Read/Write WSI DICOM (via wsidicom)
 
