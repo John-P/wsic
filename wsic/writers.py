@@ -29,6 +29,23 @@ class Writer(ABC):
         tile_size (Tuple[int, int], optional):
             A (width, height) tuple of output tile size in pixels.
             Defaults to (256, 256).
+        dtype (np.dtype, optional):
+            Data type of the output image. Defaults to np.uint8.
+        photometric (str, optional):
+            Photometric interpretation of the output image.
+            Defaults to "rgb".
+        compression (str, optional):
+            Compression codec to use. Defaults to None. Not all
+            writers support compression.
+        compression_level (int, optional):
+            Compression level to use. Defaults to 0 (lossless /
+            maximum).
+        microns_per_pixel (Tuple[float, float], optional):
+            A (width, height) tuple of microns per pixel. Defaults to
+            None.
+        pyramid_downsamples (List[int], optional):
+            A list of downsamples to use in the pyramid. Defaults to
+            None. Not all writers support pyramids.
         overwrite (bool, optional):
             Overwrite output file if it exists.
             Defaults to False.
@@ -41,13 +58,25 @@ class Writer(ABC):
         path: PathLike,
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
+        dtype: np.dtype = np.uint8,
+        photometric: Optional[str] = "rgb",
+        compression: Optional[str] = None,
+        compression_level: int = 0,
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
     ):
         self.path = Path(path)
         self.shape = shape
-        self.overwrite = overwrite
         self.tile_size = tile_size
+        self.dtype = dtype
+        self.photometric = photometric or "rgb"
+        self.compression = compression
+        self.compression_level = compression_level or 0
+        self.microns_per_pixel = microns_per_pixel
+        self.pyramid_downsamples = pyramid_downsamples or []
+
         self.overwrite = overwrite
         self.verbose = verbose
 
@@ -185,13 +214,49 @@ class JP2Writer(Writer):
     Note that when writing tiled JP2 files, the tiles must all be the
     same size and must be written in the order left-to-right, then
     top-to-bottom (row-by-row). Tiles cannot be skipped.
+
+    Args:
+        path (PathLike):
+            Path to output file.
+        shape (Tuple[int, int]):
+            A (width, height) tuple of image size in pixels.
+        tile_size (Tuple[int, int], optional):
+            A (width, height) tuple of tile size in pixels.
+            Defaults to (256, 256).
+        dtype (np.dtype, optional):
+            Data type of output image. Defaults to np.uint8.
+        photometric (str, optional):
+            Photometric interpretation of the output image.
+            Defaults to "rgb".
+        compression (str, optional):
+            Compression type. Currently only "jpeg2000" is supported.
+            Defaults to "jpeg2000".
+        compression_level (int, optional):
+            Compression level. Defaults to 0.
+        microns_per_pixel (Tuple[float, float], optional):
+            A (width, height) tuple of microns per pixel.
+            Defaults to None.
+        pyramid_downsamples (List[int], optional):
+            A list of downsamples to create. Unused but included
+            for API consistency. Defaults to None.
+        overwrite (bool, optional):
+            Overwrite existing file. Defaults to False.
+        verbose (bool, optional):
+            Print more output. Defaults to False.
+
     """
 
     def __init__(
         self,
-        path: Path,
+        path: PathLike,
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
+        dtype: np.dtype = np.uint8,
+        photometric: Optional[str] = "rgb",
+        compression: Optional[str] = "jpeg2000",
+        compression_level: int = 9,
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
     ) -> None:
@@ -199,10 +264,15 @@ class JP2Writer(Writer):
             path=path,
             shape=shape,
             tile_size=tile_size,
+            dtype=dtype,
+            photometric=photometric,
+            compression=compression,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
             overwrite=overwrite,
             verbose=verbose,
         )
-        self.image = None
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index. Not supported for JP2Writer."""
@@ -237,6 +307,37 @@ class TIFFWriter(Writer):
     Note that when writing tiled TIFF files, the tiles must all be the
     same size and must be written in the order left-to-right, then
     top-to-bottom (row-by-row). Tiles cannot be skipped.
+
+    Args:
+        path (PathLike):
+            Path to output file.
+        shape (Tuple[int, int]):
+            A (width, height) tuple of image size in pixels.
+        tile_size (Tuple[int, int], optional):
+            A (width, height) tuple of tile size in pixels.
+            Defaults to (256, 256).
+        dtype (np.dtype, optional):
+            Data type of output image. Defaults to np.uint8.
+        photometric (str, optional):
+            Photometric interpretation. Defaults to "rgb".
+        compression (str, optional):
+            Compression type.
+            Defaults to "jpeg".
+        compression_level (int, optional):
+            Compression level. Defaults to 95. Currently unused.
+        microns_per_pixel (Tuple[float, float], optional):
+            A (width, height) tuple of microns per pixel.
+            Defaults to None.
+        pyramid_downsamples (List[int], optional):
+            A list of downsamples to create. Should be strictly
+            inceasing for maximum compatibility.
+            Defaults to None.
+        overwrite (bool, optional):
+            Overwrite existing file. Defaults to False.
+        verbose (bool, optional):
+            Print more output. Defaults to False.
+        ome (bool):
+            Write OME-TIFF metadata. Defaults to False.
     """
 
     def __init__(
@@ -244,28 +345,31 @@ class TIFFWriter(Writer):
         path: Path,
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
-        overwrite: bool = False,
-        verbose: bool = False,
-        photometric: str = "rgb",
-        compression: str = "jpeg",
+        dtype: np.dtype = np.uint8,
+        photometric: Optional[str] = "rgb",
+        compression: Optional[str] = "jpeg",
         compression_level: int = 95,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
+        overwrite: bool = False,
+        verbose: bool = False,
+        *,
         ome: bool = True,
     ) -> None:
         super().__init__(
             path=path,
             shape=shape,
             tile_size=tile_size,
+            dtype=dtype,
+            photometric=photometric,
+            compression=compression,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
             overwrite=overwrite,
             verbose=verbose,
         )
         self.image = None
-        self.photometric = photometric
-        self.compression = compression
-        self.compression_level = compression_level
-        self.microns_per_pixel = microns_per_pixel
-        self.pyramid_downsamples = pyramid_downsamples or []
         self.ome = ome
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
@@ -384,27 +488,68 @@ class TIFFWriter(Writer):
 
 
 class ZarrReaderWriter(Reader, Writer):
-    """Zarr reader and writer."""
+    """Zarr reader and writer.
+
+    Args:
+        path (PathLike):
+            Path to the output zarr.
+        shape (Tuple[int, int]):
+            Shape of the output zarr.
+        tile_size (Tuple[int, int], optional):
+            A (width, height) tuple of zarr chunks in pixels.
+            Defaults to (256, 256).
+        dtype (np.dtype, optional):
+            Data type of the output zarr. Defaults to np.uint8.
+        compression (str, optional):
+            Compression codec to use. Defaults to None. Not all
+            writers support compression.
+        photometric (str, optional):
+            Photometric interpretation. Defaults to "rgb".
+        compression_level (int, optional):
+            Compression level to use. Defaults to 0 (lossless /
+            maximum).
+        microns_per_pixel (Tuple[float, float], optional):
+            A (width, height) tuple of microns per pixel. Defaults to
+            None.
+        pyramid_downsamples (List[int], optional):
+            A list of downsamples to use in the pyramid. Defaults to
+            None.
+        overwrite (bool, optional):
+            Overwrite output file if it exists.
+            Defaults to False.
+        verbose (bool, optional):
+            Print more output. Defaults to False.
+    """
 
     def __init__(
         self,
         path: Path,
         shape: Optional[Tuple[int, int]] = None,
-        dtype: Optional[str] = "u1",
-        tile_size: Tuple[int, int] = (512, 512),
-        overwrite: bool = False,
-        verbose: bool = False,
+        tile_size: Tuple[int, int] = (256, 256),
+        dtype: np.dtype = np.uint8,
+        photometric: Optional[str] = "rgb",
         compression: str = "blosc-zstd",
         compression_level: int = 9,
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
+        overwrite: bool = False,
+        verbose: bool = False,
     ) -> None:
-        self.path = Path(path)
-        self.tile_size = tile_size
-        self.overwrite = overwrite
-        self.compression = compression
-        self.compression_level = compression_level
+        super().__init__(
+            path=path,
+            shape=shape,
+            tile_size=tile_size,
+            dtype=dtype,
+            photometric=photometric,
+            compression=compression,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
         register_codecs()
         self.compressor = self.get_codec(compression, compression_level)
-        self.verbose = verbose
         if self.path.exists() and not self.path.is_dir():
             raise FileExistsError(
                 f"{self.path} exists but is not a directory. Zarrs must be directories."
@@ -527,7 +672,7 @@ class ZarrReaderWriter(Reader, Writer):
             ] = tile
 
 
-class ZarrIntermediate(Reader, Writer):
+class ZarrIntermediate(Writer, Reader):
     """Zarr intermediate reader/writer.
 
     A convenience reader/writer which is also a context manager. This
@@ -538,22 +683,38 @@ class ZarrIntermediate(Reader, Writer):
 
     Args:
         path (PathLike):
-            Path to the output file. If None, a temporary file will be created.
+            Path to the intermediate file. If None, a temporary file
+            will be created.
         shape (Tuple[int, int]):
             Shape of the output file.
         tile_size (Tuple[int, int], optional):
-            A (width, height) tuple of output tile size in pixels.
+            A (width, height) tuple of zarr chunk size in pixels.
             Defaults to (256, 256).
-        dtype (np.dtype):
-            Data type of the output file.
-        zero_after_read (bool, optional):
-            If True, data in file will be zeroed after reading.
-            Defaults to False.
+        dtype (np.dtype, optional):
+            The data type of the output file. Defaults to np.uint8.
+        photometric (str, optional):
+            Unused but kept for compatibility with the Writer base
+            class.
+        compression (str, optional):
+            Unused but kept for compatibility with the Writer base
+            class. Internally uses default zarr compression.
+        compression_level (int, optional):
+            Unused but kept for compatibility with the  Writer base
+            classes. Internally uses default zarr compression level.
+        microns_per_pixel (float, optional):
+            Unused but kept for compatibility with the Reader and Writer
+            classes.
+        pyramid_downsamples (List[int], optional):
+            Unused but kept for compatibility with the Reader and Writer
+            classes.
         overwrite (bool, optional):
             If True, the output file will be overwritten if it exists.
             Defaults to False.
         verbose (bool, optional):
             If True, print information about the file being written.
+        zero_after_write (bool, optional):
+            If True, data in the zarr will be zeroed after writing.
+            Defaults to False.
     """
 
     def __init__(
@@ -561,20 +722,38 @@ class ZarrIntermediate(Reader, Writer):
         path: PathLike,
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
-        dtype="u1",
-        zero_after_read: bool = False,
+        dtype: np.dtype = np.uint8,
+        photometric: Optional[str] = None,
+        compression: Optional[str] = None,
+        compression_level: int = 0,
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
+        *,
+        zero_after_read: bool = False,
     ) -> None:
         # Create a temporary path if no path is given
         path = path or Path(tempfile.gettempdir(), uuid.uuid4().hex).with_suffix(
             ".zarr"
         )
-        super().__init__(path=path)
-        self.shape = shape
-        self.dtype = dtype
-        self.tile_size = tile_size
+        super().__init__(
+            path=path,
+            shape=shape,
+            tile_size=tile_size,
+            dtype=dtype,
+            photometric=photometric,
+            compression=compression,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
+        self.zero_after_read = zero_after_read
+
         self.path.mkdir(parents=True, exist_ok=True)
+
         self.zarr = zarr.open(
             store=zarr.NestedDirectoryStore(path),
             mode="a",
@@ -582,9 +761,6 @@ class ZarrIntermediate(Reader, Writer):
             chunks=self.tile_size,
             dtype=self.dtype,
         )
-        self.zero_after_read = zero_after_read
-        self.overwrite = overwrite
-        self.verbose = verbose
 
     def __setitem__(
         self, index: Tuple[Union[int, slice], ...], value: np.ndarray
