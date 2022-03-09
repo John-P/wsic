@@ -487,7 +487,7 @@ class TIFFWriter(Writer):
                         )
 
 
-class ZarrReaderWriter(Reader, Writer):
+class ZarrReaderWriter(Writer, Reader):
     """Zarr reader and writer.
 
     Args:
