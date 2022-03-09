@@ -654,8 +654,6 @@ def get_level_tile(
     read_intermediate_path: PathLike,
 ) -> np.ndarray:
     """Generate tiles for a downsampled level."""
-    import zarr
-
     y, x = yx
     w, h = tile_size
     tile_index = (
