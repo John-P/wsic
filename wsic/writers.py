@@ -610,8 +610,8 @@ class ZarrReaderWriter(Writer, Reader):
             )
             self.shape = self.zarr.shape
             self.dtype = self.zarr.dtype
-            return True
-        elif self.shape is not None:
+            return self.zarr
+        if self.shape is not None:
             self.zarr = zarr.open(
                 zarr.NestedDirectoryStore(self.path),
                 mode="a",
@@ -620,6 +620,7 @@ class ZarrReaderWriter(Writer, Reader):
                 dtype=self.dtype,
                 compressor=self.compressor,
             )
+            return self.zarr
         return self.zarr
 
     def get_codec(
