@@ -15,7 +15,7 @@ import zarr
 from wsic.codecs import register_codecs
 from wsic.readers import MultiProcessTileIterator, Reader
 from wsic.types import PathLike
-from wsic.utils import mean_pool, mpp2ppcm, tile_cover_shape
+from wsic.utils import mean_pool, mpp2ppcm, tile_cover_shape, warn_unused
 
 
 class Writer(ABC):
@@ -230,10 +230,10 @@ class JP2Writer(Writer):
             Photometric interpretation of the output image.
             Defaults to "rgb".
         compression (str, optional):
-            Compression type. Currently only "jpeg2000" is supported.
-            Defaults to "jpeg2000".
+            Compression type. Currently only JPEG 2000 compression is
+            supported. Defaults to None.
         compression_level (int, optional):
-            Compression level. Defaults to 0.
+            Compression level. Currently unused. Defaults to None.
         microns_per_pixel (Tuple[float, float], optional):
             A (width, height) tuple of microns per pixel.
             Defaults to None.
@@ -253,14 +253,21 @@ class JP2Writer(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",
-        compression: Optional[str] = "jpeg2000",
-        compression_level: int = 9,
-        microns_per_pixel: Tuple[float, float] = None,
-        pyramid_downsamples: Optional[List[int]] = None,
+        photometric: str = "rgb",  # Currently unused
+        compression: str = "jpeg2000",  # Currently unused
+        compression_level: int = 0,  # Currently unused
+        microns_per_pixel: Optional[Tuple[float, float]] = None,  # Currently unused
+        pyramid_downsamples: Optional[List[int]] = None,  # Unused
         overwrite: bool = False,
         verbose: bool = False,
     ) -> None:
+        if photometric != "rgb":
+            warn_unused(photometric)
+        if compression != "jpeg2000":
+            warn_unused(compression)
+        warn_unused(compression_level, ignore_falsey=True)
+        warn_unused(microns_per_pixel)
+        warn_unused(pyramid_downsamples, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
@@ -366,10 +373,10 @@ class TIFFWriter(Writer):
         path: Path,
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
-        dtype: np.dtype = np.uint8,
+        dtype: np.dtype = np.uint8,  # Currently unused
         photometric: Optional[str] = "rgb",
         compression: Optional[str] = "jpeg",
-        compression_level: int = 95,  # Currently unused
+        compression_level: int = 0,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
@@ -377,6 +384,9 @@ class TIFFWriter(Writer):
         *,
         ome: bool = True,
     ) -> None:
+        if dtype is not np.uint8:
+            warn_unused(dtype)
+        warn_unused(compression_level, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
@@ -562,14 +572,18 @@ class ZarrReaderWriter(Writer, Reader):
         shape: Optional[Tuple[int, int]] = None,
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",
+        photometric: Optional[str] = "rgb",  # Currently unused
         compression: str = "blosc-zstd",
         compression_level: int = 9,
-        microns_per_pixel: Tuple[float, float] = None,
-        pyramid_downsamples: Optional[List[int]] = None,
+        microns_per_pixel: Tuple[float, float] = None,  # Currently unused
+        pyramid_downsamples: Optional[List[int]] = None,  # Currently unused
         overwrite: bool = False,
         verbose: bool = False,
     ) -> None:
+        if photometric != "rgb":
+            warn_unused(photometric)
+        warn_unused(microns_per_pixel)
+        warn_unused(pyramid_downsamples, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
@@ -790,16 +804,22 @@ class ZarrIntermediate(Writer, Reader):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = None,
-        compression: Optional[str] = None,
-        compression_level: int = 0,
-        microns_per_pixel: Tuple[float, float] = None,
-        pyramid_downsamples: Optional[List[int]] = None,
+        photometric: Optional[str] = "rgb",  # Currently unused
+        compression: Optional[str] = None,  # Currently unused
+        compression_level: int = 0,  # Currently unused
+        microns_per_pixel: Tuple[float, float] = None,  # Currently unused
+        pyramid_downsamples: Optional[List[int]] = None,  # Currently unused
         overwrite: bool = False,
         verbose: bool = False,
         *,
         zero_after_read: bool = False,
     ) -> None:
+        if photometric != "rgb":
+            warn_unused(photometric)
+        warn_unused(compression)
+        warn_unused(compression_level, ignore_falsey=True)
+        warn_unused(microns_per_pixel)
+        warn_unused(pyramid_downsamples, ignore_falsey=True)
         # Create a temporary path if no path is given
         path = path or Path(tempfile.gettempdir(), uuid.uuid4().hex).with_suffix(
             ".zarr"

@@ -1,7 +1,87 @@
+import inspect
+import warnings
 from math import ceil
-from typing import Any, Callable, Dict, Iterable, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 
 import numpy as np
+
+
+def varnames(
+    var: Any,
+    f_backs: int = 1,
+    squeeze: bool = True,
+) -> Optional[Union[Tuple[str], str]]:
+    """Get the name(s) of a variable.
+
+    A bit of a hack, but works for most cases. Good for debugging and
+    making logging messages more helpful.
+
+    Args:
+        var (Any):
+            The variable to get the name of.
+        f_backs (int):
+            The number of frames to go back in the call stack.
+        squeeze (bool):
+            If only one name is found in the call frame, return it as a
+            string instead of a tuple of strings
+
+    Returns:
+        Optional[Union[Tuple[str], str]]:
+            The name(s) of the variable.
+    """
+    # Get parent (caller) frame
+    call_frame = inspect.currentframe()
+    for _ in range(f_backs):
+        call_frame = call_frame.f_back
+    # Find the name of the variable in the parent frame
+    var_names = tuple(
+        var_name
+        for var_name, var_val in reversed(call_frame.f_locals.items())
+        if var_val is var
+    )
+    if not squeeze or len(var_names) > 1:
+        return var_names
+    if len(var_names) == 1:
+        return var_names[0]
+    return None
+
+
+def warn_unused(
+    var: Any,
+    name: Optional[str] = None,
+    ignore_none: bool = True,
+    ignore_falsey: bool = False,
+) -> None:
+    """Warn the user if a variable has a non None or non falsey value.
+
+    See
+    https://docs.python.org/3/library/stdtypes.html#truth-value-testing
+    for an explanation of what evaluates to true and false.
+
+    Used when some kwargs are defined for API consistency and to satisfy
+    the Liskov Substitution Principle (LSP).
+
+    Args:
+        var (Any):
+            The variable to check.
+        name (Optional[str]):
+            The name of the variable. If None, the variable name will be
+            obtained from the call frame.
+        ignore_none (bool):
+            If True, do not warn if the variable is None.
+        ignore_falsey (bool):
+            If True, do not warn if the variable is any falsey value.
+    """
+    name = name or str(varnames(var, 2))
+    if ignore_none and var is None:
+        return
+    if ignore_falsey and not var:
+        return
+    if var is not None:
+        warnings.warn(
+            f"Argument '{name}' is currently unsued and is being ignored.",
+            stacklevel=2,
+        )
 
 
 def mpp2ppcm(mpp: float) -> float:
