@@ -128,15 +128,16 @@ class Writer(ABC):
 
     @abstractmethod
     def copy_from_reader(
-        self, data: bytes, verbose: bool = False, num_workers: int = 2
+        self,
+        reader: Reader,
+        num_workers: int = 2,
+        read_tile_size: Tuple[int, int] = None,
     ) -> None:
-        """Write data to output file by copying from a Reader.
+        """Write pixel data to by copying from a Reader.
 
         Args:
             reader (Reader):
                 Reader object.
-            verbose (bool, optional):
-                Print progress. Defaults to False.
             num_workers (int, optional):
                 Number of workers to use. Defaults to 2.
             read_tile_size (Tuple[int, int], optional):
@@ -283,13 +284,27 @@ class JP2Writer(Writer):
         reader: Reader,
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
-        verbose: bool = False,
     ) -> None:
-        """Copy pixel data from a reader."""
+        """Write pixel data to by copying from a Reader.
+
+        Args:
+            reader (Reader):
+                Reader object.
+            num_workers (int, optional):
+                Number of workers to use. Defaults to 2.
+            read_tile_size (Tuple[int, int], optional):
+                Tile size to read. Defaults to None.
+                This will use the tile size of the writer if None.
+        """
+        super().copy_from_reader(
+            reader=reader,
+            num_workers=num_workers,
+            read_tile_size=read_tile_size,
+        )
         import glymur
 
         jp2 = glymur.Jp2k(
-            self.path, shape=reader.shape, tilesize=self.tile_size, verbose=verbose
+            self.path, shape=reader.shape, tilesize=self.tile_size, verbose=self.verbose
         )
         reader_tile_iterator = self.reader_tile_iterator(
             reader=reader,
@@ -390,9 +405,23 @@ class TIFFWriter(Writer):
         reader: Reader,
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
-        verbose: bool = False,
     ) -> None:
-        """Copy pixel data from a reader."""
+        """Write pixel data to by copying from a Reader.
+
+        Args:
+            reader (Reader):
+                Reader object.
+            num_workers (int, optional):
+                Number of workers to use. Defaults to 2.
+            read_tile_size (Tuple[int, int], optional):
+                Tile size to read. Defaults to None.
+                This will use the tile size of the writer if None.
+        """
+        super().copy_from_reader(
+            reader=reader,
+            num_workers=num_workers,
+            read_tile_size=read_tile_size,
+        )
         import tifffile
 
         resolution = (
@@ -633,11 +662,25 @@ class ZarrReaderWriter(Writer, Reader):
     def copy_from_reader(
         self,
         reader: Reader,
-        verbose: bool = False,
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
     ) -> None:
-        """Copy pixel data from a reader."""
+        """Write pixel data to by copying from a Reader.
+
+        Args:
+            reader (Reader):
+                Reader object.
+            num_workers (int, optional):
+                Number of workers to use. Defaults to 2.
+            read_tile_size (Tuple[int, int], optional):
+                Tile size to read. Defaults to None.
+                This will use the tile size of the writer if None.
+        """
+        super().copy_from_reader(
+            reader=reader,
+            num_workers=num_workers,
+            read_tile_size=read_tile_size,
+        )
         # Validate and normalise inputs
         lossy_codecs = ["jpeg"]
         optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
@@ -786,11 +829,10 @@ class ZarrIntermediate(Writer, Reader):
     def copy_from_reader(
         self,
         reader: Reader,
-        verbose: bool = False,
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
     ) -> None:
-        """Copy pixel data from a reader."""
+        """Not supported but included for API consistency."""
         raise NotImplementedError()
 
 
