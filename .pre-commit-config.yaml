@@ -13,6 +13,8 @@ repos:
     hooks:
       - id: flake8
         additional_dependencies: [
+          bandit==1.7.2, # Dependency for flake8-bandit
+          flake8-bandit, # Security checks (currently breaks with bandit > 1.7.2)
           flake8-bugbear, # Detect potential bugs
           flake8-builtins, # Check for built-ins being used as variables
           flake8-cognitive-complexity, # Check max function complexity
