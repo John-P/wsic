@@ -313,7 +313,13 @@ class JP2Writer(Writer):
         )
         reader_tile_iterator = self.tile_progress(reader_tile_iterator)
         for tile_writer in jp2.get_tilewriters():
-            tile_writer[:] = next(reader_tile_iterator)
+            try:
+                tile_writer[:] = next(reader_tile_iterator)
+            except StopIteration:
+                raise StopIteration(
+                    "Reader tile iterator stopped early. "
+                    "Glymur is expecting more tiles to be written."
+                )
 
 
 class TIFFWriter(Writer):
