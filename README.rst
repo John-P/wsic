@@ -31,6 +31,10 @@ Provides a command line interface (CLI) for easy convertion between formats::
       -h, --help                      Show this message and exit.
 
 
+.. image:: docs/_static/wsic_convert_demo.gif
+    :align: center
+    :alt: A demonstration of converting a JP2 file to a pyramid TIFF.
+
 
 Features
 --------
