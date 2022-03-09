@@ -20,6 +20,8 @@ requirements = [
 
 test_requirements = [
     "pytest>=3",
+    "opencv-python",
+    "scipy",
 ]
 
 setup(
