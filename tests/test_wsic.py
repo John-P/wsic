@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import tifffile
+import zarr
 from click.testing import CliRunner
 
 from wsic import cli, readers, writers
@@ -134,6 +135,20 @@ def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
     assert writer.path.is_file()
     assert writer.path.stat().st_size > 0
     output = tifffile.imread(writer.path)
+    assert np.all(reader[:512, :512] == output[:512, :512])
+
+
+def test_jp2_to_zarr(samples_path, tmp_path):
+    """Test that we can convert a JP2 to a Zarr file."""
+    reader = readers.Reader.from_file(samples_path / "XYC.jp2")
+    writer = writers.ZarrReaderWriter(
+        path=tmp_path / "XYC.zarr",
+    )
+    writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
+    assert writer.path.exists()
+    assert writer.path.is_dir()
+    assert len(list(writer.path.iterdir())) > 0
+    output = zarr.open(writer.path)
     assert np.all(reader[:512, :512] == output[:512, :512])
 
 

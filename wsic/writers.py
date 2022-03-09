@@ -590,17 +590,29 @@ class ZarrReaderWriter(Writer, Reader):
                 f"{self.path} exists but is not a directory. Zarrs must be directories."
             )
 
+        self.zarr = None
+        self._init_zarr()
+
+    def _init_zarr(self) -> Union[zarr.Array, zarr.Group]:
+        """Initialize the zarr.
+
+        If the zarr already exists, it will be opened. Otherwise, it will be
+        created if there is a shape.
+
+        Returns:
+            zarr.Array or zarr.Group:
+                The zarr.
+        """
         if self.path.exists() and self.path.is_dir():
-            self.image = zarr.open(
+            self.zarr = zarr.open(
                 self.path,
                 mode="r+",
             )
-            self.shape = self.image.shape
-            self.dtype = self.image.dtype
-        else:
-            self.dtype = dtype
-            self.shape = shape
-            self.image = zarr.open(
+            self.shape = self.zarr.shape
+            self.dtype = self.zarr.dtype
+            return True
+        elif self.shape is not None:
+            self.zarr = zarr.open(
                 zarr.NestedDirectoryStore(self.path),
                 mode="a",
                 shape=self.shape,
@@ -608,6 +620,7 @@ class ZarrReaderWriter(Writer, Reader):
                 dtype=self.dtype,
                 compressor=self.compressor,
             )
+        return self.zarr
 
     def get_codec(
         self,
@@ -633,9 +646,9 @@ class ZarrReaderWriter(Writer, Reader):
                 "deflate": imagecodecs.numcodecs.Deflate,
                 "webp": imagecodecs.numcodecs.Webp,
                 "jpeg": imagecodecs.numcodecs.Jpeg,
-                "jpegls": imagecodecs.numcodecs.Jpegls,
+                "jpegls": imagecodecs.numcodecs.JpegLs,
                 "jpeg2000": imagecodecs.numcodecs.Jpeg2k,
-                "jpegxl": imagecodecs.numcodecs.Jpegxl,
+                "jpegxl": imagecodecs.numcodecs.JpegXl,
                 "png": imagecodecs.numcodecs.Png,
                 "zfp": imagecodecs.numcodecs.Zfp,
             }
@@ -659,11 +672,11 @@ class ZarrReaderWriter(Writer, Reader):
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index."""
-        self.image[index] = value
+        self.zarr[index] = value
 
     def __getitem__(self, index: Tuple[int, ...]) -> np.ndarray:
         """Read pixel data at index."""
-        return self.image[index]
+        return self.zarr[index]
 
     def copy_from_reader(
         self,
@@ -687,6 +700,10 @@ class ZarrReaderWriter(Writer, Reader):
             num_workers=num_workers,
             read_tile_size=read_tile_size,
         )
+        # Ensure there is a zarr to write to
+        if self.shape is None:
+            self.shape = reader.shape
+        self._init_zarr()
         # Validate and normalise inputs
         lossy_codecs = ["jpeg"]
         optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
@@ -715,7 +732,7 @@ class ZarrReaderWriter(Writer, Reader):
         )
         tiles_index = np.ndindex(tiles_shape)
         for (j, i), tile in zip(tiles_index, reader_tile_iterator):
-            self.image[
+            self.zarr[
                 j * read_tile_size[1] : (j * read_tile_size[1]) + tile.shape[0],
                 i * read_tile_size[0] : (i * read_tile_size[0]) + tile.shape[1],
             ] = tile
