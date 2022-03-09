@@ -2,6 +2,7 @@ import multiprocessing
 import shutil
 import tempfile
 import uuid
+import warnings
 from abc import ABC, abstractmethod
 from functools import partial
 from math import floor
@@ -14,7 +15,7 @@ import zarr
 from wsic.codecs import register_codecs
 from wsic.readers import MultiProcessTileIterator, Reader
 from wsic.types import PathLike
-from wsic.utils import mpp2ppcm, tile_cover_shape
+from wsic.utils import mean_pool, mpp2ppcm, tile_cover_shape
 
 
 class Writer(ABC):
@@ -617,7 +618,7 @@ class ZarrIntermediate(Reader, Writer):
         raise NotImplementedError()
 
 
-def downsample_tile(image, factor: int):
+def downsample_tile(image: np.ndarray, factor: int):
     """Downsample an image by a factor.
 
     Args:
@@ -626,9 +627,24 @@ def downsample_tile(image, factor: int):
         factor (int):
             The downsampling factor.
     """
-    import cv2
+    try:
+        import cv2
 
-    return cv2.resize(image, (image.shape[1] // factor, image.shape[0] // factor))
+        return cv2.resize(image, (image.shape[1] // factor, image.shape[0] // factor))
+    except ImportError:
+        warnings.warn("OpenCV not installed.")
+    try:
+        from scipy import ndimage
+
+        return ndimage.zoom(image, 1 / factor, order=0)
+    except ImportError:
+        warnings.warn("Scipy not installed.")
+    warnings.warn(
+        "Falling back to numpy for tile downsampling. "
+        "This may be slow. "
+        "Consider installing OpenCV or Scipy."
+    )
+    return mean_pool(image, factor)
 
 
 def get_level_tile(
