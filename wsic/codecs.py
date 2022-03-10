@@ -1,4 +1,5 @@
 """Custom codecs for wsic."""
+import warnings
 from typing import IO
 
 import numpy as np
@@ -48,7 +49,6 @@ def register_codecs() -> None:
     - QOI
     """
     import numcodecs
-    from imagecodecs.numcodecs import register_codecs as register_imagecodecs_codecs
 
     # Register wsci codecs
     try:
@@ -58,5 +58,12 @@ def register_codecs() -> None:
     except ImportError:
         pass
 
-    # Register imagecodecs codecs
-    register_imagecodecs_codecs()
+    try:
+        from imagecodecs.numcodecs import register_codecs as register_imagecodecs_codecs
+
+        # Register imagecodecs codecs
+        register_imagecodecs_codecs()
+    except ImportError:
+        warnings.warn(
+            "imagecodecs is not installed, some codecs will not be available."
+        )
