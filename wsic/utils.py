@@ -14,7 +14,10 @@ def varnames(
     """Get the name(s) of a variable.
 
     A bit of a hack, but works for most cases. Good for debugging and
-    making logging messages more helpful.
+    making logging messages more helpful. Works by inspecting the call
+    stack and finding the name of the variable in the caller's frame by
+    checking the object's ID. There may be multiple variable names with
+    the same ID and hence a tuple of name strings is returned.
 
     Args:
         var (Any):
@@ -28,6 +31,19 @@ def varnames(
     Returns:
         Optional[Union[Tuple[str], str]]:
             The name(s) of the variable.
+
+    Examples:
+    >>> foo = "bar"
+    >>> varnames(foo)
+    foo
+
+    >>> foo = "bar"
+    >>> baz = foo
+    >>> varnames(foo)
+    (foo, baz)
+
+    >>> varnames("bar")  # Literals will return None
+    None
     """
     # Get parent (caller) frame
     call_frame = inspect.currentframe()
