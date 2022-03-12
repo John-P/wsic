@@ -24,6 +24,7 @@ codec_requirements = ["glymur", "imagecodecs", "qoi"]
 
 test_requirements = [
     "pytest>=3",
+    "opencv-python",
     "scipy",
     "scikit-image",
 ]
