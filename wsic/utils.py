@@ -33,17 +33,17 @@ def varnames(
             The name(s) of the variable.
 
     Examples:
-    >>> foo = "bar"
-    >>> varnames(foo)
-    foo
+        >>> foo = "bar"
+        >>> varnames(foo)
+        foo
 
-    >>> foo = "bar"
-    >>> baz = foo
-    >>> varnames(foo)
-    (foo, baz)
+        >>> foo = "bar"
+        >>> baz = foo
+        >>> varnames(foo)
+        (foo, baz)
 
-    >>> varnames("bar")  # Literals will return None
-    None
+        >>> varnames("bar")  # Literals will return None
+        None
     """
     # Get parent (caller) frame
     call_frame = inspect.currentframe()
@@ -121,14 +121,14 @@ def tile_cover_shape(
             The shape of the tiles which cover shape.
 
     Examples:
-    >>> tile_shape((13, 13), (8, 8))
-    (2, 2)
+        >>> tile_shape((13, 13), (8, 8))
+        (2, 2)
 
-    >>> tile_shape((13, 13, 3), (8, 8))
-    (2, 2)
+        >>> tile_shape((13, 13, 3), (8, 8))
+        (2, 2)
 
-    >>> tile_shape((13, 13, 3), (8, 8, 3))
-    (2, 2, 1)
+        >>> tile_shape((13, 13, 3), (8, 8, 3))
+        (2, 2, 1)
 
     """
     return tuple(ceil(x / y) for x, y in zip(array_shape, tile_shape))
@@ -257,12 +257,22 @@ def block_reduce(
 
 
 def mean_pool(image: np.ndarray, pool_size: int) -> np.ndarray:
-    """Reduce an image by applying a mean to each block.
+    r"""Reduce an image by applying a mean to each block.
 
-    Uses `wsic.utils.block_reduce` to apply `np.mean` in blocks to and
-    image. Significantly slower than cv2 INTER_AREA interpolation and
-    `scipy.ndimage.zoom` but a used as fallback for when neither
+    Uses `wsic.utils.block_reduce` to apply `np.mean` in blocks to an
+    image.
+    
+    This is significantly slower than `cv2.INTER_AREA` interpolation and
+    `scipy.ndimage.zoom`, but a used as fallback for when neither
     optional dependency is available.
+
+    Note that the output shape will always round down to the nearest
+    integer:
+
+    .. math::
+        \left\lfloor
+        \frac{\texttt{image.shape}}{\texttt{pool_size}}
+        \right\rfloor
 
     Args:
         image (np.ndarray):

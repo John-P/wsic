@@ -33,6 +33,7 @@ test_requirements += codec_requirements
 
 docs_requirements = [
     "sphinx",
+    "sphinx-autoapi",
 ]
 
 alternative_requirements = [

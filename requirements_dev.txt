@@ -11,6 +11,7 @@ openslide-python>=1.1.2
 pip==21.1
 pytest==6.2.4
 Sphinx==1.8.5
+sphinx-autoapi
 tifffile>=2022.2.9
 tox==3.14.0
 twine==1.14.0

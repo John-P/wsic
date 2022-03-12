@@ -36,6 +36,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
+    "autoapi.extension",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -156,3 +157,8 @@ texinfo_documents = [
         "Miscellaneous",
     ),
 ]
+
+
+# -- Options for autoapi -----------------------------------------------
+
+autoapi_dirs = ["../wsic"]
