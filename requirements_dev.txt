@@ -1,7 +1,6 @@
 black==21.7b0
 bump2version==0.5.11
 Click>=8.0.0
-coverage==4.5.4
 flake8==3.7.8
 glymur>=0.9.4
 imagecodecs>=2021.11.20
@@ -10,6 +9,7 @@ numpy>=1.21.5
 opencv-python>=4.5.5
 openslide-python>=1.1.2
 pip==21.1
+pytest-cov>=3.0.0
 pytest==6.2.4
 scipy>=1.7.3
 Sphinx==1.8.5
