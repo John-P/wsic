@@ -7,6 +7,7 @@ SPHINXBUILD   = python -msphinx
 SPHINXPROJ    = wsic
 SOURCEDIR     = .
 BUILDDIR      = _build
+AUTOSUMMARYDIR = _autosummary
 
 # Put it first so that "make" without argument is like "make help".
 help:
@@ -18,3 +19,6 @@ help:
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+clean:
+	rm -fr "$(BUILDDIR)" "$(AUTOSUMMARYDIR)" "$(SPHINXPROJ).rst" modules.rst

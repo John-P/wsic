@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
-import wsic
+import wsic  # noqa: E402
 
 # -- General configuration ---------------------------------------------
 
@@ -36,7 +36,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
-    "autoapi.extension",
+    "sphinx.ext.autosummary",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -53,7 +53,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "wsic"
-copyright = "2022, John Pocock"
+copyright = "2022, John Pocock"  # noqa: A001
 author = "John Pocock"
 
 # The version info for the project you're documenting, acts as replacement
@@ -158,7 +158,6 @@ texinfo_documents = [
     ),
 ]
 
+# -- Options for autodoc -----------------------------------------------
 
-# -- Options for autoapi -----------------------------------------------
-
-autoapi_dirs = ["../wsic"]
+autodoc_typehints = "description"
