@@ -11,7 +11,7 @@ opencv-python>=4.5.5
 openslide-python>=1.1.2
 pip==21.1
 pytest==6.2.4
-scipy>=1.8.0
+scipy>=1.7.3
 sphinx-autoapi
 Sphinx==1.8.5
 tifffile>=2022.2.9
