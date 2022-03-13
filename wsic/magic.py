@@ -49,7 +49,7 @@ class Spell:
 
 @dataclass
 class Incantation:
-    """Perform a sequence of spells.
+    r"""Perform a sequence of spells.
 
     Spells are performed in order and nesting of spells is supported.
 
@@ -195,7 +195,7 @@ def summon_file_types(
         ):
             parent_type = file_type[:-1]
             parent_type_matched = (parent_type in file_types) or (
-                parent_type is tuple()
+                parent_type is tuple()  # noqa: C408
             )
             if incantation.perform(header) and parent_type_matched:
                 file_types.append(file_type)
