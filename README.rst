@@ -2,23 +2,21 @@
 wsic
 ====
 
-.. rst-class:: center
+.. image:: https://img.shields.io/badge/gitmoji-%20😜%20😍-FFDD67.svg
+    :target: https://gitmoji.dev
+    :alt: Gitmoji
 
-  .. image:: https://img.shields.io/badge/gitmoji-%20😜%20😍-FFDD67.svg
-      :target: https://gitmoji.dev
-      :alt: Gitmoji
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+    :target: https://github.com/psf/black
 
-  .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
-      :target: https://github.com/psf/black
+.. image:: https://app.travis-ci.com/John-P/wsic.svg?branch=main
+    :target: https://app.travis-ci.com/John-P/wsic
 
-  .. image:: https://app.travis-ci.com/John-P/wsic.svg?branch=main
-      :target: https://app.travis-ci.com/John-P/wsic
+.. image:: https://codecov.io/gh/John-P/wsic/branch/main/graph/badge.svg?token=ICCWDKJG5J
+    :target: https://codecov.io/gh/John-P/wsic
 
-  .. image:: https://codecov.io/gh/John-P/wsic/branch/main/graph/badge.svg?token=ICCWDKJG5J
-      :target: https://codecov.io/gh/John-P/wsic
-
-  .. image:: https://deepsource.io/gh/John-P/wsic.svg/?label=active+issues&show_trend=true&token=D-sO1mhzQv1n9FPl0RFaAfGt
-      :target: https://deepsource.io/gh/John-P/wsic/?ref=repository-badge
+.. image:: https://deepsource.io/gh/John-P/wsic.svg/?label=active+issues&show_trend=true&token=D-sO1mhzQv1n9FPl0RFaAfGt
+    :target: https://deepsource.io/gh/John-P/wsic/?ref=repository-badge
 
 
 Whole Slide Image (WSI) conversion for brightfield histology images.
