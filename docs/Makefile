@@ -21,4 +21,4 @@ help:
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 clean:
-	rm -fr "$(BUILDDIR)" "$(AUTOSUMMARYDIR)" "$(SPHINXPROJ).rst" modules.rst
+	rm -fr "$(BUILDDIR)" "$(AUTOSUMMARYDIR)" "$(SPHINXPROJ).rst"
