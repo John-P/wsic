@@ -39,6 +39,10 @@ class Reader(ABC):
         Returns:
             Reader: Reader for file.
         """
+        if path.is_dir() and path.suffix == ".zarr":
+            from wsic.writers import ZarrReaderWriter
+
+            return ZarrReaderWriter(path, overwrite=True)
         file_types = summon_file_types(path)
         if ("jp2",) in file_types:
             return JP2Reader(path)
