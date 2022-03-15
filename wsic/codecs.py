@@ -62,7 +62,8 @@ def register_codecs() -> None:
         from imagecodecs.numcodecs import register_codecs as register_imagecodecs_codecs
 
         # Register imagecodecs codecs
-        register_imagecodecs_codecs()
+        if "imagecodecs_jpeg" not in numcodecs.registry.codec_registry:
+            register_imagecodecs_codecs()
     except ImportError:
         warnings.warn(
             "imagecodecs is not installed, some codecs will not be available."
