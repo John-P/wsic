@@ -120,7 +120,7 @@ https://github.com/glencoesoftware/isyntax2raw
 
 
 wsidicomiser
-:::::::::
+::::::::::::
 
 Convert OpenSlide images to WSI DICOM.
 
