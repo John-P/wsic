@@ -213,7 +213,7 @@ class MultiProcessTileIterator:
         self.fill_queue()
 
         # Get the next yield tile from the queue
-        while True:
+        for _ in range(100):
             # Remove all tiles from the queue into the reordering dict
             self.empty_queue()
 
@@ -239,6 +239,26 @@ class MultiProcessTileIterator:
 
             # Sleep and try again
             time.sleep(0.1)
+        warnings.warn(
+            "Failed to get next tile after 100 attempts. Dumping debug information."
+        )
+        print(f"{self.reader.shape=}")
+        print(f"{self.read_tile_size=}")
+        print(f"{self.yield_tile_size=}")
+        print(f"{self.read_tiles_shape=}")
+        print(f"{self.yield_tiles_shape=}")
+        print(f"{self.read_index=}")
+        print(f"{self.yield_index=}")
+        print(f"{self.remaining_reads[:10]=}")
+        print(f"{self.enqueued=}")
+        print(f"{self.queue.qsize=}")
+        print(f"{self.reordering_dict.keys()=}")
+        intermediate_read_index = tile_slices(
+            index=(self.yield_j, self.yield_i),
+            shape=self.yield_tile_size[::-1],
+        )
+        print(f"{intermediate_read_index=}")
+        raise Exception(f"Failed to yield tile {self.yield_index}")
 
     def read_next_from_intermediate(self) -> Optional[np.ndarray]:
         """Read the next tile from the intermediate file."""
