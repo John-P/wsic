@@ -173,7 +173,7 @@ class Writer(ABC):
         """
         tqdm_kwargs = {
             "colour": "magenta",
-            "smoothing": 0.1,
+            "smoothing": 0.01,
         }
         tqdm_kwargs.update(kwargs)
         try:
