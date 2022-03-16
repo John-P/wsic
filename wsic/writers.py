@@ -15,7 +15,14 @@ import zarr
 from wsic.codecs import register_codecs
 from wsic.readers import MultiProcessTileIterator, Reader
 from wsic.types import PathLike
-from wsic.utils import mean_pool, mpp2ppcm, tile_cover_shape, warn_unused
+from wsic.utils import (
+    dowmsample_shape,
+    mean_pool,
+    mpp2ppcm,
+    tile_cover_shape,
+    tile_slices,
+    warn_unused,
+)
 
 
 class Writer(ABC):
@@ -583,7 +590,6 @@ class ZarrReaderWriter(Writer, Reader):
         if photometric != "rgb":
             warn_unused(photometric)
         warn_unused(microns_per_pixel)
-        warn_unused(pyramid_downsamples, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
@@ -617,23 +623,33 @@ class ZarrReaderWriter(Writer, Reader):
             zarr.Array or zarr.Group:
                 The zarr.
         """
+        # Read and existing zarr
         if self.path.exists() and self.path.is_dir():
             self.zarr = zarr.open(
                 self.path,
                 mode="r+",
             )
-            self.shape = self.zarr.shape
-            self.dtype = self.zarr.dtype
+            # If not a group, put it in one with a single array "0"
+            if self.zarr and not isinstance(self.zarr, zarr.Group):
+                group = zarr.group()
+                group[0] = self.zarr
+                self.zarr = group
+            self.shape = self.zarr[0].shape
+            self.dtype = self.zarr[0].dtype
             return self.zarr
         if self.shape is not None:
-            self.zarr = zarr.open(
+            self.zarr = zarr.open_group(
                 zarr.NestedDirectoryStore(self.path),
                 mode="a",
+            )
+            self.zarr[0] = zarr.zeros(
                 shape=self.shape,
                 chunks=self.tile_size,
                 dtype=self.dtype,
                 compressor=self.compressor,
             )
+            self.shape = self.zarr[0].shape
+            self.dtype = self.zarr[0].dtype
             return self.zarr
         return self.zarr
 
@@ -687,11 +703,11 @@ class ZarrReaderWriter(Writer, Reader):
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index."""
-        self.zarr[index] = value
+        self.zarr[0][index] = value
 
     def __getitem__(self, index: Tuple[int, ...]) -> np.ndarray:
         """Read pixel data at index."""
-        return self.zarr[index]
+        return self.zarr[0][index]
 
     def copy_from_reader(
         self,
@@ -715,10 +731,12 @@ class ZarrReaderWriter(Writer, Reader):
             num_workers=num_workers,
             read_tile_size=read_tile_size,
         )
+
         # Ensure there is a zarr to write to
         if self.shape is None:
             self.shape = reader.shape
         self._init_zarr()
+
         # Validate and normalise inputs
         lossy_codecs = ["jpeg"]
         optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
@@ -732,6 +750,7 @@ class ZarrReaderWriter(Writer, Reader):
                 "Lossy compression requires that the tile write size is a "
                 "multiple of the read tile size."
             )
+
         # Create a reader tile iterator
         reader_tile_iterator = self.reader_tile_iterator(
             reader,
@@ -740,17 +759,56 @@ class ZarrReaderWriter(Writer, Reader):
             num_workers=num_workers,
         )
         reader_tile_iterator = self.tile_progress(reader_tile_iterator)
+
         # Write the reader tile iterator to the writer
         tiles_shape = tile_cover_shape(
             reader.shape,
             read_tile_size[::-1],
         )
         tiles_index = np.ndindex(tiles_shape)
-        for (j, i), tile in zip(tiles_index, reader_tile_iterator):
-            self.zarr[
-                j * read_tile_size[1] : (j * read_tile_size[1]) + tile.shape[0],
-                i * read_tile_size[0] : (i * read_tile_size[0]) + tile.shape[1],
-            ] = tile
+        for ji, tile in zip(tiles_index, reader_tile_iterator):
+            level_0 = self.zarr[0]
+            level_0[tile_slices(ji, read_tile_size)] = tile
+
+        self._build_pyramid()
+
+    def _build_pyramid(self):
+        """Build the pyramid.
+
+        Constructs additional levels of the pyramid from the first level.
+
+        """
+        previous_level = self.zarr[0]
+        previous_downsample = 1
+        for level, downsample in self.pyramid_progress(
+            enumerate(self.pyramid_downsamples, start=1),
+        ):
+            inter_level_downsample = downsample // previous_downsample
+            level_shape = dowmsample_shape(self.shape, downsample)
+            level_tiles_shape = tile_cover_shape(
+                level_shape,
+                self.tile_size,
+            )
+            level_array = self.zarr.zeros(
+                name=level,
+                shape=level_shape,
+                chunks=self.tile_size,
+                dtype=self.dtype,
+                compressor=self.compressor,
+            )
+            level_tiles_index = np.ndindex(level_tiles_shape)
+
+            level_read_tile_size = np.multiply(self.tile_size, inter_level_downsample)
+
+            # Write tiles to the level by copying from the previous level
+            for ji in self.tile_progress(level_tiles_index):
+                read_slices = tile_slices(ji, level_read_tile_size)
+                tile = previous_level[read_slices]
+                down_tile = downsample_tile(tile, inter_level_downsample)
+                write_slices = tile_slices(ji, self.tile_size)
+                level_array[write_slices] = down_tile
+            previous_level = level_array
+            previous_downsample = downsample
 
 
 class ZarrIntermediate(Writer, Reader):
@@ -880,7 +938,7 @@ class ZarrIntermediate(Writer, Reader):
         raise NotImplementedError()
 
 
-def downsample_tile(image: np.ndarray, factor: int):
+def downsample_tile(image: np.ndarray, factor: int) -> np.array:
     """Downsample an image by a factor.
 
     Args:

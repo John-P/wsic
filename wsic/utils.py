@@ -1,9 +1,67 @@
 import inspect
 import warnings
-from math import ceil
+from math import ceil, floor
+from numbers import Number
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 
 import numpy as np
+
+
+def dowmsample_shape(
+    baseline_shape: Tuple[int, ...],
+    downsample: int,
+    channel_dim: Optional[int] = -1,
+    rounding_func: Callable[[Number], int] = floor,
+) -> Tuple[int, ...]:
+    r"""Calculate the shape of an array after downsampling by a factor.
+
+    The shape is calculated by dividing the shape of the baseline array
+    by the downsample factor. The output is rounded to the nearest
+    integer using the provided rounding function. E.g. for a founding
+    function of `floor`, the following opertion is performed
+    :math:`\lfloor \frac{shape}{downsample} \rfloor`. If a channel
+    dimension is specified, the dimension is left unchanged.
+
+    Args:
+        baseline_shape (Tuple[int, ...]):
+            The shape of the array to downsample.
+        downsample (int):
+            The downsample factor.
+        channel_dim (Optional[int]):
+            The dimension for channels. Defaults to -1 (last).
+        rounding_func (Callable[[int], int]):
+            The rounding function to use. Defaults to floor. Any
+            function which takes a single Number and returns an int such
+            as `math.floor` or `math.ceil` can be used. Note that the
+            behaviour of floor differs for negative numbers, e.g.
+            floor(-1) = -2. The `int` function is sigificantly faster
+            than floor.
+
+    Returns:
+        Tuple[int, ...]:
+            The shape of the downsampled array.
+
+    Examples:
+        >>> dowmsample_shape((13, 13), 2)
+        (6, 6)
+
+        >>> dowmsample_shape((13, 13, 3), 2)
+        (6, 6, 3)
+
+        >>> dowmsample_shape((13, 13, 3), 2, channel_dim=2)
+        (6, 6, 3)
+
+        >>> downsample_shape((13, 13, 3), 2, -1, ceil)
+        (7, 7, 3)
+
+    """
+    channels = baseline_shape[channel_dim] if channel_dim is not None else None
+    return tuple(
+        rounding_func(x / downsample)
+        if channel_dim is not None and (channel_dim % len(baseline_shape) != i)
+        else channels
+        for i, x in enumerate(baseline_shape)
+    )
 
 
 def varnames(
@@ -261,7 +319,7 @@ def mean_pool(image: np.ndarray, pool_size: int) -> np.ndarray:
 
     Uses `wsic.utils.block_reduce` to apply `np.mean` in blocks to an
     image.
-    
+
     This is significantly slower than `cv2.INTER_AREA` interpolation and
     `scipy.ndimage.zoom`, but a used as fallback for when neither
     optional dependency is available.

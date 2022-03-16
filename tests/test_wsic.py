@@ -202,9 +202,10 @@ def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
 
 
 def test_jp2_to_zarr(samples_path, tmp_path):
-    """Test that we can convert a JP2 to a Zarr file."""
+    """Convert JP2 to a single level Zarr."""
     with warnings.catch_warnings():
         warnings.simplefilter("error")
+
         reader = readers.Reader.from_file(samples_path / "XYC.jp2")
         writer = writers.ZarrReaderWriter(
             path=tmp_path / "XYC.zarr",
@@ -216,7 +217,35 @@ def test_jp2_to_zarr(samples_path, tmp_path):
     assert len(list(writer.path.iterdir())) > 0
 
     output = zarr.open(writer.path)
-    assert np.all(reader[:512, :512] == output[:512, :512])
+    assert np.all(reader[:512, :512] == output[0][:512, :512])
+
+
+def test_jp2_to_pyramid_zarr(samples_path, tmp_path):
+    """Convert JP2 to a pyramid Zarr."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+
+        reader = readers.Reader.from_file(samples_path / "XYC.jp2")
+        pyramid_downsamples = [2, 4, 8, 16, 32]
+        writer = writers.ZarrReaderWriter(
+            path=tmp_path / "XYC.zarr",
+            pyramid_downsamples=pyramid_downsamples,
+            tile_size=(256, 256),
+        )
+        writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(256, 256))
+
+    assert writer.path.exists()
+    assert writer.path.is_dir()
+    assert len(list(writer.path.iterdir())) > 0
+
+    output = zarr.open(writer.path)
+    assert np.all(reader[:512, :512] == output[0][:512, :512])
+
+    for level, dowmsample in zip(output.values(), [1] + pyramid_downsamples):
+        assert level.shape[:2] == (
+            reader.shape[0] // dowmsample,
+            reader.shape[1] // dowmsample,
+        )
 
 
 def test_warn_unused(samples_path, tmp_path):
@@ -231,6 +260,25 @@ def test_warn_unused(samples_path, tmp_path):
             compression="WebP",
             compression_level=70,
         )
+
+
+def test_read_zarr_array(tmp_path):
+    """Test that we can open a Zarr array."""
+    # Create a Zarr array
+    array = zarr.open(
+        tmp_path / "test.zarr",
+        mode="w",
+        shape=(10, 10),
+        chunks=(2, 2),
+        dtype=np.uint8,
+    )
+    array[:] = np.random.randint(0, 255, size=(10, 10))
+
+    # Open the array
+    reader = readers.Reader.from_file(tmp_path / "test.zarr")
+
+    assert reader.shape == (10, 10)
+    assert reader.dtype == np.uint8
 
 
 def test_cli_jp2_to_tiff(samples_path, tmp_path):
