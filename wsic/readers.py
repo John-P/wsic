@@ -39,6 +39,7 @@ class Reader(ABC):
         Returns:
             Reader: Reader for file.
         """
+        path = Path(path)
         if path.is_dir() and path.suffix == ".zarr":
             from wsic.writers import ZarrReaderWriter
 
