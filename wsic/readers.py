@@ -12,7 +12,7 @@ import zarr
 
 from wsic.magic import summon_file_types
 from wsic.types import PathLike
-from wsic.utils import tile_cover_shape, tile_slices, wrap_index
+from wsic.utils import mosaic_shape, tile_slices, wrap_index
 
 
 class Reader(ABC):
@@ -142,16 +142,16 @@ class MultiProcessTileIterator:
         self.yield_i = 0
         self.yield_j = 0
         self.num_workers = num_workers or os.cpu_count() or 2
-        self.read_tiles_shape = tile_cover_shape(
+        self.read_mosaic_shape = mosaic_shape(
             self.shape,
             self.read_tile_size[::-1],
         )
-        self.yield_tiles_shape = tile_cover_shape(
+        self.yield_mosaic_shape = mosaic_shape(
             self.shape,
             self.yield_tile_size[::-1],
         )
-        self.remaining_reads = list(np.ndindex(self.read_tiles_shape))
-        self.tile_status = zarr.zeros(self.yield_tiles_shape, dtype="u1")
+        self.remaining_reads = list(np.ndindex(self.read_mosaic_shape))
+        self.tile_status = zarr.zeros(self.yield_mosaic_shape, dtype="u1")
 
         # Validation and error handling
         if self.read_tile_size != self.yield_tile_size and not self.intermediate:
@@ -164,7 +164,7 @@ class MultiProcessTileIterator:
 
     def __len__(self) -> int:
         """Return the number of tiles in the reader."""
-        return int(np.prod(self.yield_tiles_shape))
+        return int(np.prod(self.yield_mosaic_shape))
 
     def __iter__(self) -> Iterator:
         """Return an iterator for the reader."""
@@ -194,11 +194,11 @@ class MultiProcessTileIterator:
 
     def wrap_indexes(self) -> None:
         """Wrap the read and yield indexes."""
-        self.read_index, overflow = wrap_index(self.read_index, self.read_tiles_shape)
+        self.read_index, overflow = wrap_index(self.read_index, self.read_mosaic_shape)
         if overflow and self.verbose:
             print("All tiles read.")
         self.yield_index, overflow = wrap_index(
-            self.yield_index, self.yield_tiles_shape
+            self.yield_index, self.yield_mosaic_shape
         )
         if overflow and self.verbose:
             print("All tiles yielded.")
@@ -247,8 +247,8 @@ class MultiProcessTileIterator:
         print(f"{self.reader.shape=}")
         print(f"{self.read_tile_size=}")
         print(f"{self.yield_tile_size=}")
-        print(f"{self.read_tiles_shape=}")
-        print(f"{self.yield_tiles_shape=}")
+        print(f"{self.read_mosaic_shape=}")
+        print(f"{self.yield_mosaic_shape=}")
         print(f"{self.read_index=}")
         print(f"{self.yield_index=}")
         print(f"{self.remaining_reads[:10]=}")

@@ -18,8 +18,8 @@ from wsic.types import PathLike
 from wsic.utils import (
     dowmsample_shape,
     mean_pool,
+    mosaic_shape,
     mpp2ppcm,
-    tile_cover_shape,
     tile_slices,
     warn_unused,
 )
@@ -504,7 +504,7 @@ class TIFFWriter(Writer):
                             floor(s / downsample) for s in reader.shape[:2]
                         ) + (reader.shape[-1],)
 
-                        level_tiles_shape = tile_cover_shape(
+                        level_tiles_shape = mosaic_shape(
                             level_shape,
                             self.tile_size,
                         )
@@ -760,7 +760,7 @@ class ZarrReaderWriter(Writer, Reader):
         reader_tile_iterator = self.tile_progress(reader_tile_iterator)
 
         # Write the reader tile iterator to the writer
-        tiles_shape = tile_cover_shape(
+        tiles_shape = mosaic_shape(
             reader.shape,
             read_tile_size[::-1],
         )
@@ -784,7 +784,7 @@ class ZarrReaderWriter(Writer, Reader):
         ):
             inter_level_downsample = downsample // previous_downsample
             level_shape = dowmsample_shape(self.shape, downsample)
-            level_tiles_shape = tile_cover_shape(
+            level_tiles_shape = mosaic_shape(
                 level_shape,
                 self.tile_size,
             )

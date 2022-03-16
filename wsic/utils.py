@@ -163,7 +163,7 @@ def mpp2ppcm(mpp: float) -> float:
     return (1 / mpp) * 1e4
 
 
-def tile_cover_shape(
+def mosaic_shape(
     array_shape: Tuple[int, ...], tile_shape: Tuple[int, ...]
 ) -> Tuple[int, ...]:
     """Calculate the shape of a grid of tiles which covers an array.
