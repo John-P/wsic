@@ -3,10 +3,12 @@ import os
 import time
 import warnings
 from abc import ABC
+from math import ceil, floor
 from pathlib import Path
 from typing import Iterator, Optional, Tuple, Union
 
 import numpy as np
+import zarr
 
 from wsic.magic import summon_file_types
 from wsic.types import PathLike
@@ -126,7 +128,6 @@ class MultiProcessTileIterator:
         intermediate=None,
         verbose: bool = False,
     ) -> None:
-
         self.reader = reader
         self.shape = reader.shape
         self.read_tile_size = read_tile_size
@@ -150,6 +151,7 @@ class MultiProcessTileIterator:
             self.yield_tile_size[::-1],
         )
         self.remaining_reads = list(np.ndindex(self.read_tiles_shape))
+        self.tile_status = zarr.zeros(self.yield_tiles_shape, dtype="u1")
 
         # Validation and error handling
         if self.read_tile_size != self.yield_tile_size and not self.intermediate:
@@ -268,10 +270,11 @@ class MultiProcessTileIterator:
             index=(self.yield_j, self.yield_i),
             shape=self.yield_tile_size[::-1],
         )
-        tile = self.intermediate[intermediate_read_index]
-        if np.count_nonzero(tile) > 0:
+        status = self.tile_status[self.yield_index]
+        if np.all(status == 1):  # Intermediate has all data for the tile
+            self.tile_status[self.yield_index] = 2
             self.yield_i += 1
-            return tile
+            return self.intermediate[intermediate_read_index]
         return None
 
     def empty_queue(self) -> None:
@@ -312,6 +315,8 @@ class MultiProcessTileIterator:
 
             # If no intermediate is required, return the tile
             if not self.intermediate:
+                if tile is None:
+                    raise Exception(f"Tile {read_ji} is None")
                 self.read_i += 1
                 self.yield_i += 1
                 return tile
@@ -319,9 +324,14 @@ class MultiProcessTileIterator:
             # Otherwise, write the tile to the intermediate
             intermediate_write_index = tile_slices(
                 index=read_ji,
-                shape=tile.shape,
+                shape=self.read_tile_size,
             )
             self.intermediate[intermediate_write_index] = tile
+            tile_status_index = tuple(
+                slice(max(0, floor(x.start / r)), ceil(x.stop / r))
+                for x, r in zip(intermediate_write_index, self.yield_tile_size)
+            )
+            self.tile_status[tile_status_index] = 1
             self.read_i += 1
         return None
 
