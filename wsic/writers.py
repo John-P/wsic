@@ -502,7 +502,7 @@ class TIFFWriter(Writer):
                     ):
                         level_shape = tuple(
                             floor(s / downsample) for s in reader.shape[:2]
-                        ) + (3,)
+                        ) + (reader.shape[-1],)
 
                         level_tiles_shape = tile_cover_shape(
                             level_shape,
