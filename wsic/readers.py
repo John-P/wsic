@@ -205,7 +205,7 @@ class MultiProcessTileIterator:
 
     def __next__(self) -> np.ndarray:
         """Return the next tile from the reader."""
-        # Increment the read ij index
+        # Ensure a valid read ij index
         self.wrap_indexes()
 
         # Add tile reads to the queue until the maximum number of
