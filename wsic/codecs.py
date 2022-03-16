@@ -15,13 +15,15 @@ class QOI(Codec):
 
     codec_id = "wsic_qoi"
 
-    def encode(self, buf: IO) -> bytes:
+    @staticmethod
+    def encode(buf: IO) -> bytes:
         """Encode QOI data."""
         import qoi
 
         return qoi.encode(ensure_ndarray(buf))
 
-    def decode(self, buf: IO, out=None) -> np.ndarray:
+    @staticmethod
+    def decode(buf: IO, out=None) -> np.ndarray:
         """Decode QOI data."""
         import qoi
 
