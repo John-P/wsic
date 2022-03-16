@@ -71,7 +71,7 @@ Features
   * Pyramid TIFF
   * OME-TIFF
   * JP2
-  * Zarr
+  * Pyramid Zarr
 
 * Custom tile size
 * Compression codecs
@@ -80,7 +80,6 @@ Features
 To-Dos
 ------
 
-* Add pyramid generation for zarr
 * Add support for other formats:
 
   * Read/Write OME-NGFF
