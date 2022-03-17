@@ -372,7 +372,53 @@ class JP2Reader(Reader):
         self.shape = self.jp2.shape
         self.dtype = np.uint8
         self.axes = "YXS"
-        self.microns_per_pixel = None
+        self.microns_per_pixel = self._get_mpp()
+        self.tile_shape = self._get_tile_shape()
+
+    def _get_mpp(self) -> Optional[Tuple[float, float]]:
+        """Get the microns per pixel for the image.
+
+        Returns:
+            Optional[Tuple[float, float]]:
+                The resolution of the image in microns per pixel.
+                If the resolution is not available, this will be None.
+        """
+        import glymur
+
+        boxes = {type(box): box for box in self.jp2.box}
+        header_box = boxes[glymur.jp2box.JP2HeaderBox]
+        header_sub_boxes = {type(box): box for box in header_box.box}
+        resolution_box = header_sub_boxes.get(glymur.jp2box.ResolutionBox)
+        if resolution_box is None:
+            return None
+        resolution_sub_boxes = {type(box): box for box in resolution_box.box}
+        capture_resolution_box = resolution_sub_boxes.get(
+            glymur.jp2box.CaptureResolutionBox
+        )
+        if capture_resolution_box is None:
+            return None
+        y_res = capture_resolution_box.vertical_resolution
+        x_res = capture_resolution_box.horizontal_resolution
+        return ppu2mpp(x_res, "cm"), ppu2mpp(y_res, "cm")
+
+    def _get_tile_shape(self) -> Tuple[int, int]:
+        """Get the tile shape as a (height, width) tuple.
+
+        Returns:
+            Tuple[int, int]:
+                The tile shape as (height, width).
+        """
+        import glymur
+
+        boxes = {type(box): box for box in self.jp2.box}
+        ccb = boxes.get(glymur.jp2box.ContiguousCodestreamBox, None)
+        if ccb is None:
+            raise ValueError("No codestream box found.")
+        segments = {type(segment): segment for segment in ccb.codestream.segment}
+        siz = segments.get(glymur.codestream.SIZsegment, None)
+        if siz is None:
+            raise ValueError("No SIZ segment found.")
+        return (siz.ytsiz, siz.xtsiz)
 
     def __getitem__(self, index: tuple) -> np.ndarray:
         """Get pixel data at index."""
