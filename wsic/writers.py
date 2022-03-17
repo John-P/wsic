@@ -205,6 +205,7 @@ class Writer(ABC):
             "colour": "blue",
             # Bar format with no ETA
             "bar_format": "{l_bar}{bar}| {n_fmt}/{total_fmt}",
+            "desc": "Building Pyramid",
         }
         tqdm_kwargs.update(kwargs)
         try:
@@ -498,7 +499,6 @@ class TIFFWriter(Writer):
                     for _, downsample in self.pyramid_progress(
                         enumerate(self.pyramid_downsamples),
                         total=len(self.pyramid_downsamples),
-                        desc="Building Pyramid",
                     ):
                         level_shape = tuple(
                             floor(s / downsample) for s in reader.shape[:2]
