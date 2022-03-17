@@ -450,8 +450,8 @@ class TIFFWriter(Writer):
         microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
         resolution = (
             (
-                mpp2ppu(microns_per_pixel[0], "cm"),
-                mpp2ppu(microns_per_pixel[1], "cm"),
+                round(mpp2ppu(microns_per_pixel[0], "cm")),
+                round(mpp2ppu(microns_per_pixel[1], "cm")),
                 "CENTIMETER",
             )
             if microns_per_pixel
