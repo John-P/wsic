@@ -496,7 +496,7 @@ class TIFFWriter(Writer):
                 )
                 # Write pyramid resolutions
                 with multiprocessing.Pool(num_workers) as pool:
-                    for _, downsample in self.pyramid_progress(
+                    for level, downsample in self.pyramid_progress(
                         enumerate(self.pyramid_downsamples),
                         total=len(self.pyramid_downsamples),
                     ):
@@ -524,6 +524,7 @@ class TIFFWriter(Writer):
                         tile_generator = self.tile_progress(
                             tile_generator,
                             total=int(np.product(level_tiles_shape)),
+                            desc=f"Level {level}",
                             leave=False,
                         )
 
