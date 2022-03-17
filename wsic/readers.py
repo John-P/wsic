@@ -490,8 +490,9 @@ class OpenSlideReader(Reader):
         except KeyError:
             warnings.warn("No resolution metadata found.")
 
+    @staticmethod
     def _check_sensible_resolution(
-        self, tiff_resolution: Tuple[float, float], tiff_units: int
+        tiff_resolution: Tuple[float, float], tiff_units: int
     ) -> None:
         """Check whether the resolution is sensible.
 
