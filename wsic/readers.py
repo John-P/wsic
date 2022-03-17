@@ -482,7 +482,7 @@ class TIFFReader(Reader):
         data = fh.read(self.mosaic_byte_counts[index])
         if not decode:
             return data
-        tile, indices, shape = self._tiff_page.decode(
+        tile, _, _ = self._tiff_page.decode(
             data, flat_index, jpegtables=self._tiff_page.jpegtables
         )
         return tile
