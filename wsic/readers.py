@@ -489,6 +489,7 @@ class OpenSlideReader(Reader):
             return tuple(ppu2mpp(x, units) for x in resolution)
         except KeyError:
             warnings.warn("No resolution metadata found.")
+        return None
 
     @staticmethod
     def _check_sensible_resolution(
