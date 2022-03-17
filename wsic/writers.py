@@ -154,8 +154,8 @@ class Writer(ABC):
             raise FileExistsError(f"{self.path} exists and overwrite is False.")
 
     @staticmethod
-    def tile_progress(iterable: Iterable, **kwargs) -> Iterator:
-        """Wrap a tile reader iterable in a progress bar.
+    def level_progress(iterable: Iterable, **kwargs) -> Iterator:
+        """Wrapper for a tile yeilding iterable when writing a level.
 
         Used to display progress when copying from a reader.
 
@@ -325,7 +325,7 @@ class JP2Writer(Writer):
             num_workers=num_workers,
             read_tile_size=read_tile_size or self.tile_size,
         )
-        reader_tile_iterator = self.tile_progress(reader_tile_iterator)
+        reader_tile_iterator = self.level_progress(reader_tile_iterator)
         for tile_writer in jp2.get_tilewriters():
             try:
                 tile_writer[:] = next(reader_tile_iterator)
@@ -466,7 +466,7 @@ class TIFFWriter(Writer):
                 intermediate=intermediate,
                 read_tile_size=read_tile_size or self.tile_size,
             )
-            reader_tile_iterator = self.tile_progress(
+            reader_tile_iterator = self.level_progress(
                 reader_tile_iterator, desc="Writing"
             )
             # Write baseline (level 0)
@@ -521,7 +521,7 @@ class TIFFWriter(Writer):
                             iterable=np.ndindex(level_tiles_shape),
                         )
 
-                        tile_generator = self.tile_progress(
+                        tile_generator = self.level_progress(
                             tile_generator,
                             total=int(np.product(level_tiles_shape)),
                             desc=f"Level {level}",
@@ -758,7 +758,7 @@ class ZarrReaderWriter(Writer, Reader):
             yield_tile_size=read_tile_size,
             num_workers=num_workers,
         )
-        reader_tile_iterator = self.tile_progress(reader_tile_iterator)
+        reader_tile_iterator = self.level_progress(reader_tile_iterator)
 
         # Write the reader tile iterator to the writer
         tiles_shape = mosaic_shape(
@@ -801,7 +801,7 @@ class ZarrReaderWriter(Writer, Reader):
             level_read_tile_size = np.multiply(self.tile_size, inter_level_downsample)
 
             # Write tiles to the level by copying from the previous level
-            for ji in self.tile_progress(level_tiles_index):
+            for ji in self.level_progress(level_tiles_index):
                 read_slices = tile_slices(ji, level_read_tile_size)
                 tile = previous_level[read_slices]
                 down_tile = downsample_tile(tile, inter_level_downsample)
