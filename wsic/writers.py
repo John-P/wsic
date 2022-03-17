@@ -572,6 +572,11 @@ class ZarrReaderWriter(Writer, Reader):
             Defaults to False.
         verbose (bool, optional):
             Print more output. Defaults to False.
+        ome (bool):
+            Write OME-TIFF metadata. Defaults to False.
+            Currently only supported by the TIFFWriter writer but
+            defined here for API consistency.
+
     """
 
     def __init__(
@@ -587,10 +592,13 @@ class ZarrReaderWriter(Writer, Reader):
         pyramid_downsamples: Optional[List[int]] = None,  # Currently unused
         overwrite: bool = False,
         verbose: bool = False,
+        *,
+        ome: bool = False,
     ) -> None:
         if photometric != "rgb":
             warn_unused(photometric)
         warn_unused(microns_per_pixel)
+        warn_unused(ome, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
