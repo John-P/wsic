@@ -439,15 +439,57 @@ class TIFFReader(Reader):
         import tifffile
 
         super().__init__(path)
-        self.tiff = tifffile.TiffFile(str(path))
-        self.array = self.tiff.pages[0].asarray()
-        self.shape = self.array.shape
-        self.dtype = self.array.dtype
-        self.axes = self.tiff.series[0].axes
+        self._tiff = tifffile.TiffFile(str(path))
+        self._tiff_page = self._tiff.pages[0]
+        self._array = self._tiff_page.asarray()
+        self.shape = self._array.shape
+        self.dtype = self._array.dtype
+        self.axes = self._tiff.series[0].axes
+        self.is_tiled = self._tiff_page.is_tiled
+        self.tile_shape = None
+        self.mosaic_shape = None
+        self.mosaic_byte_offsets = None
+        self.mosaic_byte_counts = None
+        if self.is_tiled:
+            self.tile_shape = (self._tiff_page.tilelength, self._tiff_page.tilewidth)
+            self.mosaic_shape = mosaic_shape(
+                array_shape=self.shape, tile_shape=self.tile_shape
+            )
+            self.mosaic_byte_offsets = np.array(self._tiff_page.dataoffsets).reshape(
+                self.mosaic_shape
+            )
+            self.mosaic_byte_counts = np.array(self._tiff_page.databytecounts).reshape(
+                self.mosaic_shape
+            )
+        self.jpeg_header = self._tiff_page.jpegheader
+
+    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
+        """Get tile at index.
+
+        Args:
+            index (Tuple[int, int]):
+                The index of the tile to get.
+            decode (bool, optional):
+                Whether to decode the tile. Defaults to True.
+
+        Returns:
+            np.ndarray:
+                The tile at index.
+        """
+        flat_index = index[0] * self.tile_shape[1] + index[1]
+        fh = self._tiff.filehandle
+        _ = fh.seek(self.mosaic_byte_offsets[index])
+        data = fh.read(self.mosaic_byte_counts[index])
+        if not decode:
+            return data
+        tile, indices, shape = self._tiff_page.decode(
+            data, flat_index, jpegtables=self._tiff_page.jpegtables
+        )
+        return tile
 
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
         """Get pixel data at index."""
-        return self.array[index]
+        return self._array[index]
 
 
 class OpenSlideReader(Reader):
