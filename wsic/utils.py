@@ -158,9 +158,48 @@ def warn_unused(
         )
 
 
-def mpp2ppcm(mpp: float) -> float:
-    """Convert microns per pixel (mpp) to pixels per centimeter."""
-    return (1 / mpp) * 1e4
+def mpp2ppu(mpp: float, units: Union[str, int]) -> float:
+    """Convert microns per pixel (mpp) to pixels per unit.
+
+    Args:
+        mpp (float):
+            The microns per pixel.
+        units (Union[str, int]):
+            The units to convert to. Valid units are: 'um', 'mm', 'cm',
+            'inch', 2 (TIFF inches), and 3 (TIFF cm).
+
+    """
+    mpp_to_upp = {
+        "um": 1,
+        "mm": 1e3,
+        "cm": 1e6,
+        "inch": 25400,
+        2: 25400,
+        3: 1e6,
+    }
+    return (1 / mpp) * mpp_to_upp[units]
+
+
+def ppu2mpp(ppu: float, units: Union[str, int]) -> float:
+    """Convert pixels per unit to microns per pixel (mpp).
+
+    Args:
+        ppu (float):
+            The pixels per unit.
+        units (Union[str, int]):
+            The units to convert from. Valid units are: 'um', 'mm',
+            'cm', 'inch', 2 (TIFF inches), and 3 (TIFF cm).
+
+    """
+    mpp_to_upp = {
+        "um": 1,
+        "mm": 1e3,
+        "cm": 1e6,
+        "inch": 25400,
+        2: 25400,
+        3: 1e6,
+    }
+    return (1 / ppu) * mpp_to_upp[units]
 
 
 def mosaic_shape(

@@ -19,7 +19,7 @@ from wsic.utils import (
     dowmsample_shape,
     mean_pool,
     mosaic_shape,
-    mpp2ppcm,
+    mpp2ppu,
     tile_slices,
     warn_unused,
 )
@@ -447,13 +447,14 @@ class TIFFWriter(Writer):
         )
         import tifffile
 
+        microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
         resolution = (
             (
-                mpp2ppcm(self.microns_per_pixel[0]),
-                mpp2ppcm(self.microns_per_pixel[1]),
+                mpp2ppu(microns_per_pixel[0], "cm"),
+                mpp2ppu(microns_per_pixel[1], "cm"),
                 "CENTIMETER",
             )
-            if self.microns_per_pixel
+            if microns_per_pixel
             else None
         )
 

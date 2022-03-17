@@ -12,7 +12,7 @@ import zarr
 
 from wsic.magic import summon_file_types
 from wsic.types import PathLike
-from wsic.utils import mosaic_shape, tile_slices, wrap_index
+from wsic.utils import mosaic_shape, ppu2mpp, tile_slices, wrap_index
 
 
 class Reader(ABC):
@@ -372,6 +372,7 @@ class JP2Reader(Reader):
         self.shape = self.jp2.shape
         self.dtype = np.uint8
         self.axes = "YXS"
+        self.microns_per_pixel = None
 
     def __getitem__(self, index: tuple) -> np.ndarray:
         """Get pixel data at index."""
@@ -411,6 +412,64 @@ class OpenSlideReader(Reader):
         self.os_slide = openslide.OpenSlide(str(path))
         self.shape = self.os_slide.level_dimensions[0][::-1] + (3,)
         self.dtype = np.uint8
+        self.axes = "YXS"
+        self.tile_shape = None  # No easy way to get tile shape currently
+        self.microns_per_pixel = self._get_mpp()
+
+    def _get_mpp(self) -> Optional[Tuple[float, float]]:
+        """Get the microns per pixel for the image.
+
+        Returns:
+            Optional[Tuple[float, float]]:
+                The microns per pixel as (x, y) tuple.
+        """
+        try:
+            return (
+                self.os_slide.properties["openslide.mpp-x"],
+                self.os_slide.properties["openslide.mpp-y"],
+            )
+        except KeyError:
+            warnings.warn("OpenSlide could not find MPP.")
+        # Fall back to TIFF resolution tags
+        try:
+            resolution = (
+                self.os_slide.properties["tiff.XResolution"],
+                self.os_slide.properties["tiff.YResolution"],
+            )
+            units = self.os_slide.properties["tiff.ResolutionUnit"]
+            self._check_sensible_resolution(resolution, units)
+            return tuple(ppu2mpp(x, units) for x in resolution)
+        except KeyError:
+            warnings.warn("No resolution metadata found.")
+
+    def _check_sensible_resolution(
+        self, tiff_resolution: Tuple[float, float], tiff_units: int
+    ) -> None:
+        """Check whether the resolution is sensible.
+
+        It is common for TIFF files to have incorrect resolution tags.
+        This method checks whether the resolution is sensible and warns
+        if it is not.
+
+        Args:
+            tiff_resolution (Tuple[float, float]):
+                The TIFF resolution as an (x, y) tuple.
+            tiff_units (int):
+                The TIFF units of the resolution. A value of 2 indicates
+                inches and a value of 3 indicates centimeters.
+        """
+        if tiff_units == 2 and 72 in tiff_resolution:
+            warnings.warn(
+                "TIFF resolution tags found."
+                " However, they have a common default value of 72 pixels per inch."
+                " This may from a misconfigured software library or tool"
+                " which is expecting to handle print documents."
+            )
+        if 0 in tiff_resolution:
+            warnings.warn(
+                "TIFF resolution tags found."
+                " However, one or more of the values is zero."
+            )
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
