@@ -152,6 +152,17 @@ class MultiProcessTileIterator:
         )
         self.remaining_reads = list(np.ndindex(self.read_mosaic_shape))
         self.tile_status = zarr.zeros(self.yield_mosaic_shape, dtype="u1")
+        try:
+            from tqdm.auto import tqdm
+
+            self.read_pbar = tqdm(
+                total=np.prod(self.read_mosaic_shape),
+                desc="Reading",
+                colour="cyan",
+                smoothing=0.01,
+            )
+        except ImportError:
+            self.read_pbar = None
 
         # Validation and error handling
         if self.read_tile_size != self.yield_tile_size and not self.intermediate:
@@ -203,6 +214,7 @@ class MultiProcessTileIterator:
         if overflow and self.verbose:
             print("All tiles yielded.")
         elif overflow:
+            self.read_pbar.close()
             raise StopIteration
 
     def __next__(self) -> np.ndarray:
@@ -299,6 +311,11 @@ class MultiProcessTileIterator:
             proc.start()
             self.enqueued.add(next_ji)
 
+    def update_read_pbar(self) -> None:
+        """Update the read progress bar."""
+        if self.read_pbar is not None:
+            self.read_pbar.update()
+
     def pop_next_read_tile(self) -> Optional[np.ndarray]:
         """Remove the next tile from the reordering dict.
 
@@ -318,6 +335,7 @@ class MultiProcessTileIterator:
                 if tile is None:
                     raise Exception(f"Tile {read_ji} is None")
                 self.read_i += 1
+                self.update_read_pbar()
                 self.yield_i += 1
                 return tile
 
@@ -333,6 +351,7 @@ class MultiProcessTileIterator:
             )
             self.tile_status[tile_status_index] = 1
             self.read_i += 1
+            self.update_read_pbar()
         return None
 
 
