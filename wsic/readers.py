@@ -366,8 +366,10 @@ class JP2Reader(Reader):
         super().__init__(path)
         import glymur
 
+        # Enable multithreading
         if glymur.options.version.openjpeg_version_tuple >= (2, 2, 0):
             glymur.set_option("lib.num_threads", multiprocessing.cpu_count())
+
         self.jp2 = glymur.Jp2k(str(path))
         self.shape = self.jp2.shape
         self.dtype = np.uint8
