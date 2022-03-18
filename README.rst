@@ -82,6 +82,8 @@ Features
 
 * Custom tile size
 * Compression codecs
+* Lossloss repackaging / transcoding mode
+  (Experimental: Currently only SVS to single resolution zarr)
 
 
 To-Dos
@@ -89,7 +91,7 @@ To-Dos
 
 * Add support for other formats:
 
-  * Read/Write OME-NGFF
+  * Read/Write OME-NGFF format zarr
   * Read/Write WSI DICOM (via wsidicom)
 
 
