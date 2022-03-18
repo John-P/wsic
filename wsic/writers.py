@@ -847,8 +847,8 @@ class ZarrReaderWriter(Writer, Reader):
         """Losslessly transform into a new format from a TiffReader.
 
         Repackages tiles from the Reader to a zarr. Currently only
-        supports transcoding from SVS files and a single resolution
-        level.
+        supports transcoding from SVS and some OME-TIFF files and currently
+        only ouputs a single resolution level (level 0).
 
         It may also be possible to transcode the tiles themselves (e.g.
         JPEG JPEG XL) or perform simple geometric transforms (flip,
@@ -869,8 +869,10 @@ class ZarrReaderWriter(Writer, Reader):
             )
         if self.dtype != reader.dtype:
             raise ValueError("Dtype must match the reader dtype for transcoding.")
-        if not reader._tiff.is_svs:
-            raise ValueError("Currently only SVS is supported for transcoding.")
+        if not any([reader._tiff.is_svs, reader._tiff.is_ome]):
+            raise ValueError(
+                "Currently only SVS and OME-TIFF are supported for transcoding."
+            )
 
         register_codecs()
         codec = self.get_transcode_codec(reader)

@@ -281,6 +281,64 @@ def test_read_zarr_array(tmp_path):
     assert reader.dtype == np.uint8
 
 
+def test_tiff_get_tile(samples_path):
+    """Test getting a tile from a TIFF."""
+    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    tile = reader.get_tile((1, 1), decode=False)
+    assert isinstance(tile, bytes)
+
+
+def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
+    """Test that we can transcode an SVS to a Zarr."""
+    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    writer = writers.ZarrReaderWriter(
+        path=tmp_path / "CMU-1-Small-Region.zarr",
+        tile_size=reader.tile_shape[::-1],
+        dtype=reader.dtype,
+    )
+    writer.transcode_from_reader(reader=reader)
+
+    assert writer.path.exists()
+    assert writer.path.is_dir()
+    assert len(list(writer.path.iterdir())) > 0
+
+    output = zarr.open(writer.path)
+    assert np.all(reader[...] == output[0][...])
+
+
+def test_transcode_jp2_to_zarr(samples_path, tmp_path):
+    """Test that we can transcode an SVS to a Zarr."""
+    reader = readers.Reader.from_file(
+        samples_path
+        / "bfconvert"
+        / (
+            "XYC_-compression_JPEG-2000"
+            "_-tilex_128_-tiley_128"
+            "_-pyramid-scale_2"
+            "_-merge.ome.tiff"
+        )
+    )
+    writer = writers.ZarrReaderWriter(
+        path=tmp_path
+        / (
+            "XYC_-compression_JPEG-2000"
+            "_-tilex_128_-tiley_128_"
+            "-pyramid-scale_2_"
+            "-merge.zarr"
+        ),
+        tile_size=reader.tile_shape[::-1],
+        dtype=reader.dtype,
+    )
+    writer.transcode_from_reader(reader=reader)
+
+    assert writer.path.exists()
+    assert writer.path.is_dir()
+    assert len(list(writer.path.iterdir())) > 0
+
+    output = zarr.open(writer.path)
+    assert np.all(reader[...] == output[0][...])
+
+
 def test_cli_jp2_to_tiff(samples_path, tmp_path):
     """Test the CLI."""
     runner = CliRunner()
