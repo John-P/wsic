@@ -23,7 +23,7 @@ def main(ctx, debug):
     ctx.obj["DEBUG"] = debug
 
 
-@main.command()
+@main.command(no_args_is_help=True)
 @click.version_option(wsic.__version__)
 @click.option(
     "-i",
@@ -128,7 +128,7 @@ def convert(
     writer.copy_from_reader(reader, read_tile_size=read_tile_size, num_workers=workers)
 
 
-@main.command()
+@main.command(no_args_is_help=True)
 @click.option(
     "-i",
     "--in-path",
