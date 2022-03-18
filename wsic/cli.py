@@ -128,5 +128,34 @@ def convert(
     writer.copy_from_reader(reader, read_tile_size=read_tile_size, num_workers=workers)
 
 
+@main.command()
+@click.option(
+    "-i",
+    "--in-path",
+    help="Path to WSI TIFF to read from.",
+    type=click.Path(exists=True),
+)
+@click.option(
+    "-o",
+    "--out-path",
+    help="The path to output zarr.",
+    type=click.Path(),
+)
+def transcode(
+    in_path: str,
+    out_path: str,
+):
+    """Repackage a (TIFF) WSI to a zarr."""
+    in_path = Path(in_path)
+    out_path = Path(out_path)
+    reader = wsic.readers.TIFFReader.from_file(in_path)
+    writer = wsic.writers.ZarrReaderWriter(
+        out_path,
+        tile_size=reader.tile_shape[::-1],
+        dtype=reader.dtype,
+    )
+    writer.transcode_from_reader(reader)
+
+
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

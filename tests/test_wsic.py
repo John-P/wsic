@@ -340,13 +340,27 @@ def test_transcode_jp2_to_zarr(samples_path, tmp_path):
 
 
 def test_cli_jp2_to_tiff(samples_path, tmp_path):
-    """Test the CLI."""
+    """Test the CLI for converting JP2 to tiled TIFF."""
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as td:
         in_path = str(samples_path / "XYC.jp2")
         out_path = str(Path(td) / "XYC.tiff")
         result = runner.invoke(
             cli.convert,
+            ["-i", in_path, "-o", out_path],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+
+
+def test_cli_transcode_svs_to_zarr(samples_path, tmp_path):
+    """Test the CLI for transcoding."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = str(samples_path / "CMU-1-Small-Region.svs")
+        out_path = str(Path(td) / "MU-1-Small-Region.zarr")
+        result = runner.invoke(
+            cli.transcode,
             ["-i", in_path, "-o", out_path],
             catch_exceptions=False,
         )
