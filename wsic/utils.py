@@ -388,3 +388,83 @@ def mean_pool(image: np.ndarray, pool_size: int) -> np.ndarray:
     if reduced.ndim == 3 and out_ndim == 2:
         return reduced.squeeze(axis=2)
     return reduced
+
+
+def normalise_color_space(color_space: Union[str, int]) -> str:
+    """Normalise a color space name.
+
+    Args:
+        color_space (Union[str, int]):
+            The color space to normalise.
+
+    Returns:
+        str:
+            The normalised color space name.
+    """
+    mapping = {
+        "rgb": "RGB",
+        "RGB": "RGB",
+        "bgr": "BGR",
+        "gray": "L",
+        "gray_scale": "L",
+        "grey": "L",
+        "grey_scale": "L",
+        "ycbcr": "YCrCb",
+    }
+    try:
+        from tifffile import TIFF
+
+        mapping.update(
+            {
+                TIFF.PHOTOMETRIC.RGB: "RGB",
+                TIFF.PHOTOMETRIC.YCBCR: "YCbCr",
+            }
+        )
+    except ImportError:
+        pass
+
+    return mapping[color_space]
+
+
+def normalise_compression(compression: Union[str, int]) -> str:
+    """Normalise a compression name.
+
+    Args:
+        compression (Union[str, int]):
+            The compression to normalise.
+
+    Returns:
+        str:
+            The normalised compression name.
+    """
+    mapping = {
+        "jpeg": "JPEG",
+        "JPEG": "JPEG",
+        "jpeg2000": "JP2",
+        "JPEG2000": "JP2",
+        "j2k": "J2K",
+        "J2K": "J2K",
+        "zip": "ZIP",
+        "ZIP": "ZIP",
+        "deflate": "DEFLATE",
+        "DEFLATE": "DEFLATE",
+        "lzw": "LZW",
+        "LZW": "LZW",
+        "packbits": "PACKBITS",
+        "PACKBITS": "PACKBITS",
+        "none": "NONE",
+        "NONE": "NONE",
+    }
+    try:
+        from tifffile import TIFF
+
+        mapping.update(
+            {
+                TIFF.COMPRESSION.JPEG: "JPEG",
+                TIFF.COMPRESSION.APERIO_JP2000_YCBC: "Aperio J2K YCbCr",
+                TIFF.COMPRESSION.APERIO_JP2000_RGB: "Aperio J2K RGB",
+            }
+        )
+    except ImportError:
+        pass
+    return mapping[compression]

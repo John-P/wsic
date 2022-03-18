@@ -7,13 +7,13 @@ from abc import ABC, abstractmethod
 from functools import partial
 from math import floor
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import zarr
 
 from wsic.codecs import register_codecs
-from wsic.readers import MultiProcessTileIterator, Reader
+from wsic.readers import MultiProcessTileIterator, Reader, TIFFReader
 from wsic.types import PathLike
 from wsic.utils import (
     dowmsample_shape,
@@ -174,6 +174,7 @@ class Writer(ABC):
         tqdm_kwargs = {
             "colour": "magenta",
             "smoothing": 0.01,
+            "desc": "Writing",
         }
         tqdm_kwargs.update(kwargs)
         try:
@@ -212,6 +213,31 @@ class Writer(ABC):
             from tqdm.auto import tqdm
 
             return tqdm(iterable, **tqdm_kwargs)
+        except ImportError:
+            return iterable
+
+    @staticmethod
+    def transcode_progress(iterable: Iterable, **kwargs) -> Iterable:
+        """Progress bar for transcoding.
+
+        Args:
+            iterable (Iterable):
+                Iterable to wrap.
+            **kwargs:
+                Keyword arguments to pass to the progress bar.
+
+        Returns:
+            Iterable:
+        """
+        try:
+            from tqdm.auto import tqdm
+
+            return tqdm(
+                iterable,
+                desc="Transcoding",
+                colour="green",
+                **kwargs,
+            )
         except ImportError:
             return iterable
 
@@ -467,9 +493,7 @@ class TIFFWriter(Writer):
                 intermediate=intermediate,
                 read_tile_size=read_tile_size or self.tile_size,
             )
-            reader_tile_iterator = self.level_progress(
-                reader_tile_iterator, desc="Writing"
-            )
+            reader_tile_iterator = self.level_progress(reader_tile_iterator)
             # Write baseline (level 0)
             with tifffile.TiffWriter(
                 file=self.path,
@@ -801,7 +825,7 @@ class ZarrReaderWriter(Writer, Reader):
             level_array = self.zarr.zeros(
                 name=level,
                 shape=level_shape,
-                chunks=self.tile_size,
+                chunks=(*self.tile_size, self.shape[-1]),
                 dtype=self.dtype,
                 compressor=self.compressor,
             )
@@ -818,6 +842,83 @@ class ZarrReaderWriter(Writer, Reader):
                 level_array[write_slices] = down_tile
             previous_level = level_array
             previous_downsample = downsample
+
+    def transcode_from_reader(self, reader: Reader) -> None:
+        """Losslessly transform into a new format from a TiffReader.
+
+        Repackages tiles from the Reader to a zarr. Currently only
+        supports transcoding from SVS files and a single resolution
+        level.
+
+        It may also be possible to transcode the tiles themselves (e.g.
+        JPEG JPEG XL) or perform simple geometric transforms (flip,
+        rotate, etc). However, this is not yet implemented. Currently,
+        they are simply copied into a new structure.
+
+
+        Args:
+            reader (Reader):
+                Reader object.
+        """
+        # Input validation
+        if not isinstance(reader, TIFFReader):
+            raise ValueError("Currently TIFFReader is supported for transcoding.")
+        if self.tile_size != reader.tile_shape[:2][::-1]:
+            raise ValueError(
+                "Tile size must match the reader tile size for transcoding."
+            )
+        if self.dtype != reader.dtype:
+            raise ValueError("Dtype must match the reader dtype for transcoding.")
+        if not reader._tiff.is_svs:
+            raise ValueError("Currently only SVS is supported for transcoding.")
+
+        register_codecs()
+        codec = self.get_transcode_codec(reader)
+
+        self.zarr = zarr.open_group(zarr.NestedDirectoryStore(self.path))
+        self.zarr.create_dataset(
+            name="0",
+            shape=reader.shape,
+            dtype=reader.dtype,
+            chunks=(*reader.tile_shape, reader.shape[-1]),
+            compressor=codec,
+        )
+
+        # Copy tiles
+        for index in self.transcode_progress(
+            np.ndindex(reader.mosaic_shape),
+            total=np.prod(reader.mosaic_shape),
+        ):
+            tile_path = self.path / "0" / str(index[0]) / str(index[1]) / "0"
+            tile_path.parent.mkdir(parents=True, exist_ok=True)
+            tile_bytes = reader.get_tile(index, decode=False)
+            with open(tile_path, "wb") as file_handle:
+                file_handle.write(tile_bytes)
+
+    @staticmethod
+    def get_transcode_codec(reader: TIFFReader) -> Any:
+        """Get the codec to use for transcoding.
+
+        Args:
+            reader (TiffReader):
+                Reader object.
+
+        Returns:
+            numcodecs.Codec:
+                Codec to use for transcoding.
+        """
+        from imagecodecs.numcodecs import Jpeg, Jpeg2k
+
+        if reader.compression == "JPEG":
+            return Jpeg(tables=reader.jpeg_tables, colorspace_jpeg=reader.colour_space)
+        if reader.compression == "Aperio J2K YCbCr":
+            return Jpeg2k(codecformat="J2K", colorspace="YCbCr")
+        if reader.compression == "Aperio J2K RGB":
+            return Jpeg2k(codecformat="J2K", colorspace="RGB")
+        raise ValueError(
+            "Currently only JPEG and J2K (JPEG-2000) compression "
+            " are supported for transcoding."
+        )
 
 
 class ZarrIntermediate(Writer, Reader):
@@ -912,7 +1013,7 @@ class ZarrIntermediate(Writer, Reader):
             store=zarr.NestedDirectoryStore(path),
             mode="a",
             shape=self.shape,
-            chunks=self.tile_size,
+            chunks=(*self.tile_size, self.shape[-1]),
             dtype=self.dtype,
         )
 

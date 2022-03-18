@@ -12,7 +12,14 @@ import zarr
 
 from wsic.magic import summon_file_types
 from wsic.types import PathLike
-from wsic.utils import mosaic_shape, ppu2mpp, tile_slices, wrap_index
+from wsic.utils import (
+    mosaic_shape,
+    normalise_color_space,
+    normalise_compression,
+    ppu2mpp,
+    tile_slices,
+    wrap_index,
+)
 
 
 class Reader(ABC):
@@ -461,7 +468,9 @@ class TIFFReader(Reader):
             self.mosaic_byte_counts = np.array(self._tiff_page.databytecounts).reshape(
                 self.mosaic_shape
             )
-        self.jpeg_header = self._tiff_page.jpegheader
+        self.jpeg_tables = self._tiff_page.jpegtables
+        self.colour_space = normalise_color_space(self._tiff_page.photometric)
+        self.compression = normalise_compression(self._tiff_page.compression)
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
