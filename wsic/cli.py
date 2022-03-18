@@ -24,7 +24,7 @@ def main(ctx, debug):
 
 
 @main.command()
-# @click.pass_context
+@click.version_option(wsic.__version__)
 @click.option(
     "-i",
     "--in-path",
