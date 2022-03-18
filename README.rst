@@ -18,6 +18,9 @@ wsic
 .. image:: https://readthedocs.org/projects/pip/badge/?version=stable
     :target: https://wsic.readthedocs.io/en/latest/
     :alt: Documentation Status
+    
+.. image:: https://img.shields.io/pypi/v/wsic
+    :target: https://pypi.org/project/wsic/
 
 .. image:: https://deepsource.io/gh/John-P/wsic.svg/?label=active+issues&show_trend=true&token=D-sO1mhzQv1n9FPl0RFaAfGt
     :target: https://deepsource.io/gh/John-P/wsic/?ref=repository-badge
