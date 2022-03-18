@@ -14,6 +14,10 @@ wsic
 
 .. image:: https://codecov.io/gh/John-P/wsic/branch/main/graph/badge.svg?token=ICCWDKJG5J
     :target: https://codecov.io/gh/John-P/wsic
+    
+.. image:: https://readthedocs.org/projects/pip/badge/?version=stable
+    :target: https://wsic.readthedocs.io/en/latest/
+    :alt: Documentation Status
 
 .. image:: https://deepsource.io/gh/John-P/wsic.svg/?label=active+issues&show_trend=true&token=D-sO1mhzQv1n9FPl0RFaAfGt
     :target: https://deepsource.io/gh/John-P/wsic/?ref=repository-badge
