@@ -869,7 +869,7 @@ class ZarrReaderWriter(Writer, Reader):
             )
         if self.dtype != reader.dtype:
             raise ValueError("Dtype must match the reader dtype for transcoding.")
-        if not any([reader._tiff.is_svs, reader._tiff.is_ome]):
+        if not any([reader.tiff.is_svs, reader.tiff.is_ome]):
             raise ValueError(
                 "Currently only SVS and OME-TIFF are supported for transcoding."
             )
