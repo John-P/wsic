@@ -16,6 +16,7 @@ ext2writer = {
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--debug/--no-debug", default=False)
+@click.version_option(wsic.__version__)
 @click.pass_context
 def main(ctx, debug):
     """Console script for wsic."""
@@ -24,7 +25,6 @@ def main(ctx, debug):
 
 
 @main.command(no_args_is_help=True)
-@click.version_option(wsic.__version__)
 @click.option(
     "-i",
     "--in-path",
