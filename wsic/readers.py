@@ -263,29 +263,29 @@ class MultiProcessTileIterator:
         warnings.warn(
             "Failed to get next tile after 100 attempts. Dumping debug information."
         )
-        print(f"{self.reader.shape=}")
-        print(f"{self.read_tile_size=}")
-        print(f"{self.yield_tile_size=}")
-        print(f"{self.read_mosaic_shape=}")
-        print(f"{self.yield_mosaic_shape=}")
-        print(f"{self.read_index=}")
-        print(f"{self.yield_index=}")
-        print(f"{self.remaining_reads[:10]=}")
-        print(f"{self.enqueued=}")
-        print(f"{self.queue.qsize=}")
-        print(f"{self.reordering_dict.keys()=}")
-        intermediate_read_index = tile_slices(
+        print(f"Reader Shape {self.reader.shape}")
+        print(f"Read Tile Size {self.read_tile_size}")
+        print(f"Yield Tile Size {self.yield_tile_size}")
+        print(f"Read Mosaic Shape {self.read_mosaic_shape}")
+        print(f"Yield Mosaic Shape {self.yield_mosaic_shape}")
+        print(f"Read Index {self.read_index}")
+        print(f"Yield Index {self.yield_index}")
+        print(f"Remaining Reads (:10) {self.remaining_reads[:10]}")
+        print(f"Enqueued (:10) {self.enqueued[:10]}")
+        print(f"Reordering Dict (keys) {self.reordering_dict.keys()}")
+        print(f"Queue Size {self.queue.qsize()}")
+        intermediate_read_slices = tile_slices(
             index=(self.yield_j, self.yield_i),
             shape=self.yield_tile_size[::-1],
         )
-        print(f"{intermediate_read_index=}")
+        print(f"Intermediate Read slices {intermediate_read_slices}")
         raise Exception(f"Failed to yield tile {self.yield_index}")
 
     def read_next_from_intermediate(self) -> Optional[np.ndarray]:
         """Read the next tile from the intermediate file."""
         if self.intermediate is None:
             return None
-        intermediate_read_index = tile_slices(
+        intermediate_read_slices = tile_slices(
             index=(self.yield_j, self.yield_i),
             shape=self.yield_tile_size[::-1],
         )
@@ -293,7 +293,7 @@ class MultiProcessTileIterator:
         if np.all(status == 1):  # Intermediate has all data for the tile
             self.tile_status[self.yield_index] = 2
             self.yield_i += 1
-            return self.intermediate[intermediate_read_index]
+            return self.intermediate[intermediate_read_slices]
         return None
 
     def empty_queue(self) -> None:
