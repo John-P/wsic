@@ -16,7 +16,7 @@ wsic
     :target: https://codecov.io/gh/John-P/wsic
     
 .. image:: https://readthedocs.org/projects/pip/badge/?version=stable
-    :target: https://pip.pypa.io/en/stable/?badge=stable
+    :target: https://wsic.readthedocs.io/en/latest/
     :alt: Documentation Status
 
 .. image:: https://deepsource.io/gh/John-P/wsic.svg/?label=active+issues&show_trend=true&token=D-sO1mhzQv1n9FPl0RFaAfGt
