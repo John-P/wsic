@@ -647,7 +647,7 @@ class ZarrReaderWriter(Writer, Reader):
         self.zarr = None
         self._init_zarr()
 
-    def _init_zarr(self) -> Union[zarr.Array, zarr.Group]:
+    def _init_zarr(self) -> Optional[zarr.Group]:
         """Initialize the zarr.
 
         If the zarr already exists, it will be opened. Otherwise, it will be
