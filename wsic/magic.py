@@ -41,7 +41,7 @@ class Spell:
                 contains magic.
         """
         if isinstance(self.magic, bytes) and self.offset is not None:
-            return self.magic == data[self.offset : len(self.magic)]
+            return self.magic == data[self.offset : self.offset + len(self.magic)]
         if isinstance(self.magic, re.Pattern):
             return self.magic.search(data, pos=self.offset or 0) is not None
         return self.magic in data
