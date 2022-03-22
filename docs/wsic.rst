@@ -28,14 +28,6 @@ wsic.magic module
     :undoc-members:
     :show-inheritance:
 
-wsic.progress module
---------------------
-
-.. automodule:: wsic.progress
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 wsic.readers module
 -------------------
 
@@ -56,14 +48,6 @@ wsic.utils module
 -----------------
 
 .. automodule:: wsic.utils
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-wsic.writers.backup module
---------------------------
-
-.. automodule:: wsic.writers.backup
     :members:
     :undoc-members:
     :show-inheritance:

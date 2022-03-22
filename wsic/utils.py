@@ -410,6 +410,7 @@ def normalise_color_space(color_space: Union[str, int]) -> str:
         "grey": "L",
         "grey_scale": "L",
         "ycbcr": "YCrCb",
+        "YBR_FULL": "YCrCb",  # DICOM, Subsampling 4:4:4
     }
     try:
         from tifffile import TIFF
@@ -440,6 +441,9 @@ def normalise_compression(compression: Union[str, int]) -> str:
     mapping = {
         "jpeg": "JPEG",
         "JPEG": "JPEG",
+        "ISO_10918_1": "JPEG",  # DICOM
+        "jpeg-2000": "JP2",
+        "JPEG-2000": "JP2",
         "jpeg2000": "JP2",
         "JPEG2000": "JP2",
         "j2k": "J2K",

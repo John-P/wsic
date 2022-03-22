@@ -289,7 +289,7 @@ def test_tiff_get_tile(samples_path):
 
 
 def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
-    """Test that we can transcode an SVS to a Zarr."""
+    """Test that we can transcode an JPEG SVS to a Zarr."""
     reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
     writer = writers.ZarrReaderWriter(
         path=tmp_path / "CMU-1-Small-Region.zarr",
@@ -306,8 +306,8 @@ def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
     assert np.all(reader[...] == output[0][...])
 
 
-def test_transcode_jp2_to_zarr(samples_path, tmp_path):
-    """Test that we can transcode an SVS to a Zarr."""
+def test_transcode_svs_to_zarr(samples_path, tmp_path):
+    """Test that we can transcode an J2K SVS to a Zarr."""
     reader = readers.Reader.from_file(
         samples_path
         / "bfconvert"
@@ -336,7 +336,68 @@ def test_transcode_jp2_to_zarr(samples_path, tmp_path):
     assert len(list(writer.path.iterdir())) > 0
 
     output = zarr.open(writer.path)
-    assert np.all(reader[...] == output[0][...])
+    original = reader[...]
+    new = output[0][...]
+
+    assert np.array_equal(original, new)
+
+
+def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
+    """Test that we can transcode a JPEG compressed DICOM WSI to a Zarr."""
+    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region")
+    writer = writers.ZarrReaderWriter(
+        path=tmp_path / "CMU-1.zarr",
+        tile_size=reader.tile_shape[::-1],
+        dtype=reader.dtype,
+    )
+    writer.transcode_from_reader(reader=reader)
+
+    assert writer.path.exists()
+    assert writer.path.is_dir()
+    assert len(list(writer.path.iterdir())) > 0
+
+    output = zarr.open(writer.path)
+    original = reader[...]
+    new = output[0][...]
+
+    assert original.shape == new.shape
+
+    # Allow for some slight differences in the pixel values due to
+    # different decoders.
+    difference = original.astype(np.float16) - new.astype(np.float16)
+    mse = (difference**2).mean()
+
+    assert mse < 1.5
+    assert np.percentile(np.abs(difference), 95) < 1
+
+
+def test_transcode_j2k_dicom_wsi_to_zarr(samples_path, tmp_path):
+    """Test that we can transcode a J2K compressed DICOM WSI to a Zarr."""
+    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region-J2K")
+    writer = writers.ZarrReaderWriter(
+        path=tmp_path / "CMU-1.zarr",
+        tile_size=reader.tile_shape[::-1],
+        dtype=reader.dtype,
+    )
+    writer.transcode_from_reader(reader=reader)
+
+    assert writer.path.exists()
+    assert writer.path.is_dir()
+    assert len(list(writer.path.iterdir())) > 0
+
+    output = zarr.open(writer.path)
+    original = reader[...]
+    new = output[0][...]
+
+    assert original.shape == new.shape
+
+    # Allow for some slight differences in the pixel values due to
+    # different decoders.
+    difference = original.astype(np.float16) - new.astype(np.float16)
+    mse = (difference**2).mean()
+
+    assert mse < 1.5
+    assert np.percentile(np.abs(difference), 95) < 1
 
 
 def test_cli_jp2_to_tiff(samples_path, tmp_path):
@@ -358,7 +419,7 @@ def test_cli_transcode_svs_to_zarr(samples_path, tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as td:
         in_path = str(samples_path / "CMU-1-Small-Region.svs")
-        out_path = str(Path(td) / "MU-1-Small-Region.zarr")
+        out_path = str(Path(td) / "CMU-1-Small-Region.zarr")
         result = runner.invoke(
             cli.transcode,
             ["-i", in_path, "-o", out_path],

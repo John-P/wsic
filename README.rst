@@ -70,20 +70,23 @@ Features
   * Other Tiled TIFFs (tifffile supported formats)
   * OME-TIFF
   * JP2
-  * Zarr
+  * Zarr (single array or pyramid group of arrays)
+  * DICOM WSI
 
 * Write image data to:
 
-  * Tiled TIFF
-  * Pyramid TIFF
+  * Tiled / Pyramid Generic TIFF
   * OME-TIFF
   * JP2
   * Pyramid Zarr
 
 * Custom tile size
 * Compression codecs
-* Lossloss repackaging / transcoding mode
-  (Experimental: Currently only SVS to single resolution zarr)
+* Lossless binary repackaging / transcoding mode (experimental) to zarr from:
+
+  * SVS (JPEG / J2K compressed)
+  * OME-TIFF (single image and JPEG / J2K compressed)
+  * DICOM WSI (JPEG / J2K compressed)
 
 
 To-Dos

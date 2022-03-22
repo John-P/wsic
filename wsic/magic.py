@@ -3,7 +3,7 @@ import mmap
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import IO, List, Optional, Sequence, Tuple, Union
 
 from wsic.types import Magic, PathLike
 
@@ -157,11 +157,63 @@ FILE_INCANTATIONS = {
             Spell(re.compile(b"RIFF....WEBP")),
         ],
     ),
+    ("dcm",): Incantation(
+        spells=[
+            # DICOM signature
+            Spell(b"DICM", 128),
+        ],
+    ),
 }
 
 
+def _perform_dir_incantations(path: Path):
+    """Detect matching types for a directory.
+
+    E.g. a zarr group/array or a DICOM directory.
+    """
+    # Zarr
+    zgroup = path / ".zgroup"
+    if zgroup.exists():
+        return [("zarr",), ("zarr", "group")]
+    zarray = path / ".zarray"
+    if zarray.exists():
+        return [("zarr",), ("zarr", "array")]
+    # DICOM
+    for sub_path in path.iterdir():
+        if sub_path.is_dir():
+            continue
+        with sub_path.open("rb") as file_handle:
+            header = file_handle.read(128 + 4)
+        if Spell(b"DICM", 128).perform(header):
+            return [("dicom",)]
+    return []
+
+
+def header_bytes(
+    header_length: Optional[int], file_handle: IO
+) -> Union[bytes, mmap.mmap]:
+    """Read in bytes from the start as a header for checking.
+
+    If 0 or None is given for header_length, the entire file is memory
+    mapped.
+
+    Args:
+        header_length (int):
+            The number of bytes to read from the start of the file.
+            If 0 or None, the entire file is memory mapped and checked.
+        file_handle (file):
+            The file handle to read from.
+
+    Returns:
+        The header bytes or memory mapped bytes.
+    """
+    if header_length:
+        return file_handle.read(header_length)
+    return mmap.mmap(file_handle.fileno(), 0, access=mmap.ACCESS_READ)
+
+
 def summon_file_types(
-    file_path: PathLike,
+    path: PathLike,
     header_length: Optional[int] = 1024,
 ) -> List[Tuple[str, ...]]:
     """Perform a series of incantations to determine the file types.
@@ -180,19 +232,25 @@ def summon_file_types(
     Returns:
         A list of file types for which this file has the correct magic.
     """
-    file_path = Path(file_path)
+    path = Path(path)
     file_types = []
-    with file_path.open("rb") as file_handle:
-        if header_length:
-            header = file_handle.read(header_length)
-        else:
-            header = mmap.mmap(file_handle.fileno(), 0, access=mmap.ACCESS_READ)
+
+    # Handle directory cases
+    if path.is_dir():
+        return _perform_dir_incantations(path)
+
+    # Handle file cases
+    with path.open("rb") as file_handle:
+        header = header_bytes(header_length, file_handle)
 
         # Iterate over FILE_INCANTATIONS sorted by the type tuple length
         # to ensure that subtypes are checked after the parent type.
-        for file_type, incantation in sorted(
+        # This avoids the incantaction for a subtype having to perform
+        # the incantation for the parent type again.
+        ordered_incantations = sorted(
             FILE_INCANTATIONS.items(), key=lambda x: len(x[0])
-        ):
+        )
+        for file_type, incantation in ordered_incantations:
             parent_type = file_type[:-1]
             parent_type_matched = (parent_type in file_types) or (parent_type == ())
             if incantation.perform(header) and parent_type_matched:

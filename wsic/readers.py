@@ -49,10 +49,6 @@ class Reader(ABC):
             Reader: Reader for file.
         """
         path = Path(path)
-        if path.is_dir() and path.suffix == ".zarr":
-            from wsic.writers import ZarrReaderWriter
-
-            return ZarrReaderWriter(path, overwrite=True)
         file_types = summon_file_types(path)
         if ("jp2",) in file_types:
             return JP2Reader(path)
@@ -60,6 +56,12 @@ class Reader(ABC):
             return OpenSlideReader(path)
         if ("tiff",) in file_types:
             return TIFFReader(path)
+        if ("dicom",) in file_types or ("dcm",) in file_types:
+            return DICOMWSIReader(path)
+        if ("zarr",) in file_types:
+            from wsic.writers import ZarrReaderWriter
+
+            return ZarrReaderWriter(path)
         raise ValueError(f"Unsupported file type: {path}")
 
 
@@ -501,6 +503,84 @@ class TIFFReader(Reader):
         return self.array[index]
 
 
+class DICOMWSIReader(Reader):
+    """Reader for DICOM Whole Slide Images (WSIs) using wsidicom.
+
+    DICOM Whole Slide Imaging:  https://dicom.nema.org/Dicom/DICOMWSI/
+    """
+
+    def __init__(self, path: Path) -> None:
+        """Initialize reader.
+
+        Args:
+            path (Path):
+                Path to file.
+        """
+        from wsidicom import WsiDicom
+
+        super().__init__(path)
+        self.slide = WsiDicom.open(self.path)
+        channels = len(self.slide.read_tile(0, (0, 0)).getbands())
+        self.shape = (self.slide.size.height, self.slide.size.width, channels)
+        self.dtype = np.uint8
+        self.microns_per_pixel = (
+            self.slide.base_level.mpp.height,
+            self.slide.base_level.mpp.width,
+        )
+        self.tile_shape = (self.slide.tile_size.height, self.slide.tile_size.width)
+        self.mosaic_shape = mosaic_shape(self.shape, self.tile_shape)
+        dataset = self.slide.base_level.datasets[0]
+        # Sanity check
+        if np.prod(self.mosaic_shape) != int(dataset.NumberOfFrames):
+            raise ValueError(
+                "Number of frames in DICOM dataset does not match mosaic shape."
+            )
+        self.compression = normalise_compression(dataset.LossyImageCompressionMethod)
+        self.colour_space = normalise_color_space(dataset.photometric_interpretation)
+        self.jpeg_tables = None
+
+    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
+        """Get tile at index.
+
+        Args:
+            index (Tuple[int, int]):
+                The index of the tile to get.
+            decode (bool, optional):
+                Whether to decode the tile. Defaults to True.
+
+        Returns:
+            np.ndarray:
+                The tile at index.
+        """
+        if decode:
+            return np.array(self.slide.read_tile(level=0, tile=index[::-1], z=0))
+        return self.slide.read_encoded_tile(level=0, tile=index[::-1], z=0)
+
+    def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
+        """Get pixel data at index."""
+        if index is ...:
+            return np.array(self.slide.base_level.get_default_full())
+        xs = index[1]
+        ys = index[0]
+        start_x = xs.start or 0
+        start_y = ys.start or 0
+        end_x = xs.stop or self.shape[1]
+        end_y = ys.stop or self.shape[0]
+
+        # Prevent reading past the edges of the image
+        end_x = min(end_x, self.shape[1])
+        end_y = min(end_y, self.shape[0])
+
+        # Read the image
+        img = self.slide.read_region(
+            location=(start_x, start_y),
+            level=0,
+            size=(end_x - start_x, end_y - start_y),
+            z=0,
+        )
+        return np.array(img.convert("RGB"))
+
+
 class OpenSlideReader(Reader):
     """Reader for OpenSlide files using openslide-python."""
 
@@ -574,8 +654,8 @@ class OpenSlideReader(Reader):
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
-        xs: slice = index[1]
-        ys: slice = index[0]
+        xs = index[1]
+        ys = index[0]
         start_x = xs.start or 0
         start_y = ys.start or 0
         end_x = xs.stop or self.shape[1]

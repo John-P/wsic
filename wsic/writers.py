@@ -633,9 +633,10 @@ class ZarrReaderWriter(Writer, Reader):
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
-            overwrite=overwrite,
+            overwrite=True,
             verbose=verbose,
         )
+        self.overwrite = overwrite
         register_codecs()
         self.compressor = self.get_codec(compression, compression_level)
         if self.path.exists() and not self.path.is_dir():
@@ -660,16 +661,9 @@ class ZarrReaderWriter(Writer, Reader):
         if self.path.is_dir():
             self.zarr = zarr.open(
                 self.path,
-                mode="r+",
+                mode="r+" if self.overwrite else "r",
             )
-            # If not a group, put it in one with a single array "0"
-            if self.zarr and not isinstance(self.zarr, zarr.Group):
-                group = zarr.group()
-                group[0] = self.zarr
-                self.zarr = group
-            self.shape = self.zarr[0].shape
-            self.dtype = self.zarr[0].dtype
-            return self.zarr
+        # Create a new zarr group with one array if a shape was given
         if self.shape is not None:
             self.zarr = zarr.open_group(
                 zarr.NestedDirectoryStore(self.path),
@@ -681,9 +675,16 @@ class ZarrReaderWriter(Writer, Reader):
                 dtype=self.dtype,
                 compressor=self.compressor,
             )
+        # If it is an array zarr, put it in a group
+        if isinstance(self.zarr, zarr.Array):
+            group = zarr.group()
+            group[0] = self.zarr
+            self.zarr = group
+        # Get the shape and dtype from the zarr if possible
+        if self.zarr is not None:
             self.shape = self.zarr[0].shape
             self.dtype = self.zarr[0].dtype
-            return self.zarr
+        # self.zarr may be None if the zarr was not created (no shape given)
         return self.zarr
 
     def get_codec(
@@ -844,14 +845,20 @@ class ZarrReaderWriter(Writer, Reader):
             previous_downsample = downsample
 
     def transcode_from_reader(self, reader: Reader) -> None:
-        """Losslessly transform into a new format from a TiffReader.
+        """Losslessly transform into a new format from a supported Reader.
 
         Repackages tiles from the Reader to a zarr. Currently only
-        supports transcoding from SVS and some OME-TIFF files and currently
-        only ouputs a single resolution level (level 0).
+        supports transcoding from:
+
+        - JPEG compressed SVS (:class:`wsic.readers.TIFFReader`)
+        - J2K compressed SVS (:class:`wsic.readers.TIFFReader`)
+        - JPEG compressed OME-TIFF (:class:`wsic.readers.TIFFReader`)
+        - JPEG compressed DICOM WSI (:class:`wsic.readers.DICOMWSIReader`)
+
+        Currently only outputs a single resolution level (level 0).
 
         It may also be possible to transcode the tiles themselves (e.g.
-        JPEG JPEG XL) or perform simple geometric transforms (flip,
+        JPEG to JPEG XL) or perform simple geometric transforms (flip,
         rotate, etc). However, this is not yet implemented. Currently,
         they are simply copied into a new structure.
 
@@ -861,17 +868,22 @@ class ZarrReaderWriter(Writer, Reader):
                 Reader object.
         """
         # Input validation
-        if not isinstance(reader, TIFFReader):
-            raise ValueError("Currently TIFFReader is supported for transcoding.")
+        if not hasattr(reader, "get_tile"):
+            raise ValueError(
+                "Reader must have a get_tile method which can return encoded tiles"
+                " (decoded=False)."
+            )
         if self.tile_size != reader.tile_shape[:2][::-1]:
             raise ValueError(
                 "Tile size must match the reader tile size for transcoding."
             )
         if self.dtype != reader.dtype:
             raise ValueError("Dtype must match the reader dtype for transcoding.")
-        if not any([reader.tiff.is_svs, reader.tiff.is_ome]):
+        if isinstance(reader, TIFFReader) and not any(
+            [reader.tiff.is_svs, reader.tiff.is_ome]
+        ):
             raise ValueError(
-                "Currently only SVS and OME-TIFF are supported for transcoding."
+                "Currently only SVS and OME-TIFF are supported for TIFF transcoding."
             )
 
         register_codecs()
