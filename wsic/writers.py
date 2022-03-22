@@ -657,7 +657,7 @@ class ZarrReaderWriter(Writer, Reader):
                 The zarr.
         """
         # Read and existing zarr
-        if self.path.exists() and self.path.is_dir():
+        if self.path.is_dir():
             self.zarr = zarr.open(
                 self.path,
                 mode="r+",
