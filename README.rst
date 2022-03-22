@@ -111,10 +111,7 @@ Features
 To-Dos
 ------
 
-* Add support for other formats:
-
-  * Read/Write OME-NGFF format zarr
-  * Read/Write WSI DICOM (via wsidicom)
+For a list of To-Dos see `the project board <https://github.com/users/John-P/projects/1/views/1>`_.
 
 
 Other Tools
