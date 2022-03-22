@@ -194,9 +194,7 @@ def summon_file_types(
             FILE_INCANTATIONS.items(), key=lambda x: len(x[0])
         ):
             parent_type = file_type[:-1]
-            parent_type_matched = (parent_type in file_types) or (
-                parent_type is tuple()  # noqa: C408
-            )
+            parent_type_matched = (parent_type in file_types) or (parent_type == ())
             if incantation.perform(header) and parent_type_matched:
                 file_types.append(file_type)
     return file_types
