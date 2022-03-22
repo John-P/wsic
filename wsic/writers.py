@@ -597,9 +597,8 @@ class ZarrReaderWriter(Writer, Reader):
         verbose (bool, optional):
             Print more output. Defaults to False.
         ome (bool):
-            Write OME-TIFF metadata. Defaults to False.
-            Currently only supported by the TIFFWriter writer but
-            defined here for API consistency.
+            Write OME-NGFF metadata. Defaults to False.
+            Currently not implemented.
 
     """
 
