@@ -66,12 +66,22 @@ Features
 
 * Read image data from:
 
-  * OpenSlide Formats (e.g. SVS, MRXS, Tiled TIFF)
-  * Other Tiled TIFFs (tifffile supported formats)
-  * OME-TIFF
-  * JP2
-  * Zarr (single array or pyramid group of arrays)
-  * DICOM WSI
+  * `OpenSlide`_ Formats:
+  
+    * Aperio SVS (.svs)
+    * Hamamatsu (.vms, .vmu, .ndpi)
+    * Leica (.scn)
+    * Mirax MRXS (.mrxs)
+    * Sakura (.svslide)
+    * Trestle (.tif)
+    * Ventana (.bif, .tif)
+    * Generic tiled TIFF (.tif; DEFLATE, JPEG, and Webp compressed)
+
+  * Other Tiled TIFFs (`tifffile`_ supported formats)
+  * `OME-TIFF`_
+  * `JP2`_ (via `glymur`_ and `OpenJPEG`_) 
+  * `Zarr`_ (single array or pyramid group of arrays)
+  * `DICOM WSI`_ (via `wsidicom`_)
 
 * Write image data to:
 
@@ -88,6 +98,15 @@ Features
   * OME-TIFF (single image and JPEG / J2K compressed)
   * DICOM WSI (JPEG / J2K compressed)
 
+.. _OpenSlide: https://openslide.org/
+.. _OME-TIFF: https://docs.openmicroscopy.org/ome-model/5.6.3/ome-tiff/
+.. _JP2: https://jpeg.org/jpeg2000/
+.. _glymur: https://glymur.readthedocs.io/en/latest/
+.. _OpenJPEG: https://openjpeg.org/
+.. _zarr: https://zarr.readthedocs.io/en/stable/
+.. _tifffile: https://github.com/cgohlke/tifffile
+.. _DICOM WSI: https://dicom.nema.org/dicom/dicomwsi/
+.. _wsidicom: https://github.com/imi-bigpicture/wsidicom
 
 To-Dos
 ------
