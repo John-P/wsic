@@ -108,6 +108,31 @@ Features
 .. _DICOM WSI: https://dicom.nema.org/dicom/dicomwsi/
 .. _wsidicom: https://github.com/imi-bigpicture/wsidicom
 
+Dependencies
+------------
+
+* numpy
+* zarr
+* click (CLI)
+
+Optional Dependencies
+:::::::::::::::::::::
+
+* `OpenSlide`_ and `openslide-python`_ (reading OpenSlide Formats)
+* `tifffile`_ (reading tiled TIFFs)
+* `wsidicom`_ (reading DICOM WSI)
+* `glymur`_ and `OpenJPEG`_ (reading JP2)
+* `tqdm`_ (progress bars)
+* `scipy`_ (faster pyramid downsampling)
+* `opencv-python`_ (even faster pyramid downsampling)
+* `imagecodecs`_ (additional codecs and transcoding)
+
+.. _openslide-python: https://pypi.org/project/openslide-python/
+.. _tqdm: https://github.com/tqdm/tqdm
+.. _scipy: https://www.scipy.org/
+.. _opencv-python: https://pypi.org/project/opencv-python/
+.. _imagecodecs: https://github.com/cgohlke/imagecodecs
+
 To-Dos
 ------
 
