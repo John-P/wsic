@@ -13,7 +13,7 @@ import numpy as np
 import zarr
 
 from wsic.codecs import register_codecs
-from wsic.readers import MultiProcessTileIterator, Reader, TIFFReader
+from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
 from wsic.types import PathLike
 from wsic.utils import (
     dowmsample_shape,
@@ -843,7 +843,7 @@ class ZarrReaderWriter(Writer, Reader):
             previous_level = level_array
             previous_downsample = downsample
 
-    def transcode_from_reader(self, reader: Reader) -> None:
+    def transcode_from_reader(self, reader: Union[TIFFReader, DICOMWSIReader]) -> None:
         """Losslessly transform into a new format from a supported Reader.
 
         Repackages tiles from the Reader to a zarr. Currently only
