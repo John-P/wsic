@@ -102,7 +102,7 @@ Features
 .. _OME-TIFF: https://docs.openmicroscopy.org/ome-model/5.6.3/ome-tiff/
 .. _JP2: https://jpeg.org/jpeg2000/
 .. _glymur: https://glymur.readthedocs.io/en/latest/
-.. _OpenJPEG: https://openjpeg.org/
+.. _OpenJPEG: https://www.openjpeg.org/
 .. _zarr: https://zarr.readthedocs.io/en/stable/
 .. _tifffile: https://github.com/cgohlke/tifffile
 .. _DICOM WSI: https://dicom.nema.org/dicom/dicomwsi/
