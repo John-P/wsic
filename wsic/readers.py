@@ -273,7 +273,7 @@ class MultiProcessTileIterator:
         print(f"Read Index {self.read_index}")
         print(f"Yield Index {self.yield_index}")
         print(f"Remaining Reads (:10) {self.remaining_reads[:10]}")
-        print(f"Enqueued (:10) {self.enqueued[:10]}")
+        print(f"Enqueued {self.enqueued}")
         print(f"Reordering Dict (keys) {self.reordering_dict.keys()}")
         print(f"Queue Size {self.queue.qsize()}")
         intermediate_read_slices = tile_slices(

@@ -60,7 +60,7 @@ def main(ctx):
     "-c",
     "--compression",
     help="The compression to use.",
-    type=click.Choice(["deflate", "webp", "jpeg", "jpeg2000"]),
+    type=click.Choice(["deflate", "webp", "jpeg", "jpeg2000", "blosc"]),
     default="deflate",
 )
 @click.option(

@@ -342,6 +342,48 @@ def test_transcode_svs_to_zarr(samples_path, tmp_path):
     assert np.array_equal(original, new)
 
 
+def test_transcode_svs_to_pyramid_ome_zarr(samples_path, tmp_path):
+    """Test that we can transcode an J2K SVS to a pyramid OME-Zarr (NGFF)."""
+    reader = readers.Reader.from_file(
+        samples_path
+        / "bfconvert"
+        / (
+            "XYC_-compression_JPEG-2000"
+            "_-tilex_128_-tiley_128"
+            "_-pyramid-scale_2"
+            "_-merge.ome.tiff"
+        )
+    )
+    out_path = tmp_path / (
+        "XYC_-compression_JPEG-2000"
+        "_-tilex_128_-tiley_128_"
+        "-pyramid-scale_2_"
+        "-merge.zarr"
+    )
+    writer = writers.ZarrReaderWriter(
+        path=out_path,
+        tile_size=reader.tile_shape[::-1],
+        dtype=reader.dtype,
+        pyramid_downsamples=[2, 4, 8],
+        ome=True,
+    )
+    writer.transcode_from_reader(reader=reader)
+
+    assert writer.path.exists()
+    assert writer.path.is_dir()
+    assert len(list(writer.path.iterdir())) > 0
+
+    output = zarr.open(writer.path)
+    original = reader[...]
+    new = output[0][...]
+
+    assert np.array_equal(original, new)
+
+    assert "_creator" in writer.zarr.attrs
+    assert "omero" in writer.zarr.attrs
+    assert "multiscales" in writer.zarr.attrs
+
+
 def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
     """Test that we can transcode a JPEG compressed DICOM WSI to a Zarr."""
     reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region")

@@ -1,3 +1,4 @@
+import dataclasses
 import multiprocessing
 import shutil
 import tempfile
@@ -13,6 +14,7 @@ import numpy as np
 import zarr
 
 from wsic.codecs import register_codecs
+from wsic.metadata import ngff
 from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
 from wsic.types import PathLike
 from wsic.utils import (
@@ -621,7 +623,6 @@ class ZarrReaderWriter(Writer, Reader):
         if photometric != "rgb":
             warn_unused(photometric)
         warn_unused(microns_per_pixel)
-        warn_unused(ome, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
@@ -635,6 +636,7 @@ class ZarrReaderWriter(Writer, Reader):
             overwrite=True,
             verbose=verbose,
         )
+        self.ome = ome
         self.overwrite = overwrite
         register_codecs()
         self.compressor = self.get_codec(compression, compression_level)
@@ -644,26 +646,30 @@ class ZarrReaderWriter(Writer, Reader):
             )
 
         self.zarr = None
-        self._init_zarr()
+        self._init_zarr(create=False)
 
-    def _init_zarr(self) -> Optional[zarr.Group]:
+    def _init_zarr(self, create: bool = True) -> Optional[zarr.Group]:
         """Initialize the zarr.
 
         If the zarr already exists, it will be opened. Otherwise, it will be
         created if there is a shape.
 
+        Args:
+            create (bool):
+                Create the zarr if it does not exist.
+
         Returns:
             zarr.Array or zarr.Group:
                 The zarr.
         """
-        # Read and existing zarr
+        # Read an existing zarr
         if self.path.is_dir():
             self.zarr = zarr.open(
                 self.path,
                 mode="r+" if self.overwrite else "r",
             )
         # Create a new zarr group with one array if a shape was given
-        if self.shape is not None:
+        if create:
             self.zarr = zarr.open_group(
                 zarr.NestedDirectoryStore(self.path),
                 mode="a",
@@ -697,7 +703,7 @@ class ZarrReaderWriter(Writer, Reader):
         numcodecs_codecs = {
             "lz4": LZ4,
             "lzma": LZMA,
-            "blosc": Blosc,
+            "blosc": Blosc,  # zarr default
             "blosc-zstd": partial(Blosc, cname="zstd", shuffle=Blosc.BITSHUFFLE),
             "zlib": Zlib,
             "zstd": Zstd,
@@ -804,6 +810,48 @@ class ZarrReaderWriter(Writer, Reader):
             level_0[tile_slices(ji, read_tile_size)] = tile
 
         self._build_pyramid()
+        self._write_ome_metadata()
+
+    def _write_ome_metadata(self) -> None:
+        """Write OME-NGFF metadata to the .zattrs file in the root.
+
+        This is based on version 0.4: https://ngff.openmicroscopy.org/0.4/.
+        """
+        if self.ome:
+            multiscales = ngff.Multiscales(
+                datasets=[
+                    ngff.Dataset(
+                        path=str(level),
+                        coordinateTransformations=[
+                            ngff.CoordinateTransform(
+                                "scale",
+                                [
+                                    1,
+                                    self.microns_per_pixel[0] * downsample,
+                                    self.microns_per_pixel[1] * downsample,
+                                ],
+                            )
+                        ],
+                    )
+                    for level, downsample in enumerate([1] + self.pyramid_downsamples)
+                ]
+                if self.microns_per_pixel is not None
+                else [],
+                axes=[
+                    ngff.Axis("y", "space", "micronmeter"),
+                    ngff.Axis("x", "space", "micronmeter"),
+                    ngff.Axis("c", "channel", None),
+                ],
+            )
+            # Convert dataclasses
+            meta_dict = dataclasses.asdict(
+                ngff.Zattrs(multiscales=multiscales),
+                # Exclude None values
+                dict_factory=lambda x: {k: v for (k, v) in x if v is not None},
+            )
+            # Set the attrs
+            for key, value in meta_dict.items():
+                self.zarr.attrs[key] = value
 
     def _build_pyramid(self):
         """Build the pyramid.
@@ -887,12 +935,14 @@ class ZarrReaderWriter(Writer, Reader):
 
         register_codecs()
         codec = self.get_transcode_codec(reader)
+        self.shape = reader.shape
+        self.dtype = reader.dtype
 
         self.zarr = zarr.open_group(zarr.NestedDirectoryStore(self.path))
         self.zarr.create_dataset(
             name="0",
-            shape=reader.shape,
-            dtype=reader.dtype,
+            shape=self.shape,
+            dtype=self.dtype,
             chunks=(*reader.tile_shape, reader.shape[-1]),
             compressor=codec,
         )
@@ -907,6 +957,9 @@ class ZarrReaderWriter(Writer, Reader):
             tile_bytes = reader.get_tile(index, decode=False)
             with open(tile_path, "wb") as file_handle:
                 file_handle.write(tile_bytes)
+
+        self._build_pyramid()
+        self._write_ome_metadata()
 
     @staticmethod
     def get_transcode_codec(reader: TIFFReader) -> Any:
