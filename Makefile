@@ -64,6 +64,9 @@ coverage: ## check code coverage quickly with the default Python
 	pytest
 	$(BROWSER) htmlcov/index.html
 
+host-coverage coverage: ## Simple HTTP server for hosting coverage
+	cd coverage && python -m http.server 8888
+
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/wsic.rst
 	rm -f docs/modules.rst
