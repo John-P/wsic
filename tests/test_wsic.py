@@ -470,6 +470,34 @@ def test_cli_transcode_svs_to_zarr(samples_path, tmp_path):
     assert result.exit_code == 0
 
 
+def test_copy_from_reader_timeout(samples_path, tmp_path):
+    """Check that Writer.copy_from_reader raises IOError when timed out."""
+    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    writer = writers.ZarrReaderWriter(
+        path=tmp_path / "CMU-1-Small-Region.zarr",
+        tile_size=reader.tile_shape[::-1],
+        dtype=reader.dtype,
+    )
+    warnings.simplefilter("ignore")
+    with pytest.raises(IOError, match="timed out"):
+        writer.copy_from_reader(reader=reader, timeout=1e-5)
+
+
+def test_cli_convert_timeout(samples_path, tmp_path):
+    """Check that CLI convert raises IOError when reading times out."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = str(samples_path / "XYC.jp2")
+        out_path = str(Path(td) / "XYC.tiff")
+        warnings.simplefilter("ignore")
+        with pytest.raises(IOError, match="timed out"):
+            runner.invoke(
+                cli.convert,
+                ["-i", in_path, "-o", out_path, "--timeout", "0"],
+                catch_exceptions=False,
+            )
+
+
 def test_help():
     """Test the help output."""
     runner = CliRunner()

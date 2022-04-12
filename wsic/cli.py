@@ -94,6 +94,13 @@ def main(ctx):
     help="Whether to overwrite the output file.",
     default=False,
 )
+@click.option(
+    "-to",
+    "--timeout",
+    help="Timeout in seconds for reading a tile.",
+    type=float,
+    default=10,
+)
 def convert(
     in_path: str,
     out_path: str,
@@ -106,12 +113,18 @@ def convert(
     microns_per_pixel: float,
     ome: bool,
     overwrite: bool,
+    timeout: float,
 ):
     """Convert a WSI."""
     in_path = Path(in_path)
     out_path = Path(out_path)
     reader = wsic.readers.Reader.from_file(in_path)
-    writer_cls = ext2writer[out_path.suffix]
+    try:
+        writer_cls = ext2writer[out_path.suffix]
+    except KeyError:
+        raise click.BadParameter(
+            f"Unknown file extension {out_path.suffix}", param_hint="out_path"
+        )
     writer = writer_cls(
         out_path,
         shape=reader.shape,
@@ -123,7 +136,9 @@ def convert(
         microns_per_pixel=microns_per_pixel,
         ome=ome,
     )
-    writer.copy_from_reader(reader, read_tile_size=read_tile_size, num_workers=workers)
+    writer.copy_from_reader(
+        reader, read_tile_size=read_tile_size, num_workers=workers, timeout=timeout
+    )
 
 
 @main.command(no_args_is_help=True)

@@ -136,6 +136,7 @@ class MultiProcessTileIterator:
         num_workers: int = None,
         intermediate=None,
         verbose: bool = False,
+        timeout: float = 10.0,
     ) -> None:
         self.reader = reader
         self.shape = reader.shape
@@ -143,6 +144,8 @@ class MultiProcessTileIterator:
         self.yield_tile_size = yield_tile_size or read_tile_size
         self.intermediate = intermediate
         self.verbose = verbose
+        self.timeout = timeout if timeout >= 0 else float("inf")
+        self.processes = set()
         self.queue = multiprocessing.Queue()
         self.enqueued = set()
         self.reordering_dict = {}
@@ -236,7 +239,8 @@ class MultiProcessTileIterator:
         self.fill_queue()
 
         # Get the next yield tile from the queue
-        for _ in range(100):
+        t0 = time.perf_counter()
+        while (time.perf_counter() - t0) < self.timeout:
             # Remove all tiles from the queue into the reordering dict
             self.empty_queue()
 
@@ -281,7 +285,10 @@ class MultiProcessTileIterator:
             shape=self.yield_tile_size[::-1],
         )
         print(f"Intermediate Read slices {intermediate_read_slices}")
-        raise Exception(f"Failed to yield tile {self.yield_index}")
+        # Terminate the read processes
+        for process in self.processes:
+            process.terminate()
+        raise IOError(f"Tile read timed out at index {self.yield_index}")
 
     def read_next_from_intermediate(self) -> Optional[np.ndarray]:
         """Read the next tile from the intermediate file."""
@@ -308,7 +315,7 @@ class MultiProcessTileIterator:
         """Add tile reads to the queue until the max number of workers is reached."""
         while len(self.enqueued) < self.num_workers and len(self.remaining_reads) > 0:
             next_ji = self.remaining_reads.pop(0)
-            proc = multiprocessing.Process(
+            process = multiprocessing.Process(
                 target=get_tile,
                 args=(
                     self.queue,
@@ -317,7 +324,8 @@ class MultiProcessTileIterator:
                     self.reader.path,
                 ),
             )
-            proc.start()
+            process.start()
+            self.processes.add(process)
             self.enqueued.add(next_ji)
 
     def update_read_pbar(self) -> None:
@@ -362,6 +370,11 @@ class MultiProcessTileIterator:
             self.read_i += 1
             self.update_read_pbar()
         return None
+
+    def __del__(self):
+        """Destructor."""
+        for process in self.processes:
+            process.terminate()
 
 
 class JP2Reader(Reader):
