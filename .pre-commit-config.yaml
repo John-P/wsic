@@ -8,6 +8,7 @@ repos:
     hooks:
       - id: black
         language_version: python3
+        additional_dependencies: ['click==8.0.4']  # Currently >8.0.4 breaks black
   - repo: https://gitlab.com/pycqa/flake8
     rev: 3.9.2
     hooks:
