@@ -836,31 +836,35 @@ class ZarrReaderWriter(Writer, Reader):
         This is based on version 0.4: https://ngff.openmicroscopy.org/0.4/.
         """
         if self.ome:
-            multiscales = ngff.Multiscales(
-                datasets=[
-                    ngff.Dataset(
-                        path=str(level),
-                        coordinateTransformations=[
-                            ngff.CoordinateTransform(
-                                "scale",
-                                [
-                                    1,
-                                    self.microns_per_pixel[0] * downsample,
-                                    self.microns_per_pixel[1] * downsample,
-                                ],
-                            )
-                        ],
-                    )
-                    for level, downsample in enumerate([1] + self.pyramid_downsamples)
-                ]
-                if self.microns_per_pixel is not None
-                else [],
-                axes=[
-                    ngff.Axis("y", "space", "micronmeter"),
-                    ngff.Axis("x", "space", "micronmeter"),
-                    ngff.Axis("c", "channel", None),
-                ],
-            )
+            multiscales = [
+                ngff.Multiscales(
+                    datasets=[
+                        ngff.Dataset(
+                            path=str(level),
+                            coordinateTransformations=[
+                                ngff.CoordinateTransform(
+                                    "scale",
+                                    [
+                                        1,
+                                        self.microns_per_pixel[0] * downsample,
+                                        self.microns_per_pixel[1] * downsample,
+                                    ],
+                                )
+                            ],
+                        )
+                        for level, downsample in enumerate(
+                            [1] + self.pyramid_downsamples
+                        )
+                    ]
+                    if self.microns_per_pixel is not None
+                    else [],
+                    axes=[
+                        ngff.Axis("y", "space", "micronmeter"),
+                        ngff.Axis("x", "space", "micronmeter"),
+                        ngff.Axis("c", "channel", None),
+                    ],
+                )
+            ]
             # Convert dataclasses
             meta_dict = dataclasses.asdict(
                 ngff.Zattrs(multiscales=multiscales),
