@@ -511,7 +511,7 @@ class TIFFWriter(Writer):
             reader_tile_iterator = self.level_progress(reader_tile_iterator)
             # Write baseline (level 0)
             with tifffile.TiffWriter(
-                file=self.path,
+                self.path,
                 bigtiff=True,
                 ome=self.ome,
             ) as tif:
