@@ -84,7 +84,7 @@ class Writer(ABC):
         self.compression = compression
         self.compression_level = compression_level or 0
         self.microns_per_pixel = microns_per_pixel
-        self.pyramid_downsamples = pyramid_downsamples or []
+        self.pyramid_downsamples = list(pyramid_downsamples) or []
 
         self.overwrite = overwrite
         self.verbose = verbose
