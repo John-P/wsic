@@ -1,11 +1,12 @@
 import multiprocessing
+import multiprocessing.queues
 import os
 import time
 import warnings
 from abc import ABC
 from math import ceil, floor
 from pathlib import Path
-from typing import Iterator, Optional, Tuple, Union
+from typing import Any, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -20,6 +21,57 @@ from wsic.utils import (
     tile_slices,
     wrap_index,
 )
+
+
+class Queue(multiprocessing.queues.Queue):
+    """A multiprocessing.Queue subclass with a shared counter.
+
+    The `multiprocessing.Queue.qsize` is unreliable and may raise
+    `NotImplementedError` on Unix platforms like macOS where
+    `sem_getvalue()` is not implemented. Here we use a shared counter
+    instead.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialise the queue."""
+        super().__init__(*args, ctx=multiprocessing.get_context(), **kwargs)
+        self.counter = multiprocessing.Value("i", 0)
+
+    def put(self, *args, **kwargs) -> None:
+        """Put an item into the queue."""
+        with self.counter.get_lock():
+            self.counter.value += 1
+        return super().put(*args, **kwargs)
+
+    def get(self, *args, **kwargs) -> Any:
+        """Remove and return an item from the queue."""
+        value = super().get(*args, **kwargs)
+        with self.counter.get_lock():
+            self.counter.value -= 1
+        return value  # noqa: R504
+
+    def qsize(self) -> int:
+        """Return the number of items in the queue."""
+        return self.counter.value
+
+    def empty(self) -> bool:
+        """Return True if the queue is empty."""
+        return self.qsize() == 0
+
+    def clear(self) -> None:
+        """Clear the queue."""
+        while not self.empty():
+            self.get()
+
+    def __getstate__(self) -> Any:
+        """Return the state of the queue."""
+        return (self.counter, super().__getstate__())
+
+    def __setstate__(self, state: Any) -> None:
+        """Restore the state of the queue."""
+        self.counter, state = state
+        super().__setstate__(state)
+        self._after_fork()
 
 
 class Reader(ABC):
@@ -66,7 +118,7 @@ class Reader(ABC):
 
 
 def get_tile(
-    queue: multiprocessing.Queue,
+    queue: Queue,
     ji: Tuple[int, int],
     tilesize: Tuple[int, int],
     path: Path,
@@ -74,8 +126,8 @@ def get_tile(
     """Append a tile read from a reader to a multiprocessing queue.
 
     Args:
-        queue (multiprocessing.Queue):
-            Queue to put tiles on to.
+        queue (Queue):
+            A multiprocessing Queue to put tiles on to.
         ji (Tuple[int, int]):
             Index of tile.
         tilesize (Tuple[int, int]):
@@ -146,7 +198,7 @@ class MultiProcessTileIterator:
         self.verbose = verbose
         self.timeout = timeout if timeout >= 0 else float("inf")
         self.processes = set()
-        self.queue = multiprocessing.Queue()
+        self.queue = Queue()
         self.enqueued = set()
         self.reordering_dict = {}
         self.read_j = 0
