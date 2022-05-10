@@ -526,7 +526,7 @@ class TIFFWriter(Writer):
                     metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
                 tif.write(
-                    data=reader_tile_iterator,
+                    data=iter(reader_tile_iterator),
                     tile=self.tile_size,
                     shape=reader.shape,
                     dtype=reader.dtype,
@@ -571,7 +571,7 @@ class TIFFWriter(Writer):
                         )
 
                         tif.write(
-                            data=tile_generator,
+                            data=iter(tile_generator),
                             tile=self.tile_size,
                             shape=level_shape,
                             dtype=reader.dtype,
