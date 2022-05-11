@@ -41,6 +41,8 @@ jobs:
         pytest
   codecov:
     needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
     steps:
     - name: Report test coverage to Codecov
       uses: codecov/codecov@v2
@@ -49,6 +51,8 @@ jobs:
         verbose: true
   deepsource:
     needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
     steps:
     - name: Report test coverage to DeepSource
       uses: deepsourcelabs/test-coverage-action@master
