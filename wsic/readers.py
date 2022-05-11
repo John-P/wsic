@@ -375,6 +375,7 @@ class MultiProcessTileIterator:
                     self.read_tile_size,
                     self.reader.path,
                 ),
+                daemon=True,
             )
             process.start()
             self.processes.add(process)
