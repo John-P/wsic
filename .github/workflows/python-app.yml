@@ -40,22 +40,16 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
-  codecov:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    steps:
+    - uses: actions/upload-artifact@v2
+      with:
+        name: coverage
+        path: coverage.xml
     - name: Report test coverage to Codecov
       uses: codecov/codecov-action@v2
       with:
         files: coverage.xml
         fail_ci_if_error: false
         verbose: true
-  deepsource:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    steps:
     - name: Report test coverage to DeepSource
       uses: deepsourcelabs/test-coverage-action@master
       with:
