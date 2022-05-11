@@ -186,7 +186,7 @@ class Writer(ABC):
         }
         tqdm_kwargs.update(kwargs)
         try:
-            from tqdm.autonotebook import tqdm
+            from tqdm.auto import tqdm
 
             return tqdm(iterable, **tqdm_kwargs)
         except ImportError:
@@ -218,7 +218,7 @@ class Writer(ABC):
         }
         tqdm_kwargs.update(kwargs)
         try:
-            from tqdm.autonotebook import tqdm
+            from tqdm.auto import tqdm
 
             return tqdm(iterable, **tqdm_kwargs)
         except ImportError:
@@ -238,7 +238,7 @@ class Writer(ABC):
             Iterable:
         """
         try:
-            from tqdm.autonotebook import tqdm
+            from tqdm.auto import tqdm
 
             return tqdm(
                 iterable,

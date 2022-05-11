@@ -217,7 +217,7 @@ class MultiProcessTileIterator:
         self.remaining_reads = list(np.ndindex(self.read_mosaic_shape))
         self.tile_status = zarr.zeros(self.yield_mosaic_shape, dtype="u1")
         try:
-            from tqdm.autonotebook import tqdm
+            from tqdm.auto import tqdm
 
             self.read_pbar = tqdm(
                 total=np.prod(self.read_mosaic_shape),
