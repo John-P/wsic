@@ -47,6 +47,7 @@ jobs:
     - name: Report test coverage to Codecov
       uses: codecov/codecov-action@v2
       with:
+        files: coverage.xml
         fail_ci_if_error: false
         verbose: true
   deepsource:
