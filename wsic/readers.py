@@ -276,9 +276,9 @@ class MultiProcessTileIterator:
         self.yield_index, overflow = wrap_index(
             self.yield_index, self.yield_mosaic_shape
         )
-        if overflow and self.verbose:
-            print("All tiles yielded.")
-        elif overflow:
+        if overflow:
+            if self.verbose:
+                print("All tiles yielded.")
             self.close()
             raise StopIteration
 
