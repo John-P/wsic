@@ -4,6 +4,7 @@ import os
 import time
 import warnings
 from abc import ABC
+from concurrent.futures import ThreadPoolExecutor
 from math import ceil, floor
 from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple, Union
@@ -278,7 +279,7 @@ class MultiProcessTileIterator:
         if overflow and self.verbose:
             print("All tiles yielded.")
         elif overflow:
-            self.read_pbar.close()
+            self.close()
             raise StopIteration
 
     def __next__(self) -> np.ndarray:
@@ -338,8 +339,7 @@ class MultiProcessTileIterator:
         )
         print(f"Intermediate Read slices {intermediate_read_slices}")
         # Terminate the read processes
-        for process in self.processes:
-            process.terminate()
+        self.close()
         raise IOError(f"Tile read timed out at index {self.yield_index}")
 
     def read_next_from_intermediate(self) -> Optional[np.ndarray]:
@@ -424,10 +424,24 @@ class MultiProcessTileIterator:
             self.update_read_pbar()
         return None
 
+    def close(self):
+        """Safely end any dependants (threads, processes, and files).
+
+        Close progress bars and join child processes. Terminate children
+        if they fail to join after one second.
+        """
+        self.read_pbar.close()
+        # Join processes in parallel threads
+        with ThreadPoolExecutor(len(self.processes)) as executor:
+            executor.map(lambda p: p.join(1), self.processes)
+        # Terminate any child processes if still alive
+        for process in self.processes:
+            if process.is_alive():
+                process.terminate()
+
     def __del__(self):
         """Destructor."""
-        for process in self.processes:
-            process.terminate()
+        self.close()
 
 
 class JP2Reader(Reader):
