@@ -80,4 +80,4 @@ Creetive Commons Zero (CC0) is a public domain license. It waives all
 copyright to the extent that is possible under the law.
 
 For more information, see
-https://creativecommons.org/publicdomain/zero/1.0/. 
+https://creativecommons.org/publicdomain/zero/1.0/.

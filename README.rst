@@ -14,11 +14,11 @@ wsic
 
 .. image:: https://codecov.io/gh/John-P/wsic/branch/main/graph/badge.svg?token=ICCWDKJG5J
     :target: https://codecov.io/gh/John-P/wsic
-    
+
 .. image:: https://readthedocs.org/projects/pip/badge/?version=stable
     :target: https://wsic.readthedocs.io/en/latest/
     :alt: Documentation Status
-    
+
 .. image:: https://img.shields.io/pypi/v/wsic
     :target: https://pypi.org/project/wsic/
 
@@ -67,7 +67,7 @@ Features
 * Read image data from:
 
   * `OpenSlide`_ Formats:
-  
+
     * Aperio SVS (.svs)
     * Hamamatsu (.vms, .vmu, .ndpi)
     * Leica (.scn)
@@ -79,7 +79,7 @@ Features
 
   * Other Tiled TIFFs (`tifffile`_ supported formats)
   * `OME-TIFF`_
-  * `JP2`_ (via `glymur`_ and `OpenJPEG`_) 
+  * `JP2`_ (via `glymur`_ and `OpenJPEG`_)
   * `Zarr`_ (single array or pyramid group of arrays)
   * `DICOM WSI`_ (via `wsidicom`_)
 
