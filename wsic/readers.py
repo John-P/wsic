@@ -479,6 +479,7 @@ class TIFFReader(Reader):
         super().__init__(path)
         self.tiff = tifffile.TiffFile(str(path))
         self.tiff_page = self.tiff.pages[0]
+        self.microns_per_pixel = self._get_mpp()
         self.array = self.tiff_page.asarray()
         self.shape = self.array.shape
         self.dtype = self.array.dtype
@@ -502,6 +503,26 @@ class TIFFReader(Reader):
         self.jpeg_tables = self.tiff_page.jpegtables
         self.colour_space = normalise_color_space(self.tiff_page.photometric)
         self.compression = normalise_compression(self.tiff_page.compression)
+
+    def _get_mpp(self) -> Optional[Tuple[float, float]]:
+        """Get the microns per pixel for the image.
+
+        This checks the resolution and resolution unit TIFF tags.
+
+        Returns:
+            Optional[Tuple[float, float]]:
+                The resolution of the image in microns per pixel.
+                If the resolution is not available, this will be None.
+        """
+        try:
+            y_resolution = self.tiff_page.tags["YResolution"].value[0]
+            x_resolution = self.tiff_page.tags["XResolution"].value[0]
+            resolution_units = self.tiff_page.tags["ResolutionUnit"].value
+            return ppu2mpp(x_resolution, resolution_units), ppu2mpp(
+                y_resolution, resolution_units
+            )
+        except KeyError:
+            return None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.

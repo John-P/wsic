@@ -456,6 +456,12 @@ def test_cli_jp2_to_tiff(samples_path, tmp_path):
     assert result.exit_code == 0
 
 
+def test_tiff_res_tags(samples_path):
+    """Test that we can read the resolution tags from a TIFF."""
+    reader = readers.Reader.from_file(samples_path / "XYC-half-mpp.tiff")
+    assert reader.microns_per_pixel == (0.5, 0.5)
+
+
 def test_cli_transcode_svs_to_zarr(samples_path, tmp_path):
     """Test the CLI for transcoding."""
     runner = CliRunner()

@@ -191,13 +191,15 @@ def ppu2mpp(ppu: float, units: Union[str, int]) -> float:
             'cm', 'inch', 2 (TIFF inches), and 3 (TIFF cm).
 
     """
+    if ppu == 0:
+        return 0
     mpp_to_upp = {
         "um": 1,
         "mm": 1e3,
-        "cm": 1e6,
+        "cm": 1e4,
         "inch": 25400,
         2: 25400,
-        3: 1e6,
+        3: 1e4,
     }
     return (1 / ppu) * mpp_to_upp[units]
 
@@ -464,6 +466,7 @@ def normalise_compression(compression: Union[str, int]) -> str:
 
         mapping.update(
             {
+                TIFF.COMPRESSION.NONE: "NONE",
                 TIFF.COMPRESSION.JPEG: "JPEG",
                 TIFF.COMPRESSION.APERIO_JP2000_YCBC: "Aperio J2K YCbCr",
                 TIFF.COMPRESSION.APERIO_JP2000_RGB: "Aperio J2K RGB",
