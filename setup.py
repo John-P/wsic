@@ -88,6 +88,6 @@ setup(
     tests_require=test_requirements,
     extras_require=extra_requirements,
     url="https://github.com/john-p/wsic",
-    version="0.2.0",
+    version="0.3.0",
     zip_safe=False,
 )
