@@ -415,6 +415,23 @@ class JP2Reader(Reader):
         self.microns_per_pixel = self._get_mpp()
         self.tile_shape = self._get_tile_shape()
 
+    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
+        """Get tile at index.
+
+        Args:
+            index (Tuple[int, int]):
+                The index of the tile to get.
+            decode (bool, optional):
+                Whether to decode the tile. Defaults to True.
+
+        Returns:
+            np.ndarray:
+                The tile at index.
+        """
+        if not decode:
+            raise NotImplementedError("Returning encoded JP2 tiles is not supported.")
+        return self.jp2[tile_slices(index, self.tile_shape)]
+
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
 
@@ -644,6 +661,21 @@ class OpenSlideReader(Reader):
         self.axes = "YXS"
         self.tile_shape = None  # No easy way to get tile shape currently
         self.microns_per_pixel = self._get_mpp()
+
+    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
+        """Get tile at index.
+
+        Args:
+            index (Tuple[int, int]):
+                The index of the tile to get.
+            decode (bool, optional):
+                Whether to decode the tile. Defaults to True.
+
+        Returns:
+            np.ndarray:
+                The tile at index.
+        """
+        raise NotImplementedError("OpenSlideReader does not support reading tiles.")
 
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
