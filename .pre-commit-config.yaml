@@ -20,6 +20,7 @@ repos:
       - id: pretty-format-json
       - id: requirements-txt-fixer
       - id: trailing-whitespace
+        exclude: 'setup.cfg'
   - repo: https://github.com/pycqa/isort
     rev: 5.10.1
     hooks:
