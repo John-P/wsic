@@ -16,7 +16,9 @@ def samples_path():
     return Path(__file__).parent / "samples"
 
 
-def naive_jp2_to_tiff(samples_path, tmp_path, tile_size: Tuple[int, int] = (64, 64)):
+def test_naive_jp2_to_tiff(
+    samples_path, tmp_path, tile_size: Tuple[int, int] = (64, 64)
+):
     """Naive JP2 to TIFF conversion."""
     import glymur
     import tifffile
@@ -46,12 +48,9 @@ def naive_jp2_to_tiff(samples_path, tmp_path, tile_size: Tuple[int, int] = (64, 
         )
 
 
-def test_naive_jp2_to_tiff(benchmark, samples_path, tmp_path):
-    """Benchmark naive JP2 to TIFF conversion."""
-    benchmark(naive_jp2_to_tiff, samples_path, tmp_path)
-
-
-def wsic_jp2_to_tiff(samples_path, tmp_path, tile_size: Tuple[int, int] = (64, 64)):
+def test_wsic_jp2_to_tiff(
+    samples_path, tmp_path, tile_size: Tuple[int, int] = (64, 64)
+):
     """JP2 to TIFF conversion using wsic."""
     reader = wsic.readers.JP2Reader(samples_path / "XYC.jp2")
     writer = wsic.writers.TIFFWriter(
@@ -64,8 +63,3 @@ def wsic_jp2_to_tiff(samples_path, tmp_path, tile_size: Tuple[int, int] = (64, 6
         overwrite=True,  # Multiple rounds should overwrite
     )
     writer.copy_from_reader(reader, read_tile_size=(512, 512), num_workers=1)
-
-
-def test_wsic_jp2_to_tiff(benchmark, samples_path, tmp_path):
-    """Benchmark JP2 to TIFF conversion."""
-    benchmark(wsic_jp2_to_tiff, samples_path, tmp_path)
