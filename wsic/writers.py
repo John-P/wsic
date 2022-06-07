@@ -13,15 +13,17 @@ from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Uni
 import numpy as np
 import zarr
 
+from wsic import __version__ as wsic_version
 from wsic.codecs import register_codecs
 from wsic.metadata import ngff
 from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
 from wsic.types import PathLike
 from wsic.utils import (
-    dowmsample_shape,
+    downsample_shape,
     mean_pool,
     mosaic_shape,
     mpp2ppu,
+    scale_to_fit,
     tile_slices,
     warn_unused,
 )
@@ -382,6 +384,21 @@ class TIFFWriter(Writer):
     same size and must be written in the order left-to-right, then
     top-to-bottom (row-by-row). Tiles cannot be skipped.
 
+    TIFF 6.0 Specification Notes
+    ----------------------------
+
+    - TileWidth and TileLength (height) must each be a multiple of 16.
+    - "Offsets [bytes from the start of file to each tile blob and
+      therefore the tile ordering when writing] are ordered
+      left-to-right and top-to-bottom."
+    - "For PlanarConfiguration = 2, the offsets for the first component
+      plane are stored first, followed by all the offsets for the second
+      component plane, and so on."
+
+      Full specification at:
+      https://web.archive.org/web/20210108174645/https://www.adobe.io/content/dam/udp/en/open/standards/tiff/TIFF6.pdf
+
+
     Args:
         path (PathLike):
             Path to output file.
@@ -578,6 +595,314 @@ class TIFFWriter(Writer):
                             photometric=self.photometric,
                             compression=self.compression,
                             subfiletype=1,  # Subfile type: reduced resolution
+                        )
+
+
+class SVSWriter(Writer):
+    """Aperio SVS writer using tifffile.
+
+    Note that when writing tiled TIFF files, the tiles must all be the
+    same size and must be written in the order left-to-right, then
+    top-to-bottom (row-by-row). Tiles cannot be skipped.
+
+    Args:
+        path (PathLike):
+            Path to output file.
+        shape (Tuple[int, int]):
+            A (width, height) tuple of image size in pixels.
+        tile_size (Tuple[int, int], optional):
+            A (width, height) tuple of tile size in pixels.
+            Defaults to (256, 256).
+        dtype (np.dtype, optional):
+            Data type of output image. Defaults to np.uint8.
+        photometric (str, optional):
+            Photometric interpretation. Defaults to "rgb".
+        compression (str, optional):
+            Compression type.
+            Defaults to "jpeg".
+        compression_level (int, optional):
+            Compression level. Defaults to 95. Currently unused.
+        microns_per_pixel (Tuple[float, float], optional):
+            A (width, height) tuple of microns per pixel.
+            Defaults to None.
+        pyramid_downsamples (List[int], optional):
+            A list of downsamples to create. Should be strictly
+            inceasing for maximum compatibility.
+            Defaults to None.
+        overwrite (bool, optional):
+            Overwrite existing file. Defaults to False.
+        verbose (bool, optional):
+            Print more output. Defaults to False.
+        ome (bool):
+            Write OME-TIFF metadata. Defaults to False.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        shape: Tuple[int, int],
+        tile_size: Tuple[int, int] = (256, 256),
+        dtype: np.dtype = np.uint8,  # Currently unused
+        photometric: Optional[str] = "rgb",
+        compression: Optional[str] = "jpeg",
+        compression_level: int = 0,  # Currently unused
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
+        overwrite: bool = False,
+        verbose: bool = False,
+        **kwargs,
+    ) -> None:
+        # Validate inputs
+        if dtype is not np.uint8:
+            raise ValueError(f"SVSWriter only supports uint8, not {dtype}")
+        if photometric.lower() not in ("rgb", "ycbcr"):
+            raise ValueError(
+                f"SVSWriter only supports rgb and ycbcr, not {photometric}"
+            )
+        if compression == "j2k":
+            compression = "aperio_jp2000_ycbc"
+        if compression not in ("jpeg", "aperio_jp2000_ycbc"):
+            raise ValueError(
+                "SVSWriter only supports jpeg and j2k (aperio_jp2000_ycbc) compession,"
+                f" not {compression}"
+            )
+        warn_unused(compression_level, ignore_falsey=True)
+        # Super
+        super().__init__(
+            path=path,
+            shape=shape,
+            tile_size=tile_size,
+            dtype=dtype,
+            photometric=photometric,
+            compression=compression,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
+
+    def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
+        """Write pixel data at index. Not supported for TIFFWriter.
+
+        In theory this is possible but it can be complex. If the new tile
+        is larger in bytes, the tile will have to be added to the end of the
+        file. The old tile will remain in the file and waste space unless it
+        is later overwritten by another of length smaller or equal to the
+        original tile.
+        """
+        raise NotImplementedError(
+            "Compressed tiled TIFF files do not support random access writes."
+        )
+
+    def copy_from_reader(
+        self,
+        reader: Reader,
+        num_workers: int = 2,
+        read_tile_size: Optional[Tuple[int, int]] = None,
+        timeout: float = 10.0,
+    ) -> None:
+        """Write pixel data to by copying from a Reader.
+
+        Args:
+            reader (Reader):
+                Reader object.
+            num_workers (int, optional):
+                Number of workers to use. Defaults to 2.
+            read_tile_size (Tuple[int, int], optional):
+                Tile size to read. Defaults to None.
+                This will use the tile size of the writer if None.
+            timeout (float, optional):
+                Timeout for workers. Defaults to 10s.
+        """
+        super().copy_from_reader(
+            reader=reader,
+            num_workers=num_workers,
+            read_tile_size=read_tile_size,
+            timeout=timeout,
+        )
+        import tifffile
+
+        microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
+        resolution = (
+            (
+                round(mpp2ppu(microns_per_pixel[0], "cm")),
+                round(mpp2ppu(microns_per_pixel[1], "cm")),
+                "CENTIMETER",
+            )
+            if microns_per_pixel
+            else None
+        )
+
+        with ZarrIntermediate(
+            None, reader.shape, zero_after_read=False
+        ) as intermediate:
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader=reader,
+                num_workers=num_workers,
+                intermediate=intermediate,
+                read_tile_size=read_tile_size or self.tile_size,
+                timeout=timeout,
+            )
+            reader_tile_iterator = self.level_progress(reader_tile_iterator)
+            # Write baseline (level 0)
+            with tifffile.TiffWriter(
+                self.path,
+                bigtiff=True,
+            ) as tif:
+
+                # Construct the pipe separated Aperio description
+                # Example description:
+                """
+                Aperio Image Library v11.2.1\n
+                46000x32914 [42673,5576 2220x2967] (240x240) JPEG/RGB Q=30;
+                Aperio Image Library v10.0.51\n
+                46920x33014 [0,100 46000x32914] (256x256) JPEG/RGB Q=30|
+                AppMag = 20|
+                StripeWidth = 2040|
+                ScanScope ID = CPAPERIOCS|
+                Filename = CMU-1|
+                Date = 12/29/09|Time = 09:59:15|
+                User = b414003d-95c6-48b0-9369-8010ed517ba7|
+                Parmset = USM Filter|
+                MPP = 0.4990|
+                Left = 25.691574|Top = 23.449873|
+                LineCameraSkew = -0.000424|
+                LineAreaXOffset = 0.019265|LineAreaYOffset = -0.000313|
+                Focus Offset = 0.000000|
+                ImageID = 1004486|
+                OriginalWidth = 46920|Originalheight = 33014|
+                Filtered = 5|
+                OriginalWidth = 46000|
+                OriginalHeight = 32914
+                """
+                aperio_desc_compression = {
+                    "jpeg": f"JPEG/{self.photometric.upper()}",
+                    "aperio_jp2000_ycbc": "J2K/YUV16",
+                }
+                software = f"Aperio wsic Library v{wsic_version}"
+                # Using reader shape for now, could be user specified in future
+                original_height = reader.shape[0]
+                original_width = reader.shape[1]
+                # Not sure what these are copying original for now
+                mystery_height = original_height
+                mystery_width = original_width
+                headers = [
+                    (
+                        f"{software} \n"
+                        f"{original_width}x{original_height} "
+                        f"[0,100 {mystery_width}x{mystery_height}] "
+                        f"({self.tile_size[0]}x{self.tile_size[1]})"
+                        f" {aperio_desc_compression[self.compression]} "
+                        f"Q={self.compression_level}"
+                    )
+                ]
+                key_values = {
+                    "AppMag": 20,  # e.g. 20
+                    "StripeWidth": None,
+                    "ScanScopeID": None,  # e.g. CPAPERIOCS
+                    "Filename": None,
+                    "Date": None,  # e.g. 01/01/22
+                    "Time": None,  # e.g. 09:00:00
+                    "User": None,  # e.g. UUID4
+                    "Parmset": None,  # e.g. USM Filter
+                    "MPP": np.mean(self.microns_per_pixel)
+                    if self.microns_per_pixel
+                    else None,
+                    "Left": None,
+                    "Top": None,
+                    "LineCameraSkew": None,  # e.g. -0.003035
+                    "LineAreaXOffset": None,  # e.g. 0.000000
+                    "LineAreaYOffset": None,  # e.g. 0.000000
+                    "Focus Offset": None,  # e.g. -0.001000
+                    "DSR ID": None,  # e.g. homer
+                    "ImageID": None,  # e.g. 1234
+                    "OriginalWidth": original_width,
+                    "OriginalHeight": original_height,
+                    "Filtered": None,  # e.g. 5
+                }
+                description = (
+                    "\n".join(headers)
+                    + ("|" if any(key_values.values()) else "")
+                    + "|".join(
+                        f"{key} = {value}" for key, value in key_values.items() if value
+                    )
+                )
+
+                tif.write(
+                    data=iter(reader_tile_iterator),
+                    tile=self.tile_size,
+                    shape=reader.shape,
+                    dtype=reader.dtype,
+                    photometric=self.photometric,
+                    compression=(self.compression, self.compression_level),
+                    resolution=resolution,
+                    subifds=len(self.pyramid_downsamples),
+                    description=description,
+                    subfiletype=0,
+                )
+
+                # Write thumbnail
+                # NOTE: Assuming YXC order
+                thumb_scale = max(
+                    scale_to_fit(reader.shape[:2], (1024, 768)),
+                    scale_to_fit(reader.shape[:2], (768, 1024)),
+                )
+                thumb_shape = tuple(floor(s * thumb_scale) for s in reader.shape[:2])
+                thumbnail = reader.thumbnail(thumb_shape, approx_ok=True)
+                tif.write(
+                    data=thumbnail,
+                    rowsperstrip=16,
+                    dtype=np.uint8,
+                    photometric="rgb",
+                    compression="jpeg",
+                    description=software,
+                    subfiletype=0,
+                )
+
+                # Write pyramid resolutions
+                with multiprocessing.Pool(num_workers) as pool:
+                    for level, downsample in self.pyramid_progress(
+                        enumerate(self.pyramid_downsamples),
+                        total=len(self.pyramid_downsamples),
+                    ):
+                        level_shape = tuple(
+                            floor(s / downsample) for s in reader.shape[:2]
+                        ) + (reader.shape[-1],)
+
+                        level_tiles_shape = mosaic_shape(
+                            level_shape,
+                            self.tile_size,
+                        )
+
+                        func = partial(
+                            get_level_tile,
+                            tile_size=self.tile_size,
+                            downsample=downsample,
+                            read_intermediate_path=intermediate.path,
+                        )
+
+                        tile_generator = pool.imap(
+                            func=func,
+                            iterable=np.ndindex(level_tiles_shape),
+                        )
+
+                        tile_generator = self.level_progress(
+                            tile_generator,
+                            total=int(np.product(level_tiles_shape)),
+                            desc=f"Level {level}",
+                            leave=False,
+                        )
+
+                        tif.write(
+                            data=iter(tile_generator),
+                            tile=self.tile_size,
+                            shape=level_shape,
+                            dtype=reader.dtype,
+                            photometric=self.photometric,
+                            compression=(self.compression, self.compression_level),
+                            description=software,  # Optional for OpenSlide
+                            subfiletype=1,  # Subfile type: 1 = reduced resolution
                         )
 
 
@@ -889,7 +1214,8 @@ class ZarrReaderWriter(Writer, Reader):
             enumerate(self.pyramid_downsamples, start=1),
         ):
             inter_level_downsample = downsample // previous_downsample
-            level_shape = dowmsample_shape(self.shape, downsample)
+            # NOTE: Assuming length three shape with channels last
+            level_shape = downsample_shape(self.shape, (downsample, downsample, 1))
             level_tiles_shape = mosaic_shape(
                 level_shape,
                 self.tile_size,

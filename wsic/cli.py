@@ -11,6 +11,7 @@ ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
     ".tiff": wsic.writers.TIFFWriter,
     ".zarr": wsic.writers.ZarrReaderWriter,
+    ".svs": wsic.writers.SVSWriter,
 }
 
 
@@ -60,7 +61,9 @@ def main(ctx):
     "-c",
     "--compression",
     help="The compression to use.",
-    type=click.Choice(["deflate", "webp", "jpeg", "jpeg2000", "blosc"]),
+    type=click.Choice(
+        ["deflate", "webp", "jpeg", "jpeg2000", "blosc", "aperio_jp2000_ycbc"]
+    ),
     default="deflate",
 )
 @click.option(

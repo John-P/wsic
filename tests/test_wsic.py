@@ -11,7 +11,7 @@ import tifffile
 import zarr
 from click.testing import CliRunner
 
-from wsic import cli, readers, writers
+from wsic import cli, readers, utils, writers
 
 
 @pytest.fixture()
@@ -177,6 +177,12 @@ def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
 
     tif = tifffile.TiffFile(writer.path)
     assert len(tif.series[0].levels) == len(pyramid_downsamples) + 1
+    # Check that the levels are not blank and have a sensible range
+    for level in tif.series[0].levels:
+        level_array = level.asarray()
+        assert len(np.unique(level_array)) > 1
+        assert np.max(level_array) > 200
+        assert np.min(level_array) < 100
 
 
 def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
@@ -487,6 +493,163 @@ def test_copy_from_reader_timeout(samples_path, tmp_path):
     warnings.simplefilter("ignore")
     with pytest.raises(IOError, match="timed out"):
         writer.copy_from_reader(reader=reader, timeout=1e-5)
+
+
+def test_block_downsample_shape():
+    """Test that the block downsample shape is correct."""
+    shape = (135, 145)
+    block_shape = (32, 32)
+    downsample = 3
+    # (32, 32) / 3 = (10, 10)
+    # (135, 145) / 32 = (4.21875, 4.53125)
+    # floor((0.21875, 0.53125) * 10) = (2, 5)
+    # ((4, 4) * 10) + (2, 5) = (42, 45)
+    expected = (42, 45)
+    result_shape, result_tile_shape = utils.block_downsample_shape(
+        shape=shape, block_shape=block_shape, downsample=downsample
+    )
+    assert result_shape == expected
+    assert result_tile_shape == (10, 10)
+
+
+def test_thumbnail(samples_path):
+    """Test generating a thumbnail from a reader."""
+    # Compare with cv2 downsampling
+    import cv2
+
+    reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
+    thumbnail = reader.thumbnail(shape=(64, 64))
+    cv2_thumbnail = cv2.resize(reader[...], (64, 64), interpolation=cv2.INTER_AREA)
+    assert thumbnail.shape == (64, 64, 3)
+    assert np.allclose(thumbnail, cv2_thumbnail, atol=1)
+
+
+def test_thumbnail_pil(samples_path, monkeypatch):
+    """Test generating a thumbnail from a reader without cv2 installed.
+
+    This should fall back to Pillow.
+    """
+    from PIL import Image
+
+    # Monkeypatch cv2 to not be installed
+    monkeypatch.setitem(sys.modules, "cv2", None)
+
+    # Sanity check that cv2 is not installed
+    with pytest.raises(ImportError):
+        import cv2  # noqa: F401
+
+    reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
+    thumbnail = reader.thumbnail(shape=(64, 64))
+    pil_thumbnail = Image.fromarray(reader[...]).resize(
+        (64, 64),
+        resample=Image.BOX,
+    )
+    assert thumbnail.shape == (64, 64, 3)
+
+    mse = np.mean((thumbnail - pil_thumbnail) ** 2)
+    assert mse < 1
+    assert np.allclose(thumbnail, pil_thumbnail, atol=1)
+
+
+def test_thumbnail_no_cv2_no_pil(samples_path, monkeypatch):
+    """Test generating a thumbnail from a reader without cv2 or Pillow installed.
+
+    This should fall back to scipy.ndimage.zoom.
+    """
+    import cv2 as _cv2
+
+    # Monkeypatch cv2 and Pillow to not be installed
+    monkeypatch.setitem(sys.modules, "cv2", None)
+    monkeypatch.setitem(sys.modules, "PIL", None)
+
+    # Sanity check that cv2 and Pillow are not installed
+    with pytest.raises(ImportError):
+        import cv2  # noqa: F401
+    with pytest.raises(ImportError):
+        import PIL  # noqa: F401
+
+    reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
+    thumbnail = reader.thumbnail(shape=(64, 64))
+    zoom = np.divide((64, 64), reader.shape[:2])
+    zoom = np.append(zoom, 1)
+    cv2_thumbnail = _cv2.resize(reader[...], (64, 64), interpolation=_cv2.INTER_AREA)
+    assert thumbnail.shape == (64, 64, 3)
+    assert np.allclose(thumbnail, cv2_thumbnail, atol=1)
+
+
+def test_thumbnail_no_cv2_no_pil_no_scipy(samples_path, monkeypatch):
+    """Test generating a thumbnail with nearest neighbor subsampling.
+
+    This should be the raw numpy fallaback.
+    """
+    import cv2 as _cv2
+
+    # Monkeypatch cv2 and Pillow to not be installed
+    monkeypatch.setitem(sys.modules, "cv2", None)
+    monkeypatch.setitem(sys.modules, "PIL", None)
+    monkeypatch.setitem(sys.modules, "scipy", None)
+
+    # Sanity check that modules are not installed
+    with pytest.raises(ImportError):
+        import cv2  # noqa: F401
+    with pytest.raises(ImportError):
+        import PIL  # noqa: F401
+    with pytest.raises(ImportError):
+        import scipy  # noqa: F401
+
+    reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
+    thumbnail = reader.thumbnail(shape=(64, 64))
+    cv2_thumbnail = _cv2.resize(reader[...], (64, 64), interpolation=_cv2.INTER_AREA)
+    assert thumbnail.shape == (64, 64, 3)
+    assert np.allclose(thumbnail, cv2_thumbnail, atol=1)
+
+
+def test_thumbnail_non_power_two(samples_path):
+    """Test generating a thumbnail from a reader.
+
+    Outputs a non power of two sized thumbnail.
+    """
+    # Compare with cv2 downsampling
+    import cv2
+
+    reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
+    thumbnail = reader.thumbnail(shape=(59, 59))
+    cv2_thumbnail = cv2.resize(reader[...], (59, 59), interpolation=cv2.INTER_AREA)
+    assert thumbnail.shape == (59, 59, 3)
+    assert np.mean(thumbnail) == pytest.approx(np.mean(cv2_thumbnail), abs=0.5)
+
+
+def test_write_rgb_jpeg_svs(samples_path, tmp_path):
+    """Test writing an SVS file with RGB JPEG compression."""
+    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    writer = writers.SVSWriter(
+        path=tmp_path / "Neo-CMU-1-Small-Region.svs",
+        shape=reader.shape,
+        pyramid_downsamples=[2, 4],
+        compression_level=70,
+    )
+    writer.copy_from_reader(reader=reader)
+    assert writer.path.exists()
+    assert writer.path.is_file()
+
+    # Pass the tiffile is_svs test
+    import tifffile
+
+    tiff = tifffile.TiffFile(str(writer.path))
+    assert tiff.is_svs
+
+    # Read and compare with OpenSlide
+    import openslide
+
+    with openslide.OpenSlide(str(writer.path)) as slide:
+        new_svs_region = slide.read_region((0, 0), 0, (1024, 1024))
+    with openslide.OpenSlide(str(samples_path / "CMU-1-Small-Region.svs")) as slide:
+        old_svs_region = slide.read_region((0, 0), 0, (1024, 1024))
+
+    # Check mean squared error
+    # There will be some error due to JPEG compression
+    mse = (np.subtract(new_svs_region, old_svs_region) ** 2).mean()
+    assert mse < 10
 
 
 def test_cli_convert_timeout(samples_path, tmp_path):

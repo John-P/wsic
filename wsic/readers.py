@@ -6,7 +6,7 @@ from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
 from math import ceil, floor
 from pathlib import Path
-from typing import Iterator, Optional, Tuple, Union
+from typing import Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -15,10 +15,13 @@ from wsic.magic import summon_file_types
 from wsic.multiprocessing import Queue
 from wsic.types import PathLike
 from wsic.utils import (
+    block_downsample_shape,
+    mean_pool,
     mosaic_shape,
     normalise_color_space,
     normalise_compression,
     ppu2mpp,
+    resize_array,
     tile_slices,
     wrap_index,
 )
@@ -65,6 +68,82 @@ class Reader(ABC):
 
             return ZarrReaderWriter(path)
         raise ValueError(f"Unsupported file type: {path}")
+
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        """Generate a thumbnail image of (or near) the requested shape.
+
+        Args:
+            shape (Tuple[int, ...]):
+                Shape of the thumbnail.
+            approx_ok (bool):
+                If True, return a thumbnail that is approximately the
+                requested shape. It will be equal to or larger than the
+                requested shape (the next largest shape possible via
+                an integer block downsampling).
+
+        Returns:
+            np.ndarray: Thumbnail.
+        """
+        # NOTE: Assuming first two are Y and X
+        yx_shape = self.shape[:2]
+        yx_tile_shape = (
+            self.tile_shape[:2] if self.tile_shape else np.minimum(yx_shape, (256, 256))
+        )
+        self_mosaic_shape = (
+            self.mosaic_shape
+            if self.mosaic_shape
+            else mosaic_shape(yx_shape, yx_tile_shape)
+        )
+        downsample_shape = yx_shape
+        downsample_tile_shape = yx_tile_shape
+        downsample = 0
+        while True:
+            new_downsample = downsample + 1
+            next_downsample_shape, new_downsample_tile_shape = block_downsample_shape(
+                yx_shape, new_downsample, yx_tile_shape
+            )
+            if not any(x > max(0, y) for x, y in zip(downsample_shape, shape)):
+                break
+            downsample_shape = next_downsample_shape
+            downsample_tile_shape = new_downsample_tile_shape
+            downsample = new_downsample
+        # NOTE: Assuming channels last
+        channels = self.shape[-1]
+        thumbnail = np.zeros(downsample_shape + (channels,), dtype=np.uint8)
+        # Resize tiles to new_downsample_tile_shape and combine
+        tile_indexes = list(np.ndindex(self_mosaic_shape))
+        for tile_index in self.pbar(tile_indexes, desc="Generating thumbnail"):
+            tile = self[tile_slices(tile_index, yx_tile_shape)]
+            tile = mean_pool(tile.astype(float), downsample).astype(np.uint8)
+            thumbnail[tile_slices(tile_index, downsample_tile_shape)] = tile
+        if approx_ok:
+            return thumbnail
+        return resize_array(thumbnail, shape, "bicubic")
+
+    def pbar(self, iterable: Iterable, *args, **kwargs) -> Iterator:
+        """Return an iterator that displays a progress bar.
+
+        Uses tqdm if installed, otherwise falls back to a simple iterator.
+
+        Args:
+            iterable (Iterable):
+                Iterable to iterate over.
+            args (tuple):
+                Positional arguments to pass to tqdm.
+            kwargs (dict):
+                Keyword arguments to pass to tqdm.
+
+        Returns:
+            Iterator: Iterator that displays a progress bar.
+        """
+        try:
+            from tqdm.auto import tqdm
+        except ImportError:
+
+            def tqdm(x, *args, **kwargs):
+                return x
+
+        return tqdm(iterable, *args, **kwargs)
 
 
 def get_tile(
