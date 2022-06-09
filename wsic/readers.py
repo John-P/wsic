@@ -124,7 +124,8 @@ class Reader(ABC):
             return thumbnail
         return resize_array(thumbnail, shape, "bicubic")
 
-    def pbar(self, iterable: Iterable, *args, **kwargs) -> Iterator:
+    @staticmethod
+    def pbar(iterable: Iterable, *args, **kwargs) -> Iterator:
         """Return an iterator that displays a progress bar.
 
         Uses tqdm if installed, otherwise falls back to a simple iterator.

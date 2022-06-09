@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# skipcq: PYL-W0404
 
 """Tests for `wsic` package."""
 import sys

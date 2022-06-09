@@ -753,6 +753,7 @@ class SVSWriter(Writer):
 
                 # Construct the pipe separated Aperio description
                 # Example description:
+                # skipcq: PYL-W0105
                 """
                 Aperio Image Library v11.2.1\n
                 46000x32914 [42673,5576 2220x2967] (240x240) JPEG/RGB Q=30;
