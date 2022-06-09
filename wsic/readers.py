@@ -463,7 +463,8 @@ class MultiProcessTileIterator:
         Close progress bars and join child processes. Terminate children
         if they fail to join after one second.
         """
-        self.read_pbar.close()
+        if self.read_pbar is not None:
+            self.read_pbar.close()
         # Join processes in parallel threads
         with ThreadPoolExecutor(len(self.processes)) as executor:
             executor.map(lambda p: p.join(1), self.processes)

@@ -577,12 +577,12 @@ def resize_array(
         from PIL import Image
 
         str_to_pillow_interpolation = {
-            "nearest": Image.NEAREST,
-            "bilinear": Image.BILINEAR,
-            "bicubic": Image.BICUBIC,
-            "box": Image.BOX,
-            "area": Image.BOX,
-            "lanczos": Image.LANCZOS,
+            "nearest": Image.Resampling.NEAREST,
+            "bilinear": Image.Resampling.BILINEAR,
+            "bicubic": Image.Resampling.BICUBIC,
+            "box": Image.Resampling.BOX,
+            "area": Image.Resampling.BOX,
+            "lanczos": Image.Resampling.LANCZOS,
         }
         pil_interpolation = str_to_pillow_interpolation[interpolation]
 

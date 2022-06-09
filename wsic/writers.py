@@ -666,7 +666,6 @@ class SVSWriter(Writer):
                 "SVSWriter currently only supports jpeg compession,"
                 f" not {compression}"
             )
-        warn_unused(compression_level, ignore_falsey=True)
         # Super
         super().__init__(
             path=path,
@@ -1511,12 +1510,13 @@ class ZarrIntermediate(Writer, Reader):
         return result  # noqa: R504
 
     def __enter__(self) -> "ZarrIntermediate":
-        """Enter the context manager."""
+        """Enter the context."""
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        """Exit the context manager."""
-        shutil.rmtree(self.path)
+        """Exit the context."""
+        if self.path.exists():
+            shutil.rmtree(self.path)
 
     def copy_from_reader(
         self,

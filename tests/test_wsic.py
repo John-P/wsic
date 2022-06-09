@@ -543,7 +543,7 @@ def test_thumbnail_pil(samples_path, monkeypatch):
     thumbnail = reader.thumbnail(shape=(64, 64))
     pil_thumbnail = Image.fromarray(reader[...]).resize(
         (64, 64),
-        resample=Image.BOX,
+        resample=Image.Resampling.BOX,
     )
     assert thumbnail.shape == (64, 64, 3)
 
@@ -599,7 +599,8 @@ def test_thumbnail_no_cv2_no_pil_no_scipy(samples_path, monkeypatch):
         import scipy  # noqa: F401 skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
-    thumbnail = reader.thumbnail(shape=(64, 64))
+    with pytest.warns(UserWarning, match="slower"):
+        thumbnail = reader.thumbnail(shape=(64, 64))
     cv2_thumbnail = _cv2.resize(reader[...], (64, 64), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (64, 64, 3)
     assert np.allclose(thumbnail, cv2_thumbnail, atol=1)
