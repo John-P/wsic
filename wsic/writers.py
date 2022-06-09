@@ -661,9 +661,9 @@ class SVSWriter(Writer):
             )
         if compression == "j2k":
             compression = "aperio_jp2000_ycbc"
-        if compression not in ("jpeg", "aperio_jp2000_ycbc"):
+        if compression not in ("jpeg",):  # aperio_jp2000_ycbc not working
             raise ValueError(
-                "SVSWriter only supports jpeg and j2k (aperio_jp2000_ycbc) compession,"
+                "SVSWriter currently only supports jpeg compession,"
                 f" not {compression}"
             )
         warn_unused(compression_level, ignore_falsey=True)
