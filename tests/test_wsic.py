@@ -800,11 +800,6 @@ class TestTranscodeScenarios:
         assert output_reader.shape == reader.shape
         assert output_reader.tile_shape == reader.tile_shape
 
-        visual_inspections_passed = self.visually_compare_readers(
-            in_path, out_path, reader, output_reader
-        )
-        assert len(visual_inspections_passed) == 1
-
         # Check mean squared error is low
         mse = (np.subtract(reader[...], output_reader[...]) ** 2).mean()
         assert mse < 10
