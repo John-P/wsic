@@ -23,6 +23,7 @@ from wsic.utils import (
     mean_pool,
     mosaic_shape,
     mpp2ppu,
+    normalise_compression,
     scale_to_fit,
     tile_slices,
     warn_unused,
@@ -415,7 +416,7 @@ class TIFFWriter(Writer):
             Compression type.
             Defaults to "jpeg".
         compression_level (int, optional):
-            Compression level. Defaults to 95. Currently unused.
+            Compression level. Defaults to -1 (highest / lossless).
         microns_per_pixel (Tuple[float, float], optional):
             A (width, height) tuple of microns per pixel.
             Defaults to None.
@@ -439,7 +440,7 @@ class TIFFWriter(Writer):
         dtype: np.dtype = np.uint8,  # Currently unused
         photometric: Optional[str] = "rgb",
         compression: Optional[str] = "jpeg",
-        compression_level: int = 0,  # Currently unused
+        compression_level: int = -1,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
@@ -449,7 +450,6 @@ class TIFFWriter(Writer):
     ) -> None:
         if dtype is not np.uint8:
             warn_unused(dtype)
-        warn_unused(compression_level, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
@@ -548,7 +548,7 @@ class TIFFWriter(Writer):
                     shape=reader.shape,
                     dtype=reader.dtype,
                     photometric=self.photometric,
-                    compression=self.compression,
+                    compression=(self.compression, self.compression_level),
                     resolution=resolution,
                     subifds=len(self.pyramid_downsamples),
                     metadata=metadata,
@@ -593,7 +593,7 @@ class TIFFWriter(Writer):
                             shape=level_shape,
                             dtype=reader.dtype,
                             photometric=self.photometric,
-                            compression=self.compression,
+                            compression=(self.compression, self.compression_level),
                             subfiletype=1,  # Subfile type: reduced resolution
                         )
 
@@ -988,7 +988,11 @@ class ZarrReaderWriter(Writer, Reader):
         self.zarr = None
         self._init_zarr(create=False)
 
-    def _init_zarr(self, create: bool = True) -> Optional[zarr.Group]:
+    @property
+    def tile_shape(self) -> Optional[Tuple[int, int]]:
+        return self.zarr[0].chunks[:2] if self.zarr else None
+
+    def _init_zarr(self, create: bool = True) -> zarr.Group:
         """Initialize the zarr.
 
         If the zarr already exists, it will be opened. Otherwise, it will be
@@ -999,7 +1003,7 @@ class ZarrReaderWriter(Writer, Reader):
                 Create the zarr if it does not exist.
 
         Returns:
-            zarr.Array or zarr.Group:
+            zarr.Group:
                 The zarr.
         """
         # Read an existing zarr
@@ -1251,6 +1255,7 @@ class ZarrReaderWriter(Writer, Reader):
         - J2K compressed SVS (:class:`wsic.readers.TIFFReader`)
         - JPEG compressed OME-TIFF (:class:`wsic.readers.TIFFReader`)
         - JPEG compressed DICOM WSI (:class:`wsic.readers.DICOMWSIReader`)
+        - JPEG compressed NDPI (Hamamatsu)
 
         Currently only outputs a single resolution level (level 0).
 
@@ -1264,23 +1269,12 @@ class ZarrReaderWriter(Writer, Reader):
             reader (Reader):
                 Reader object.
         """
-        # Input validation
-        if not hasattr(reader, "get_tile"):
+        transcode_supported = self._can_transcode_from_reader(reader)
+        if not transcode_supported:
             raise ValueError(
-                "Reader must have a get_tile method which can return encoded tiles"
-                " (decoded=False)."
-            )
-        if self.tile_size != reader.tile_shape[:2][::-1]:
-            raise ValueError(
-                "Tile size must match the reader tile size for transcoding."
-            )
-        if self.dtype != reader.dtype:
-            raise ValueError("Dtype must match the reader dtype for transcoding.")
-        if isinstance(reader, TIFFReader) and not any(
-            [reader.tiff.is_svs, reader.tiff.is_ome]
-        ):
-            raise ValueError(
-                "Currently only SVS and OME-TIFF are supported for TIFF transcoding."
+                "Currently only SVS, NDPI, OME-TIFF, and WSI DICOM "
+                "(with JPEG, JPEG2000, or WebP compression) "
+                "are supported for transcoding."
             )
 
         register_codecs()
@@ -1311,6 +1305,58 @@ class ZarrReaderWriter(Writer, Reader):
         self._build_pyramid()
         self._write_ome_metadata()
 
+    def _can_transcode_from_reader(self, reader: Reader) -> bool:
+        """Determine if a reader supports from to the current writer.
+
+        Args:
+            reader (Reader):
+                Reader object.
+
+        Returns:
+            bool:
+                Whether the reader supports being transcoded from.
+        """
+        # 1. A valid get_tile(decode=False)
+        try:
+            reader.get_tile((0, 0), decode=False)
+        except (NotImplementedError, AttributeError):
+            raise ValueError(
+                "Reader must have a get_tile method which can return encoded tiles"
+                " (decoded=False)."
+            )
+        # 2. Compatible tile sizes
+        if self.tile_size != reader.tile_shape[:2][::-1]:
+            raise ValueError(
+                "Tile size must match the reader tile size for transcoding."
+            )
+        # 3. Matching data types
+        if self.dtype != reader.dtype:
+            raise ValueError("Dtype must match the reader dtype for transcoding.")
+        # 4. Compatible compression
+        has_valid_compression = (
+            normalise_compression(reader.compression) in ("JPEG", "JPEG2000", "WebP"),
+        )
+        # 5. Known supported TIFF formats
+        is_generic_tiff = isinstance(reader, TIFFReader) and (
+            reader.tiff.pages[0].is_tiled and has_valid_compression
+        )
+        is_supported_tiff = isinstance(reader, TIFFReader) and any(
+            [
+                reader.tiff.is_svs,
+                reader.tiff.is_ome,
+                reader.tiff.is_ndpi,
+                is_generic_tiff,
+            ]
+        )
+        # 5. Supported Reader (WSIDICOM or a TIFF with supported format)
+        return all(
+            [
+                isinstance(reader, (TIFFReader, DICOMWSIReader)),
+                has_valid_compression,
+                not isinstance(reader, TIFFReader) or is_supported_tiff,
+            ]
+        )
+
     @staticmethod
     def get_transcode_codec(reader: TIFFReader) -> Any:
         """Get the codec to use for transcoding.
@@ -1323,16 +1369,33 @@ class ZarrReaderWriter(Writer, Reader):
             numcodecs.Codec:
                 Codec to use for transcoding.
         """
-        from imagecodecs.numcodecs import Jpeg, Jpeg2k
+        from imagecodecs.numcodecs import Jpeg, Jpeg2k, Webp
 
+        # Try to get the compression level from the reader if known
+        try:
+            level = reader.compression_level
+        except AttributeError:
+            level = None
+
+        # Create the codec object
         if reader.compression == "JPEG":
-            return Jpeg(tables=reader.jpeg_tables, colorspace_jpeg=reader.colour_space)
-        if reader.compression == "Aperio J2K YCbCr":
-            return Jpeg2k(codecformat="J2K", colorspace="YCbCr")
-        if reader.compression == "Aperio J2K RGB":
-            return Jpeg2k(codecformat="J2K", colorspace="RGB")
+            return Jpeg(
+                tables=reader.jpeg_tables,
+                colorspace_jpeg=reader.colour_space,
+                colorspace_data="RGB",
+                level=reader.compression_level,
+            )
+        if reader.compression == "APERIO_JP2000_YCBC":
+            return Jpeg2k(codecformat="J2K", colorspace="YCbCr", level=level)
+        if reader.compression == "APERIO_JP2000_RGB":
+            return Jpeg2k(codecformat="J2K", colorspace="RGB", level=level)
+        if reader.compression == "WEBP":
+            return Webp(level=level)
+        if reader.compression == "JPEG2000":
+            return Jpeg2k(codecformat="JP2", colorspace="RGB", level=level)
+        # Out of options
         raise ValueError(
-            "Currently only JPEG and J2K (JPEG-2000) compression "
+            "Currently only JPEG, J2K (JPEG-2000), and WebP compression "
             " are supported for transcoding."
         )
 

@@ -505,13 +505,15 @@ def normalise_compression(compression: Union[str, int]) -> str:
             {
                 TIFF.COMPRESSION.NONE: "NONE",
                 TIFF.COMPRESSION.JPEG: "JPEG",
-                TIFF.COMPRESSION.APERIO_JP2000_YCBC: "Aperio J2K YCbCr",
-                TIFF.COMPRESSION.APERIO_JP2000_RGB: "Aperio J2K RGB",
+                TIFF.COMPRESSION.JPEG2000: "JPEG2000",
+                TIFF.COMPRESSION.APERIO_JP2000_YCBC: "APERIO_JP2000_YCBC",
+                TIFF.COMPRESSION.APERIO_JP2000_RGB: "APERIO_JP2000_RGB",
+                TIFF.COMPRESSION.WEBP: "WEBP",
             }
         )
     except ImportError:
         pass
-    return mapping[compression]
+    return mapping.get(compression, compression).upper()
 
 
 def resize_array(

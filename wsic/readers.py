@@ -4,6 +4,7 @@ import time
 import warnings
 from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from math import ceil, floor
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Tuple, Union
@@ -57,8 +58,11 @@ class Reader(ABC):
         file_types = summon_file_types(path)
         if ("jp2",) in file_types:
             return JP2Reader(path)
-        if ("tiff", "svs") in file_types:
-            return OpenSlideReader(path)
+        with suppress(ImportError):
+            import openslide
+
+            with suppress(openslide.OpenSlideUnsupportedFormatError):
+                return OpenSlideReader(path)
         if ("tiff",) in file_types:
             return TIFFReader(path)
         if ("dicom",) in file_types or ("dcm",) in file_types:
@@ -599,6 +603,7 @@ class TIFFReader(Reader):
         self.jpeg_tables = self.tiff_page.jpegtables
         self.colour_space = normalise_color_space(self.tiff_page.photometric)
         self.compression = normalise_compression(self.tiff_page.compression)
+        self.compression_level = None  # To be filled in if known later
 
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
@@ -682,6 +687,9 @@ class DICOMWSIReader(Reader):
                 "Number of frames in DICOM dataset does not match mosaic shape."
             )
         self.compression = normalise_compression(dataset.LossyImageCompressionMethod)
+        self.compression_level = (
+            None  # Set if known: dataset.get(LossyImageCompressionRatio)?
+        )
         self.colour_space = normalise_color_space(dataset.photometric_interpretation)
         self.jpeg_tables = None
 
@@ -773,8 +781,8 @@ class OpenSlideReader(Reader):
         # Fall back to TIFF resolution tags
         try:
             resolution = (
-                self.os_slide.properties["tiff.XResolution"],
-                self.os_slide.properties["tiff.YResolution"],
+                float(self.os_slide.properties["tiff.XResolution"]),
+                float(self.os_slide.properties["tiff.YResolution"]),
             )
             units = self.os_slide.properties["tiff.ResolutionUnit"]
             self._check_sensible_resolution(resolution, units)

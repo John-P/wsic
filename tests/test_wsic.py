@@ -4,6 +4,7 @@
 import sys
 import warnings
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
 import pytest
@@ -196,6 +197,7 @@ def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
             overwrite=False,
             tile_size=(256, 256),
             compression="WebP",
+            compression_level=-1,  # <0 for lossless
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
 
@@ -258,7 +260,7 @@ def test_warn_unused(samples_path, tmp_path):
     """Test the warning about unsued arguments."""
     reader = readers.Reader.from_file(samples_path / "XYC.jp2")
     with pytest.warns(UserWarning):
-        writers.TIFFWriter(
+        writers.JP2Writer(
             path=tmp_path / "XYC.tiff",
             shape=reader.shape,
             overwrite=False,
@@ -289,14 +291,14 @@ def test_read_zarr_array(tmp_path):
 
 def test_tiff_get_tile(samples_path):
     """Test getting a tile from a TIFF."""
-    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     tile = reader.get_tile((1, 1), decode=False)
     assert isinstance(tile, bytes)
 
 
 def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
     """Test that we can transcode an JPEG SVS to a Zarr."""
-    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     writer = writers.ZarrReaderWriter(
         path=tmp_path / "CMU-1-Small-Region.zarr",
         tile_size=reader.tile_shape[::-1],
@@ -392,7 +394,7 @@ def test_transcode_svs_to_pyramid_ome_zarr(samples_path, tmp_path):
 
 def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
     """Test that we can transcode a JPEG compressed DICOM WSI to a Zarr."""
-    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region")
+    reader = readers.DICOMWSIReader(samples_path / "CMU-1-Small-Region")
     writer = writers.ZarrReaderWriter(
         path=tmp_path / "CMU-1.zarr",
         tile_size=reader.tile_shape[::-1],
@@ -484,7 +486,7 @@ def test_cli_transcode_svs_to_zarr(samples_path, tmp_path):
 
 def test_copy_from_reader_timeout(samples_path, tmp_path):
     """Check that Writer.copy_from_reader raises IOError when timed out."""
-    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     writer = writers.ZarrReaderWriter(
         path=tmp_path / "CMU-1-Small-Region.zarr",
         tile_size=reader.tile_shape[::-1],
@@ -621,7 +623,7 @@ def test_thumbnail_non_power_two(samples_path):
 
 def test_write_rgb_jpeg_svs(samples_path, tmp_path):
     """Test writing an SVS file with RGB JPEG compression."""
-    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     writer = writers.SVSWriter(
         path=tmp_path / "Neo-CMU-1-Small-Region.svs",
         shape=reader.shape,
@@ -654,7 +656,7 @@ def test_write_rgb_jpeg_svs(samples_path, tmp_path):
 
 def test_write_ycbcr_j2k_svs(samples_path, tmp_path):
     """Test writing an SVS file with YCbCr JP2 compression."""
-    reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     writer = writers.SVSWriter(
         path=tmp_path / "Neo-CMU-1-Small-Region.svs",
         shape=reader.shape,
@@ -715,3 +717,177 @@ def test_help():
     help_result = runner.invoke(cli.main, ["--help"])
     assert help_result.exit_code == 0
     assert "Console script for wsic." in help_result.output
+
+
+# Test Scenarios
+
+
+def pytest_generate_tests(metafunc):
+    """Generate test scenarios.
+
+    See
+    https://docs.pytest.org/en/7.1.x/example/parametrize.html#a-quick-port-of-testscenarios
+    """
+    id_list = []
+    arg_values = []
+    if metafunc.cls is None:
+        return
+    for scenario in metafunc.cls.scenarios:
+        id_list.append(scenario[0])
+        items = scenario[1].items()
+        arg_names = [x[0] for x in items]
+        arg_values.append([x[1] for x in items])
+    metafunc.parametrize(arg_names, arg_values, ids=id_list, scope="class")
+
+
+class TestTranscodeScenarios:
+    scenarios = [
+        (
+            "svs_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region.svs",
+                "reader_cls": readers.TIFFReader,
+                "out_ext": ".zarr",
+            },
+        ),
+        (
+            "jpeg_tiff_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region.jpeg.tiff",
+                "reader_cls": readers.TIFFReader,
+                "out_ext": ".zarr",
+            },
+        ),
+        (
+            "webp_tiff_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region.webp.tiff",
+                "reader_cls": readers.TIFFReader,
+                "out_ext": ".zarr",
+            },
+        ),
+        (
+            "jp2_tiff_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region.jp2.tiff",
+                "reader_cls": readers.TIFFReader,
+                "out_ext": ".zarr",
+            },
+        ),
+    ]
+    writer_ext_map = {
+        ".zarr": writers.ZarrReaderWriter,
+    }
+
+    def test_transcode_tiled(
+        self, samples_path, sample_name, reader_cls, out_ext, tmp_path
+    ):
+        in_path = samples_path / sample_name
+        out_path = (tmp_path / sample_name).with_suffix(out_ext)
+        reader = reader_cls(in_path)
+        writer_cls = self.writer_ext_map[out_ext]
+        writer = writer_cls(
+            path=out_path,
+            shape=reader.shape,
+            tile_size=reader.tile_shape[::-1],
+        )
+        writer.transcode_from_reader(reader=reader)
+        output_reader = readers.Reader.from_file(out_path)
+
+        assert output_reader.shape == reader.shape
+        assert output_reader.tile_shape == reader.tile_shape
+
+        visual_inspections_passed = self.visually_compare_readers(
+            in_path, out_path, reader, output_reader
+        )
+        assert len(visual_inspections_passed) == 1
+
+        # Check mean squared error is low
+        mse = (np.subtract(reader[...], output_reader[...]) ** 2).mean()
+        assert mse < 10
+        # Check all pixels are within +/- 1
+        # There may be some variation due to different encode/decode libraries
+        assert np.allclose(output_reader[...], reader[...], atol=1)
+
+    def visually_compare_readers(
+        self,
+        in_path: Path,
+        out_path: Path,
+        reader: readers.Reader,
+        output_reader: readers.Reader,
+    ) -> Dict[str, bool]:
+        """Compare two readers for manual visual inspection.
+
+        Used for debugging.
+
+        Args:
+            in_path:
+                Path to the input file.
+            out_path:
+                Path to the output file.
+            reader:
+                Reader for the input file.
+            output_reader:
+                Reader for the output file.
+        """
+        import inspect
+
+        from matplotlib import pyplot as plt
+        from matplotlib.widgets import Button
+
+        current_frame = inspect.currentframe()
+        class_name = self.__class__.__name__
+        function_name = current_frame.f_back.f_code.co_name
+        # Create a dictionary of arg names to values
+        args, _, _, values = inspect.getargvalues(current_frame)
+        args_dict = {arg: values[arg] for arg in args}
+        function_arguments = ",\n  ".join(
+            f"{k}={v}" if k not in ("self",) else k for k, v in args_dict.items()
+        )
+
+        # Display the function signature and arguments in axs[0]
+        text_figure = plt.gcf()
+        text_figure.canvas.set_window_title(f"{class_name} - {function_name}")
+        text_figure.set_size_inches(8, 2)
+        plt.suptitle(
+            f"{function_name}(\n  {function_arguments}\n)",
+            horizontalalignment="left",
+            verticalalignment="top",
+            x=0,
+        )
+        plt.show(block=False)
+
+        # Plot the readers to compare
+        _, axs = plt.subplots(1, 2)
+        axs[0].imshow(reader[...])
+        axs[0].set_title(f"Input\n({in_path.name})")
+        axs[1].imshow(output_reader[...])
+        axs[1].set_title(f"Output\n({out_path.name})")
+
+        # Set the window title
+        plt.gcf().canvas.set_window_title(f"{class_name} - {function_name}")
+
+        # Add Pass / Fail Buttons with function callbacks
+        visual_inspections_passed = {}
+
+        def pass_callback(event):
+            visual_inspections_passed[function_name] = True
+            plt.close(text_figure)
+            plt.close()
+
+        def fail_callback(event):
+            plt.close(text_figure)
+            plt.close()
+
+        ax_pass = plt.axes([0.8, 0.05, 0.1, 0.075])
+        btn_pass = Button(ax_pass, "Pass", color="lightgreen")
+        btn_pass.on_clicked(pass_callback)
+        ax_fail = plt.axes([0.9, 0.05, 0.1, 0.075])
+        btn_fail = Button(ax_fail, "Fail", color="red")
+        btn_fail.on_clicked(fail_callback)
+
+        # Set suptitle to the function name
+        plt.suptitle("\n".join([class_name, function_name]))
+        plt.show(block=True)
+
+        return visual_inspections_passed  # noqa: R504

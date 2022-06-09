@@ -6,6 +6,7 @@ from typing import Tuple
 import click
 
 import wsic
+from wsic import magic
 
 ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
@@ -164,7 +165,17 @@ def transcode(
     """Repackage a (TIFF) WSI to a zarr."""
     in_path = Path(in_path)
     out_path = Path(out_path)
-    reader = wsic.readers.TIFFReader.from_file(in_path)
+
+    file_types = magic.summon_file_types(in_path)
+    if ("tiff",) in file_types:
+        reader = wsic.readers.TIFFReader(in_path)
+    elif ("dicom",) in file_types or ("dcm",) in file_types:
+        reader = wsic.readers.DICOMReader(in_path)
+    else:
+        suffixes = "".join(in_path.suffixes)
+        raise click.BadParameter(
+            f"Input file type {suffixes} could not be transcribed", param_hint="in_path"
+        )
     writer = wsic.writers.ZarrReaderWriter(
         out_path,
         tile_size=reader.tile_shape[::-1],
