@@ -741,6 +741,8 @@ def pytest_generate_tests(metafunc):
 
 
 class TestTranscodeScenarios:
+    """Test scenarios for the transcoding WSIs."""
+
     scenarios = [
         (
             "svs_to_zarr",
@@ -782,6 +784,7 @@ class TestTranscodeScenarios:
     def test_transcode_tiled(
         self, samples_path, sample_name, reader_cls, out_ext, tmp_path
     ):
+        """Test transcoding a tiled WSI."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader = reader_cls(in_path)
@@ -871,11 +874,13 @@ class TestTranscodeScenarios:
         visual_inspections_passed = {}
 
         def pass_callback(event):
+            """Callback for the pass button."""
             visual_inspections_passed[function_name] = True
             plt.close(text_figure)
             plt.close()
 
         def fail_callback(event):
+            """Callback for the fail button."""
             plt.close(text_figure)
             plt.close()
 
