@@ -664,35 +664,6 @@ def test_write_ycbcr_j2k_svs_fails(samples_path, tmp_path):
             compression_level=70,
             photometric="rgb",
         )
-    # writer.copy_from_reader(reader=reader)
-    # assert writer.path.exists()
-    # assert writer.path.is_file()
-
-    # # Pass the tiffile is_svs test
-    # import tifffile
-
-    # tiff = tifffile.TiffFile(str(writer.path))
-    # assert tiff.is_svs
-
-    # # Explicitly check the openslide criteria
-    # # 1. Is a TIFF (would have raise exception above)
-    # # 2. The first page is tiled
-    # assert tiff.pages[0].is_tiled
-    # # 3. Image description starts with "Aperio"
-    # assert tiff.pages[0].description.startswith("Aperio")
-
-    # # Read and compare with OpenSlide
-    # import openslide
-
-    # with openslide.OpenSlide(str(writer.path)) as slide:
-    #     new_svs_region = slide.read_region((0, 0), 0, (1024, 1024))
-    # with openslide.OpenSlide(str(samples_path / "CMU-1-Small-Region.svs")) as slide:
-    #     old_svs_region = slide.read_region((0, 0), 0, (1024, 1024))
-
-    # # Check mean squared error
-    # # There will be some error due to JPEG compression
-    # mse = (np.subtract(new_svs_region, old_svs_region) ** 2).mean()
-    # assert mse < 10
 
 
 def test_cli_convert_timeout(samples_path, tmp_path):
