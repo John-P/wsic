@@ -635,8 +635,6 @@ def test_write_rgb_jpeg_svs(samples_path, tmp_path):
     assert writer.path.is_file()
 
     # Pass the tiffile is_svs test
-    import tifffile
-
     tiff = tifffile.TiffFile(str(writer.path))
     assert tiff.is_svs
 
