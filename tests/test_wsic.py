@@ -111,8 +111,42 @@ def test_no_tqdm(samples_path, tmp_path, monkeypatch):
     assert len(tif.series[0].levels) == len(pyramid_downsamples) + 1
 
 
+def test_pyramid_tiff(samples_path, tmp_path, monkeypatch):
+    """Test pyramid generation using OpenCV to downsample."""
+    # Try to make a pyramid TIFF
+    reader = readers.Reader.from_file(samples_path / "XYC.jp2")
+    pyramid_downsamples = [2, 4]
+    writer = writers.TIFFWriter(
+        path=tmp_path / "XYC.tiff",
+        shape=reader.shape,
+        overwrite=False,
+        tile_size=(256, 256),
+        compression="deflate",
+        pyramid_downsamples=pyramid_downsamples,
+    )
+    writer.copy_from_reader(
+        reader=reader, num_workers=3, read_tile_size=(512, 512), downsample_method="cv2"
+    )
+
+    assert writer.path.exists()
+    assert writer.path.is_file()
+    assert writer.path.stat().st_size > 0
+
+    output = tifffile.imread(writer.path)
+    assert np.all(reader[:512, :512] == output[:512, :512])
+
+    tif = tifffile.TiffFile(writer.path)
+    assert len(tif.series[0].levels) == len(pyramid_downsamples) + 1
+
+
 def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
-    """Test pyramid generation when cv2 is not installed."""
+    """Test pyramid generation when cv2 is not installed.
+
+    This will use SciPy. This method has a high error on synthetic data,
+    e.g. a test grid image. It performns better on natural images.
+    """
+    import cv2 as _cv2
+
     # Make cv2 unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
 
@@ -132,7 +166,12 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
         compression="deflate",
         pyramid_downsamples=pyramid_downsamples,
     )
-    writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
+    writer.copy_from_reader(
+        reader=reader,
+        num_workers=3,
+        read_tile_size=(512, 512),
+        downsample_method="scipy",
+    )
 
     assert writer.path.exists()
     assert writer.path.is_file()
@@ -142,11 +181,26 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
     assert np.all(reader[:512, :512] == output[:512, :512])
 
     tif = tifffile.TiffFile(writer.path)
+    level_0 = tif.series[0].levels[0].asarray()
     assert len(tif.series[0].levels) == len(pyramid_downsamples) + 1
+
+    for level in tif.series[0].levels[:2]:
+        level_array = level.asarray()
+        level_size = level_array.shape[:2][::-1]
+        resized_level_0 = _cv2.resize(level_0, level_size)
+        level_array = _cv2.GaussianBlur(level_array, (11, 11), 0)
+        resized_level_0 = _cv2.GaussianBlur(resized_level_0, (11, 11), 0)
+        mse = ((level_array.astype(float) - resized_level_0.astype(float)) ** 2).mean()
+        assert mse < 200
+        assert len(np.unique(level_array)) > 1
+        assert resized_level_0.mean() == pytest.approx(level_array.mean(), abs=5)
+        assert np.allclose(level_array, resized_level_0, atol=50)
 
 
 def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
     """Test pyramid generation when neither cv2 or scipy are installed."""
+    import cv2 as _cv2
+
     # Make cv2 and scipy unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "scipy", None)
@@ -166,7 +220,9 @@ def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
         compression="deflate",
         pyramid_downsamples=pyramid_downsamples,
     )
-    writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
+    writer.copy_from_reader(
+        reader=reader, num_workers=3, read_tile_size=(512, 512), downsample_method="np"
+    )
 
     assert writer.path.exists()
     assert writer.path.is_file()
@@ -176,13 +232,18 @@ def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
     assert np.all(reader[:512, :512] == output[:512, :512])
 
     tif = tifffile.TiffFile(writer.path)
+    level_0 = tif.series[0].levels[0].asarray()
     assert len(tif.series[0].levels) == len(pyramid_downsamples) + 1
     # Check that the levels are not blank and have a sensible range
-    for level in tif.series[0].levels:
+    for level in tif.series[0].levels[:2]:
         level_array = level.asarray()
+        level_size = level_array.shape[:2][::-1]
+        resized_level_0 = _cv2.resize(level_0, level_size)
+        mse = ((level_array.astype(float) - resized_level_0.astype(float)) ** 2).mean()
+        assert mse < 10
         assert len(np.unique(level_array)) > 1
-        assert np.max(level_array) > 200
-        assert np.min(level_array) < 100
+        assert resized_level_0.mean() == pytest.approx(level_array.mean(), abs=1)
+        assert np.allclose(level_array, resized_level_0, atol=1)
 
 
 def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):

@@ -484,6 +484,7 @@ class TIFFWriter(Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -497,6 +498,9 @@ class TIFFWriter(Writer):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use. Defaults to None.
+                Valid downsample methods are: "cv2", "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
@@ -573,6 +577,7 @@ class TIFFWriter(Writer):
                             tile_size=self.tile_size,
                             downsample=downsample,
                             read_intermediate_path=intermediate.path,
+                            downsample_method=downsample_method,
                         )
 
                         tile_generator = pool.imap(
@@ -1098,6 +1103,7 @@ class ZarrReaderWriter(Writer, Reader):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -1111,6 +1117,9 @@ class ZarrReaderWriter(Writer, Reader):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use. Defaults to None.
+                Valid downsample methods are: "cv2", "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
@@ -1158,7 +1167,7 @@ class ZarrReaderWriter(Writer, Reader):
             level_0 = self.zarr[0]
             level_0[tile_slices(ji, read_tile_size)] = tile
 
-        self._build_pyramid()
+        self._build_pyramid(downsample_method)
         self._write_ome_metadata()
 
     def _write_ome_metadata(self) -> None:
@@ -1206,10 +1215,14 @@ class ZarrReaderWriter(Writer, Reader):
             for key, value in meta_dict.items():
                 self.zarr.attrs[key] = value
 
-    def _build_pyramid(self):
+    def _build_pyramid(self, downsample_method: Optional[str] = None):
         """Build the pyramid.
 
         Constructs additional levels of the pyramid from the first level.
+
+        Args:
+            downsample_method (str, optional):
+                Downsample method to use. Defaults to None.
 
         """
         previous_level = self.zarr[0]
@@ -1239,13 +1252,19 @@ class ZarrReaderWriter(Writer, Reader):
             for ji in self.level_progress(level_tiles_index):
                 read_slices = tile_slices(ji, level_read_tile_size)
                 tile = previous_level[read_slices]
-                down_tile = downsample_tile(tile, inter_level_downsample)
+                down_tile = downsample_tile(
+                    tile, inter_level_downsample, method=downsample_method
+                )
                 write_slices = tile_slices(ji, self.tile_size)
                 level_array[write_slices] = down_tile
             previous_level = level_array
             previous_downsample = downsample
 
-    def transcode_from_reader(self, reader: Union[TIFFReader, DICOMWSIReader]) -> None:
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
         """Losslessly transform into a new format from a supported Reader.
 
         Repackages tiles from the Reader to a zarr. Currently only
@@ -1268,6 +1287,10 @@ class ZarrReaderWriter(Writer, Reader):
         Args:
             reader (Reader):
                 Reader object.
+            downsample_method (str, optional):
+                Downsample method to use for new reduced resolutions.
+                Defaults to None.
+                Valid downsample methods are: "cv2", "scipy", "np", None.
         """
         transcode_supported = self._can_transcode_from_reader(reader)
         if not transcode_supported:
@@ -1302,7 +1325,7 @@ class ZarrReaderWriter(Writer, Reader):
             with open(tile_path, "wb") as file_handle:
                 file_handle.write(tile_bytes)
 
-        self._build_pyramid()
+        self._build_pyramid(downsample_method)
         self._write_ome_metadata()
 
     def _can_transcode_from_reader(self, reader: Reader) -> bool:
@@ -1529,7 +1552,86 @@ class ZarrIntermediate(Writer, Reader):
         raise NotImplementedError()
 
 
-def downsample_tile(image: np.ndarray, factor: int) -> np.array:
+def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using OpenCV.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    import cv2
+
+    return cv2.resize(
+        image,
+        (image.shape[1] // factor, image.shape[0] // factor),
+        interpolation=cv2.INTER_AREA,
+    )
+
+
+def _pil_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using PIL.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    import PIL.Image
+
+    return PIL.Image.fromarray(image).resize(
+        (image.shape[1] // factor, image.shape[0] // factor),
+        resample=PIL.Image.Resampling.Box,
+    )
+
+
+def _scipy_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using SciPy.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    from scipy import ndimage
+
+    return ndimage.zoom(image, (1 / factor, 1 / factor, 1), order=1)
+
+
+def _np_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using NumPy.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    return mean_pool(image.astype(np.float), factor).clip(0, 255).astype(np.uint8)
+
+
+def downsample_tile(
+    image: np.ndarray, factor: int, method: Optional[str] = None
+) -> np.array:
     """Downsample an image by a factor.
 
     Args:
@@ -1537,25 +1639,35 @@ def downsample_tile(image: np.ndarray, factor: int) -> np.array:
             The image to downsample.
         factor (int):
             The downsampling factor.
+        method (str):
+            The downsampling method (library) to use.
+            Defaults to None, which tries cv2, then scipy, and falls
+            back to numpy.
+            Valid options are: "cv2", "pillow", "scipy", "np", None.
     """
-    try:
-        import cv2
 
-        return cv2.resize(image, (image.shape[1] // factor, image.shape[0] // factor))
-    except ImportError:
-        warnings.warn("OpenCV not installed.")
-    try:
-        from scipy import ndimage
+    methods = {
+        "cv2": _cv2_downsample,
+        "pillow": _pil_downsample,
+        "scipy": _scipy_downsample,
+        "np": _np_downsample,
+    }
 
-        return ndimage.zoom(image, 1 / factor, order=0)
-    except ImportError:
-        warnings.warn("Scipy not installed.")
-    warnings.warn(
-        "Falling back to numpy for tile downsampling. "
-        "This may be slow. "
-        "Consider installing OpenCV or Scipy."
-    )
-    return mean_pool(image, factor)
+    if method is not None and method not in methods:
+        raise ValueError(f"Invalid method: {method}")
+
+    if method in methods:
+        return methods[method](image, factor)
+
+    for method, func in methods.items():
+        try:
+            return func(image, factor)
+        except ImportError:
+            warnings.warn(
+                f"Failed to import library for {method} for downsampling. "
+                "It may not be installed."
+            )
+    raise Exception("Failed to use any downsampling method.")
 
 
 def get_level_tile(
@@ -1563,8 +1675,22 @@ def get_level_tile(
     tile_size: Tuple[int, int],
     downsample: int,
     read_intermediate_path: PathLike,
+    downsample_method: Optional[str] = None,
 ) -> np.ndarray:
-    """Generate tiles for a downsampled level."""
+    """Generate tiles for a downsampled level.
+
+    Args:
+        yx (Tuple[int, int]):
+            The tile coordinates.
+        tile_size (Tuple[int, int]):
+            The tile size.
+        downsample (int):
+            The downsampling factor.
+        read_intermediate_path (PathLike):
+            The path to the intermediate file (zarr).
+        downsample_method (str):
+            The downsampling method (library) to use.
+    """
     y, x = yx
     w, h = tile_size
     tile_index = (
@@ -1573,4 +1699,4 @@ def get_level_tile(
     )
     reader = zarr.open(read_intermediate_path, mode="r")
     tile = reader[tile_index]
-    return downsample_tile(tile, downsample)
+    return downsample_tile(tile, downsample, method=downsample_method)
