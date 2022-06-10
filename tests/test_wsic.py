@@ -776,7 +776,7 @@ class TestTranscodeScenarios:
 
     scenarios = [
         (
-            "svs_to_zarr",
+            "jpeg_svs_to_zarr",
             {
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.TIFFReader,
@@ -808,9 +808,17 @@ class TestTranscodeScenarios:
             },
         ),
         (
-            "dicom_to_zarr",
+            "jpeg_dicom_to_zarr",
             {
                 "sample_name": "CMU-1-Small-Region",
+                "reader_cls": readers.DICOMWSIReader,
+                "out_ext": ".zarr",
+            },
+        ),
+        (
+            "j2k_dicom_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region-J2K",
                 "reader_cls": readers.DICOMWSIReader,
                 "out_ext": ".zarr",
             },
