@@ -1645,7 +1645,6 @@ def downsample_tile(
             back to numpy.
             Valid options are: "cv2", "pillow", "scipy", "np", None.
     """
-
     methods = {
         "cv2": _cv2_downsample,
         "pillow": _pil_downsample,
@@ -1659,12 +1658,12 @@ def downsample_tile(
     if method in methods:
         return methods[method](image, factor)
 
-    for method, func in methods.items():
+    for method_name, func in methods.items():
         try:
             return func(image, factor)
         except ImportError:
             warnings.warn(
-                f"Failed to import library for {method} for downsampling. "
+                f"Failed to import library for {method_name} for downsampling. "
                 "It may not be installed."
             )
     raise Exception("Failed to use any downsampling method.")

@@ -577,7 +577,7 @@ def test_block_downsample_shape():
 def test_thumbnail(samples_path):
     """Test generating a thumbnail from a reader."""
     # Compare with cv2 downsampling
-    import cv2
+    import cv2  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
@@ -673,7 +673,7 @@ def test_thumbnail_non_power_two(samples_path):
     Outputs a non power of two sized thumbnail.
     """
     # Compare with cv2 downsampling
-    import cv2
+    import cv2  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(59, 59))
