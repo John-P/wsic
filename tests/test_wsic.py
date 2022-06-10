@@ -807,6 +807,14 @@ class TestTranscodeScenarios:
                 "out_ext": ".zarr",
             },
         ),
+        (
+            "dicom_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region",
+                "reader_cls": readers.DICOMWSIReader,
+                "out_ext": ".zarr",
+            },
+        ),
     ]
     writer_ext_map = {
         ".zarr": writers.ZarrReaderWriter,
@@ -832,11 +840,16 @@ class TestTranscodeScenarios:
         assert output_reader.tile_shape == reader.tile_shape
 
         # Check mean squared error is low
-        mse = (np.subtract(reader[...], output_reader[...]) ** 2).mean()
-        assert mse < 10
-        # Check all pixels are within +/- 1
-        # There may be some variation due to different encode/decode libraries
-        assert np.allclose(output_reader[...], reader[...], atol=1)
+        channel_wise_mse = (np.subtract(reader[...], output_reader[...]) ** 2).mean(
+            axis=(0, 1)
+        )
+        assert np.all(channel_wise_mse < 1)
+
+        # Check mean absolute error is low
+        channel_wise_mae = np.abs(np.subtract(reader[...], output_reader[...])).mean(
+            axis=(0, 1)
+        )
+        assert np.all(channel_wise_mae < 6)
 
     def visually_compare_readers(
         self,
@@ -887,11 +900,18 @@ class TestTranscodeScenarios:
         plt.show(block=False)
 
         # Plot the readers to compare
-        _, axs = plt.subplots(1, 2)
+        _, axs = plt.subplots(1, 3, sharex=True, sharey=True)
         axs[0].imshow(reader[...])
         axs[0].set_title(f"Input\n({in_path.name})")
         axs[1].imshow(output_reader[...])
         axs[1].set_title(f"Output\n({out_path.name})")
+        diff = np.abs(np.subtract(reader[...], output_reader[...], dtype=float))
+        axs[2].imshow(diff.mean(-1))
+        max_diff = diff.max(axis=(0, 1))
+        mean_diff = diff.mean(axis=(0, 1))
+        axs[2].set_title(
+            f"Difference\nChannel Max Diff {max_diff}\nChannel Mean Diff {mean_diff}"
+        )
 
         # Set the window title
         plt.gcf().canvas.set_window_title(f"{class_name} - {function_name}")
@@ -919,6 +939,7 @@ class TestTranscodeScenarios:
 
         # Set suptitle to the function name
         plt.suptitle("\n".join([class_name, function_name]))
+        plt.tight_layout()
         plt.show(block=True)
 
         return visual_inspections_passed  # noqa: R504
