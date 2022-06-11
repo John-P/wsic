@@ -78,9 +78,12 @@ Features
     * Generic tiled TIFF (.tif; DEFLATE, JPEG, and Webp compressed)
 
   * Other Tiled TIFFs (`tifffile`_ supported formats)
+
+    * E.g. JPEG XL compressed
+
   * `OME-TIFF`_
   * `JP2`_ (via `glymur`_ and `OpenJPEG`_)
-  * `Zarr`_ (single array or pyramid group of arrays)
+  * `Zarr`_ \ NGFF (single array or pyramid group of arrays)
   * `DICOM WSI`_ (via `wsidicom`_)
 
 * Write image data to:
@@ -92,11 +95,12 @@ Features
 
 * Custom tile size
 * Compression codecs
-* Lossless binary repackaging / transcoding mode (experimental) to zarr from:
+* Lossless binary repackaging / transcoding mode to zarr from:
 
-  * SVS (JPEG / J2K compressed)
-  * OME-TIFF (single image and JPEG / J2K compressed)
-  * DICOM WSI (JPEG / J2K compressed)
+  * SVS (JPEG compressed)
+  * OME-TIFF (single image, JPEG and JPEG2000 (J2K) compressed)
+  * Generic Tiled TIFF (JPEG, JPEG2000, and WebP compressed)
+  * DICOM WSI (JPEG and JPEG2000 (J2K) compressed)
 
 .. _OpenSlide: https://openslide.org/
 .. _OME-TIFF: https://docs.openmicroscopy.org/ome-model/5.6.3/ome-tiff/
