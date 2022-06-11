@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 import click
 
 import wsic
-from wsic import magic, utils
+from wsic import magic
 
 ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
@@ -241,7 +241,7 @@ def thumbnail(
         )
     reader = wsic.readers.Reader.from_file(in_path)
     if downsample is not None:
-        out_shape = utils.block_downsample_shape(reader.shape[:2], downsample)
+        out_shape = tuple(x / downsample for x in reader.shape[:2])
         thumbnail = reader.thumbnail(out_shape)
     else:
         out_shape = size[::-1]
