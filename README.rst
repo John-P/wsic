@@ -95,7 +95,7 @@ Features
 
 * Custom tile size
 * Compression codecs
-* Lossless binary repackaging / transcoding mode to zarr from:
+* Lossless repackaging / transcoding (to zarr/NGFF) from:
 
   * SVS (JPEG compressed)
   * OME-TIFF (single image, JPEG and JPEG2000 (J2K) compressed)
