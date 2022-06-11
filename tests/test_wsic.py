@@ -750,9 +750,26 @@ def test_cli_thumbnail(samples_path, tmp_path):
         out_path = Path(td) / "XYC.jpeg"
         runner.invoke(
             cli.thumbnail,
-            ["-i", str(in_path), "-o", str(out_path)],
+            ["-i", str(in_path), "-o", str(out_path), "-s", "512", "512"],
             catch_exceptions=False,
         )
+        assert out_path.exists()
+        assert out_path.is_file()
+        assert out_path.stat().st_size > 0
+
+
+def test_cli_thumbnail_downsample(samples_path, tmp_path):
+    """Check that CLI thumbnail works with downsample option."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = samples_path / "XYC.jp2"
+        out_path = Path(td) / "XYC.jpeg"
+        result = runner.invoke(
+            cli.thumbnail,
+            ["-i", str(in_path), "-o", str(out_path), "-d", "16"],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
         assert out_path.exists()
         assert out_path.is_file()
         assert out_path.stat().st_size > 0
@@ -769,7 +786,7 @@ def test_cli_thumbnail_no_cv2(samples_path, tmp_path, monkeypatch):
         out_path = Path(td) / "XYC.jpeg"
         runner.invoke(
             cli.thumbnail,
-            ["-i", str(in_path), "-o", str(out_path)],
+            ["-i", str(in_path), "-o", str(out_path), "-s", "512", "512"],
             catch_exceptions=False,
         )
         assert out_path.exists()

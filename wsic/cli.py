@@ -9,6 +9,32 @@ import click
 import wsic
 from wsic import magic
 
+
+class MutuallyExclusiveOption(click.Option):
+    """Click Option to enforce mutual exclusivity with other options."""
+
+    def __init__(self, *args, **kwargs):
+        self.mutually_exclusive = set(kwargs.pop("mutually_exclusive", []))
+        mutually_exclusive_str = ", ".join(self.mutually_exclusive)
+        if self.mutually_exclusive:
+            kwargs["help"] = kwargs.get("help", "") + (
+                " Note: This argument is mutually exclusive with "
+                f" arguments: [{mutually_exclusive_str}]."
+            )
+        super(MutuallyExclusiveOption, self).__init__(*args, **kwargs)
+
+    def handle_parse_result(self, ctx, opts, args):
+        """Handle parse result."""
+        if self.mutually_exclusive.intersection(opts) and self.name in opts:
+            mutually_exclusive_str = ", ".join(self.mutually_exclusive)
+            raise click.UsageError(
+                f"Illegal usage: `{self.name}` is mutually exclusive with "
+                f"arguments `{mutually_exclusive_str}`."
+            )
+
+        return super(MutuallyExclusiveOption, self).handle_parse_result(ctx, opts, args)
+
+
 ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
     ".tiff": wsic.writers.TIFFWriter,
@@ -200,18 +226,20 @@ def transcode(
     type=click.Path(),
 )
 @click.option(
+    "-s",
+    "--size",
+    help="The size of the thumbnail.",
+    type=click.Tuple([int, int]),
+    cls=MutuallyExclusiveOption,
+    mutually_exclusive=["downsample"],
+)
+@click.option(
     "-d",
     "--downsample",
     help="The downsample factor to use.",
     type=int,
-    default=None,
-)
-@click.option(
-    "-s",
-    "--size",
-    help="The size of the thumbnail to generate.",
-    type=click.Tuple([int, int]),
-    default=(512, 256),
+    cls=MutuallyExclusiveOption,
+    mutually_exclusive=["size"],
 )
 @click.option(
     "-a",
@@ -235,10 +263,6 @@ def thumbnail(
     """Create a thumbnail from a WSI."""
     in_path = Path(in_path)
     out_path = Path(out_path)
-    if sum(x is not None for x in (downsample, size)) > 1:
-        raise click.BadParameter(
-            "Only one of downsample or size can be specified", param_hint="size"
-        )
     reader = wsic.readers.Reader.from_file(in_path)
     if downsample is not None:
         out_shape = tuple(x / downsample for x in reader.shape[:2])
