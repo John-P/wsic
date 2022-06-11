@@ -83,7 +83,7 @@ Features
 
   * `OME-TIFF`_
   * `JP2`_ (via `glymur`_ and `OpenJPEG`_)
-  * `Zarr`_ \ NGFF (single array or pyramid group of arrays)
+  * `Zarr`_ / NGFF (single array or pyramid group of arrays)
   * `DICOM WSI`_ (via `wsidicom`_)
 
 * Write image data to:
