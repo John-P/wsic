@@ -1,12 +1,13 @@
 """Console script for wsic."""
 import sys
+from contextlib import suppress
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 import click
 
 import wsic
-from wsic import magic
+from wsic import magic, utils
 
 ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
@@ -182,6 +183,86 @@ def transcode(
         dtype=reader.dtype,
     )
     writer.transcode_from_reader(reader)
+
+
+# Thumnail generation
+@main.command(no_args_is_help=True)
+@click.option(
+    "-i",
+    "--in-path",
+    help="Path to WSI to read from.",
+    type=click.Path(exists=True),
+)
+@click.option(
+    "-o",
+    "--out-path",
+    help="The path to output to.",
+    type=click.Path(),
+)
+@click.option(
+    "-d",
+    "--downsample",
+    help="The downsample factor to use.",
+    type=int,
+    default=None,
+)
+@click.option(
+    "-s",
+    "--size",
+    help="The size of the thumbnail to generate.",
+    type=click.Tuple([int, int]),
+    default=(512, 256),
+)
+@click.option(
+    "-a",
+    "--approx-ok",
+    help=(
+        "Whether to allow approximate thumbnails."
+        " The output size will be the nearest integer"
+        " (or power of 2 depending on the backend) downsample which is"
+        " greater than or equal to the requested size."
+    ),
+    is_flag=True,
+    default=False,
+)
+def thumbnail(
+    in_path: str,
+    out_path: str,
+    downsample: Optional[int],
+    size: Tuple[int, int],
+    approx_ok: bool,
+):
+    """Create a thumbnail from a WSI."""
+    in_path = Path(in_path)
+    out_path = Path(out_path)
+    if sum(x is not None for x in (downsample, size)) > 1:
+        raise click.BadParameter(
+            "Only one of downsample or size can be specified", param_hint="size"
+        )
+    reader = wsic.readers.Reader.from_file(in_path)
+    if downsample is not None:
+        out_shape = utils.block_downsample_shape(reader.shape[:2], downsample)
+        thumbnail = reader.thumbnail(out_shape)
+    else:
+        out_shape = size[::-1]
+        thumbnail = reader.thumbnail(out_shape, approx_ok=approx_ok)
+
+    with suppress(ImportError):
+        import cv2
+
+        cv2.imwrite(str(out_path), cv2.cvtColor(thumbnail, cv2.COLOR_RGB2BGR))
+        return
+
+    with suppress(ImportError):
+        import PIL.Image
+
+        PIL.Image.fromarray(thumbnail).save(out_path)
+        return
+
+    raise Exception(
+        "Failed to save thumbnail with any of: cv2, PIL. "
+        "Please check your installation."
+    )
 
 
 if __name__ == "__main__":
