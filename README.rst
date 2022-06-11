@@ -91,7 +91,7 @@ Features
   * Tiled / Pyramid Generic TIFF
   * OME-TIFF
   * JP2
-  * Pyramid Zarr
+  * Pyramid Zarr (NGFF)
 
 * Custom tile size
 * Compression codecs
