@@ -1,5 +1,6 @@
 import inspect
 import warnings
+from contextlib import suppress
 from math import ceil, floor
 from numbers import Number
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
@@ -7,10 +8,9 @@ from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 import numpy as np
 
 
-def dowmsample_shape(
+def downsample_shape(
     baseline_shape: Tuple[int, ...],
     downsample: int,
-    channel_dim: Optional[int] = -1,
     rounding_func: Callable[[Number], int] = floor,
 ) -> Tuple[int, ...]:
     r"""Calculate the shape of an array after downsampling by a factor.
@@ -27,8 +27,6 @@ def dowmsample_shape(
             The shape of the array to downsample.
         downsample (int):
             The downsample factor.
-        channel_dim (Optional[int]):
-            The dimension for channels. Defaults to -1 (last).
         rounding_func (Callable[[int], int]):
             The rounding function to use. Defaults to floor. Any
             function which takes a single Number and returns an int such
@@ -55,13 +53,52 @@ def dowmsample_shape(
         (7, 7, 3)
 
     """
-    channels = baseline_shape[channel_dim] if channel_dim is not None else None
-    return tuple(
-        rounding_func(x / downsample)
-        if channel_dim is not None and (channel_dim % len(baseline_shape) != i)
-        else channels
-        for i, x in enumerate(baseline_shape)
-    )
+    if isinstance(downsample, Number):
+        downsample = [downsample] * len(baseline_shape)
+    if len(downsample) != len(baseline_shape):
+        raise ValueError(
+            f"The number of downsample factors ({len(downsample)}) "
+            f"does not match the number of dimensions ({len(baseline_shape)})."
+        )
+    return tuple(rounding_func(x / s) for x, s in zip(baseline_shape, downsample))
+
+
+def block_downsample_shape(
+    shape: Tuple[int, ...], downsample: float, block_shape: Tuple[int, ...]
+) -> Tuple[int, ...]:
+    """Calculate the shape of an array after downsampling in fixed size chunks."""
+    shape = np.array(shape)
+    block_shape = np.array(block_shape)
+    mosaic_shape_int = shape // block_shape
+    new_tile_shape = downsample_shape(block_shape, downsample)
+    edges_shape = shape - (mosaic_shape_int * block_shape)
+    edge_tile_shapes = downsample_shape(edges_shape, downsample)
+    new_shape = (
+        np.array(mosaic_shape_int) * np.array(new_tile_shape)
+    ) + edge_tile_shapes
+    return tuple(new_shape.astype(int)), new_tile_shape
+
+
+def scale_to_fit(shape: Tuple[int, ...], max_shape: Tuple[int, ...]) -> float:
+    """Find the scale factor to fit shape into a max shape.
+
+    Given a shape and a max shape, find the scale factor to apply to the
+    shape to fit it within the max shape while preserving the aspect
+    ratio.
+
+    Args:
+        shape (Tuple[int, ...]):
+            The shape to fit.
+        max_shape (Tuple[int, ...]):
+            The maximum shape to fit into.
+
+    Returns:
+        float:
+            The scale factor to apply to the shape to fit it within the
+    """
+    shape = np.array(shape)
+    max_shape = np.array(max_shape)
+    return np.min(max_shape / shape)
 
 
 def varnames(
@@ -468,10 +505,122 @@ def normalise_compression(compression: Union[str, int]) -> str:
             {
                 TIFF.COMPRESSION.NONE: "NONE",
                 TIFF.COMPRESSION.JPEG: "JPEG",
-                TIFF.COMPRESSION.APERIO_JP2000_YCBC: "Aperio J2K YCbCr",
-                TIFF.COMPRESSION.APERIO_JP2000_RGB: "Aperio J2K RGB",
+                TIFF.COMPRESSION.JPEG2000: "JPEG2000",
+                TIFF.COMPRESSION.APERIO_JP2000_YCBC: "APERIO_JP2000_YCBC",
+                TIFF.COMPRESSION.APERIO_JP2000_RGB: "APERIO_JP2000_RGB",
+                TIFF.COMPRESSION.WEBP: "WEBP",
             }
         )
     except ImportError:
         pass
-    return mapping[compression]
+    return mapping.get(compression, compression).upper()
+
+
+def resize_array(
+    array: np.ndarray,
+    shape: Tuple[int, ...],
+    interpolation: Union[str, int] = "bilinear",
+    cv2_kwargs: Dict[str, Any] = None,
+    pil_kwargs: Dict[str, Any] = None,
+    zoom_kwargs: Dict[str, Any] = None,
+) -> np.ndarray:
+    """Resize an array (image).
+
+    Tries to use the fastest method available by trying several
+    libraries in turn. The order of preference is:
+        1. `cv2.resize`
+        2. 'PIL.Image.resize'
+        3. `scipy.ndimage.zoom`
+        4. Nearest neighbour subsampling
+
+    Args:
+        array (np.ndarray):
+            The array to resize.
+        shape (Tuple[int, ...]):
+            The shape of the output array.
+        interpolation (Union[str, int]):
+            The interpolation method to use.
+            Defaults to `bilinear`.
+        cv2_kwargs (Dict[str, Any]):
+            Keyword arguments to pass to `cv2.resize`.
+        pil_kwargs (Dict[str, Any]):
+            Keyword arguments to pass to `PIL.Image.resize`.
+        zoom_kwargs (Dict[str, Any]):
+            Keyword arguments to pass to `scipy.ndimage.zoom`.
+            Defaults to `{"mode": "reflect"}`.
+
+        Returns:
+            np.ndarray:
+                The resized array.
+    """
+    if zoom_kwargs is None:
+        zoom_kwargs = {"mode": "reflect"}
+
+    with suppress(ImportError):
+        import cv2
+
+        str_to_cv2_interpolation = {
+            "nearest": cv2.INTER_NEAREST,
+            "bilinear": cv2.INTER_LINEAR,
+            "bicubic": cv2.INTER_CUBIC,
+            "box": cv2.INTER_AREA,
+            "area": cv2.INTER_AREA,
+            "lanczos": cv2.INTER_LANCZOS4,
+        }
+        cv2_interpolation = str_to_cv2_interpolation[interpolation]
+
+        return cv2.resize(
+            array, shape[::-1], interpolation=cv2_interpolation, **(cv2_kwargs or {})
+        )
+
+    with suppress(ImportError):
+        from PIL import Image
+
+        str_to_pillow_interpolation = {
+            "nearest": Image.Resampling.NEAREST,
+            "bilinear": Image.Resampling.BILINEAR,
+            "bicubic": Image.Resampling.BICUBIC,
+            "box": Image.Resampling.BOX,
+            "area": Image.Resampling.BOX,
+            "lanczos": Image.Resampling.LANCZOS,
+        }
+        pil_interpolation = str_to_pillow_interpolation[interpolation]
+
+        return np.array(
+            Image.fromarray(array).resize(
+                shape[::-1],
+                resample=pil_interpolation,
+                **(pil_kwargs or {}),
+            )
+        )
+
+    with suppress(ImportError):
+        from scipy import ndimage
+
+        str_to_order = {
+            "nearest": 0,
+            "bilinear": 1,
+            "bicubic": 3,
+            "box": 2,
+            "area": 2,
+            "lanczos": 4,
+        }
+        order = str_to_order[interpolation]
+        zoom = np.divide(shape, array.shape[:2])
+        zoom = np.append(zoom, 1)
+
+        return ndimage.zoom(
+            array,
+            zoom,
+            order=order,
+            **(zoom_kwargs or {}),
+        )
+
+    warnings.warn(
+        "Neither OpenCV nor scipy are installed for image resizing. "
+        "A slower and lower quality method will be used."
+    )
+    # Nearest neighbour sample the numpy array
+    y = np.linspace(0, array.shape[0], shape[0], endpoint=False).round().astype(int)
+    x = np.linspace(0, array.shape[1], shape[1], endpoint=False).round().astype(int)
+    return array[np.ix_(y, x)]

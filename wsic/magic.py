@@ -116,8 +116,12 @@ FILE_INCANTATIONS = {
             (
                 # Little-endian TIFF
                 Spell(b"II\x2a\x00"),
+                # Little-endian Big-TIFF
+                Spell(b"II\x2b\x00"),
                 # Big-endian TIFF
                 Spell(b"MM\x00\x2a"),
+                # Big-endian Big-TIFF
+                Spell(b"MM\x00\x2b"),
             ),
         ],
     ),
