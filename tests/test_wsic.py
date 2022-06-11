@@ -742,6 +742,41 @@ def test_cli_convert_timeout(samples_path, tmp_path):
             )
 
 
+def test_cli_thumbnail(samples_path, tmp_path):
+    """Check that CLI thumbnail works."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = samples_path / "XYC.jp2"
+        out_path = Path(td) / "XYC.jpeg"
+        runner.invoke(
+            cli.thumbnail,
+            ["-i", str(in_path), "-o", str(out_path)],
+            catch_exceptions=False,
+        )
+        assert out_path.exists()
+        assert out_path.is_file()
+        assert out_path.stat().st_size > 0
+
+
+def test_cli_thumbnail_no_cv2(samples_path, tmp_path, monkeypatch):
+    """Check that CLI thumbnail works without OpenCV (cv2)."""
+    monkeypatch.setitem(sys.modules, "cv2", None)
+    with pytest.raises(ImportError):
+        import cv2  # noqa # skipcq
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = samples_path / "XYC.jp2"
+        out_path = Path(td) / "XYC.jpeg"
+        runner.invoke(
+            cli.thumbnail,
+            ["-i", str(in_path), "-o", str(out_path)],
+            catch_exceptions=False,
+        )
+        assert out_path.exists()
+        assert out_path.is_file()
+        assert out_path.stat().st_size > 0
+
+
 def test_help():
     """Test the help output."""
     runner = CliRunner()
