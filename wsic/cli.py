@@ -242,21 +242,21 @@ def thumbnail(
     reader = wsic.readers.Reader.from_file(in_path)
     if downsample is not None:
         out_shape = tuple(x / downsample for x in reader.shape[:2])
-        approx_thumbnail = reader.thumbnail(out_shape, approx_ok=approx_ok)
+        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
     else:
         out_shape = size[::-1]
-        approx_thumbnail = reader.thumbnail(out_shape, approx_ok=approx_ok)
+        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
 
     with suppress(ImportError):
         import cv2
 
-        cv2.imwrite(str(out_path), cv2.cvtColor(approx_thumbnail, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(str(out_path), cv2.cvtColor(thumbnail_image, cv2.COLOR_RGB2BGR))
         return
 
     with suppress(ImportError):
         import PIL.Image
 
-        PIL.Image.fromarray(approx_thumbnail).save(out_path)
+        PIL.Image.fromarray(thumbnail_image).save(out_path)
         return
 
     raise Exception(
