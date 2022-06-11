@@ -81,7 +81,7 @@ Features
 
     * E.g. JPEG XL compressed
 
-  * `OME-TIFF`_
+  * `OME-TIFF`_ (via (`tifffile`_)
   * `JP2`_ (via `glymur`_ and `OpenJPEG`_)
   * `Zarr`_ / NGFF (single array or pyramid group of arrays)
   * `DICOM WSI`_ (via `wsidicom`_)
