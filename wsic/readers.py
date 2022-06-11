@@ -572,8 +572,11 @@ class JP2Reader(Reader):
         scale = scale_to_fit(self.shape[:2], shape)
         downsample = 1 / scale
         out_shape = tuple(int(x * scale) for x in self.shape[:2])
+        # Glymur requires a power of two stride
         pow_2_downsample = 2 ** np.floor(np.log2(downsample))
+        # Get the power of two downsample
         thumbnail = self.jp2[::pow_2_downsample, ::pow_2_downsample]
+        # Resize the thumbnail if required
         if approx_ok:
             return thumbnail
         return resize_array(thumbnail, out_shape)
