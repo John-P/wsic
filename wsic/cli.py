@@ -4,7 +4,13 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Optional, Tuple
 
-import click
+try:
+    import click
+except ImportError:
+    raise ImportError(
+        "Click is required to use wsic from the command line. "
+        "Install with `pip install click` or `conda install click`."
+    )
 
 import wsic
 from wsic import magic

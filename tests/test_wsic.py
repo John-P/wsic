@@ -802,6 +802,17 @@ def test_help():
     assert "Console script for wsic." in help_result.output
 
 
+def test_missing_click(monkeypatch):
+    """Test that the user is warned if click is not installed."""
+    monkeypatch.setitem(sys.modules, "click", None)
+    with pytest.raises(ImportError):
+        import click  # noqa # skipcq
+
+    runner = CliRunner()
+    help_result = runner.invoke(cli.main, ["--help"])
+    assert help_result.exit_code != 0
+
+
 # Test Scenarios
 
 
