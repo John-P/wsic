@@ -1003,3 +1003,38 @@ class TestTranscodeScenarios:
         plt.show(block=True)
 
         return visual_inspections_passed  # noqa: R504
+
+
+class TestConvertScenarios:
+    """Test scenarios for converting between formats."""
+
+    scenarios = [
+        (
+            "j2k_dicom_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region-J2K",
+                "reader_cls": readers.DICOMWSIReader,
+                "writer_cls": writers.ZarrReaderWriter,
+                "out_ext": ".zarr",
+            },
+        ),
+        (
+            "jpeg_dicom_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region",
+                "reader_cls": readers.DICOMWSIReader,
+                "writer_cls": writers.ZarrReaderWriter,
+                "out_ext": ".zarr",
+            },
+        ),
+    ]
+
+    def test_convert(
+        self, samples_path, sample_name, reader_cls, writer_cls, out_ext, tmp_path
+    ):
+        """Test converting between formats."""
+        in_path = samples_path / sample_name
+        out_path = (tmp_path / sample_name).with_suffix(out_ext)
+        reader = reader_cls(in_path)
+        writer = writer_cls(out_path)
+        writer.copy_from_reader(reader)
