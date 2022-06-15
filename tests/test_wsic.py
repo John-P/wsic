@@ -1016,6 +1016,7 @@ class TestConvertScenarios:
                 "reader_cls": readers.DICOMWSIReader,
                 "writer_cls": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
+                "compression": "blosc",
             },
         ),
         (
@@ -1025,16 +1026,64 @@ class TestConvertScenarios:
                 "reader_cls": readers.DICOMWSIReader,
                 "writer_cls": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
+                "compression": "blosc",
+            },
+        ),
+        (
+            "jp2_to_tiff",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.TIFFWriter,
+                "out_ext": ".tiff",
+                "compression": "jpeg",
+            },
+        ),
+        (
+            "jp2_to_zarr",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.ZarrReaderWriter,
+                "out_ext": ".zarr",
+                "compression": "blosc",
+            },
+        ),
+        (
+            "jp2_to_jpeg_svs",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.SVSWriter,
+                "out_ext": ".svs",
+                "compression": "jpeg",
+            },
+        ),
+        (
+            "tiff_to_jp2",
+            {
+                "sample_name": "XYC-half-mpp.tiff",
+                "reader_cls": readers.TIFFReader,
+                "writer_cls": writers.JP2Writer,
+                "out_ext": ".jp2",
+                "compression": "jpeg2000",
             },
         ),
     ]
 
     def test_convert(
-        self, samples_path, sample_name, reader_cls, writer_cls, out_ext, tmp_path
+        self,
+        samples_path: Path,
+        sample_name: str,
+        reader_cls: readers.Reader,
+        writer_cls: writers.Writer,
+        out_ext: str,
+        tmp_path: Path,
+        compression: str,
     ):
         """Test converting between formats."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader = reader_cls(in_path)
-        writer = writer_cls(out_path)
+        writer = writer_cls(out_path, shape=reader.shape, compression=compression)
         writer.copy_from_reader(reader)
