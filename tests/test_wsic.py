@@ -823,6 +823,11 @@ def pytest_generate_tests(metafunc):
     metafunc.parametrize(arg_names, arg_values, ids=id_list, scope="class")
 
 
+WRITER_EXT_MAPPING = {
+    ".zarr": writers.ZarrReaderWriter,
+}
+
+
 class TestTranscodeScenarios:
     """Test scenarios for the transcoding WSIs."""
 
@@ -876,18 +881,20 @@ class TestTranscodeScenarios:
             },
         ),
     ]
-    writer_ext_map = {
-        ".zarr": writers.ZarrReaderWriter,
-    }
 
+    @staticmethod
     def test_transcode_tiled(
-        self, samples_path, sample_name, reader_cls, out_ext, tmp_path
+        samples_path: Path,
+        sample_name: str,
+        reader_cls: readers.Reader,
+        out_ext: str,
+        tmp_path: Path,
     ):
         """Test transcoding a tiled WSI."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader = reader_cls(in_path)
-        writer_cls = self.writer_ext_map[out_ext]
+        writer_cls = WRITER_EXT_MAPPING[out_ext]
         writer = writer_cls(
             path=out_path,
             shape=reader.shape,
@@ -1071,8 +1078,8 @@ class TestConvertScenarios:
         ),
     ]
 
+    @staticmethod
     def test_convert(
-        self,
         samples_path: Path,
         sample_name: str,
         reader_cls: readers.Reader,
