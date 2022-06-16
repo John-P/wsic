@@ -11,7 +11,6 @@ with open("HISTORY.rst") as history_file:
     history = history_file.read()
 
 requirements = [
-    "Click>=7.0",
     "numpy",
     "zarr",  # Includes numcodecs as a dependency
 ]
@@ -41,12 +40,20 @@ alternative_requirements = [
     "scikit-image",  # Alternative to opencv-python for some operations
 ]
 
+# Command-line interface requirements
+cli_requirements = ["Click>=7.0"]
+
+# User experience improving requirements
+ux_requirements = ["tqdm"]
+
 # All extra requirements
 all_extra_requirements = (
     test_requirements
     + docs_requirements
     + codec_requirements
     + alternative_requirements
+    + cli_requirements
+    + ux_requirements
 )
 
 # Optional dependencies
@@ -54,6 +61,8 @@ extra_requirements = {
     "all": all_extra_requirements,
     "test": test_requirements,
     "docs": docs_requirements,
+    "cli": cli_requirements,
+    "ux": ux_requirements,
     "performance": performance_requirements,
     "codecs": codec_requirements,
     "jpeg2000": ["glymur"],

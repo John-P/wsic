@@ -23,7 +23,9 @@ from wsic.utils import (
     normalise_compression,
     ppu2mpp,
     resize_array,
+    scale_to_fit,
     tile_slices,
+    warn_unused,
     wrap_index,
 )
 
@@ -566,6 +568,19 @@ class JP2Reader(Reader):
         """Get pixel data at index."""
         return self.jp2[index]
 
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        scale = scale_to_fit(self.shape[:2], shape)
+        downsample = 1 / scale
+        out_shape = tuple(int(x * scale) for x in self.shape[:2])
+        # Glymur requires a power of two stride
+        pow_2_downsample = 2 ** np.floor(np.log2(downsample))
+        # Get the power of two downsample
+        thumbnail = self.jp2[::pow_2_downsample, ::pow_2_downsample]
+        # Resize the thumbnail if required
+        if approx_ok:
+            return thumbnail
+        return resize_array(thumbnail, out_shape)
+
 
 class TIFFReader(Reader):
     """Reader for TIFF files using tifffile."""
@@ -843,3 +858,7 @@ class OpenSlideReader(Reader):
             size=(end_x - start_x, end_y - start_y),
         )
         return np.array(img.convert("RGB"))
+
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        warn_unused(approx_ok, ignore_falsey=True)
+        return np.array(self.os_slide.get_thumbnail(shape[::-1]))

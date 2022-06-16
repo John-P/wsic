@@ -742,6 +742,58 @@ def test_cli_convert_timeout(samples_path, tmp_path):
             )
 
 
+def test_cli_thumbnail(samples_path, tmp_path):
+    """Check that CLI thumbnail works."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = samples_path / "XYC.jp2"
+        out_path = Path(td) / "XYC.jpeg"
+        runner.invoke(
+            cli.thumbnail,
+            ["-i", str(in_path), "-o", str(out_path), "-s", "512", "512"],
+            catch_exceptions=False,
+        )
+        assert out_path.exists()
+        assert out_path.is_file()
+        assert out_path.stat().st_size > 0
+
+
+def test_cli_thumbnail_downsample(samples_path, tmp_path):
+    """Check that CLI thumbnail works with downsample option."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = samples_path / "XYC.jp2"
+        out_path = Path(td) / "XYC.jpeg"
+        result = runner.invoke(
+            cli.thumbnail,
+            ["-i", str(in_path), "-o", str(out_path), "-d", "16"],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+        assert out_path.exists()
+        assert out_path.is_file()
+        assert out_path.stat().st_size > 0
+
+
+def test_cli_thumbnail_no_cv2(samples_path, tmp_path, monkeypatch):
+    """Check that CLI thumbnail works without OpenCV (cv2)."""
+    monkeypatch.setitem(sys.modules, "cv2", None)
+    with pytest.raises(ImportError):
+        import cv2  # noqa # skipcq
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = samples_path / "XYC.jp2"
+        out_path = Path(td) / "XYC.jpeg"
+        runner.invoke(
+            cli.thumbnail,
+            ["-i", str(in_path), "-o", str(out_path), "-s", "512", "512"],
+            catch_exceptions=False,
+        )
+        assert out_path.exists()
+        assert out_path.is_file()
+        assert out_path.stat().st_size > 0
+
+
 def test_help():
     """Test the help output."""
     runner = CliRunner()
@@ -769,6 +821,11 @@ def pytest_generate_tests(metafunc):
         arg_names = [x[0] for x in items]
         arg_values.append([x[1] for x in items])
     metafunc.parametrize(arg_names, arg_values, ids=id_list, scope="class")
+
+
+WRITER_EXT_MAPPING = {
+    ".zarr": writers.ZarrReaderWriter,
+}
 
 
 class TestTranscodeScenarios:
@@ -824,18 +881,20 @@ class TestTranscodeScenarios:
             },
         ),
     ]
-    writer_ext_map = {
-        ".zarr": writers.ZarrReaderWriter,
-    }
 
+    @staticmethod
     def test_transcode_tiled(
-        self, samples_path, sample_name, reader_cls, out_ext, tmp_path
+        samples_path: Path,
+        sample_name: str,
+        reader_cls: readers.Reader,
+        out_ext: str,
+        tmp_path: Path,
     ):
         """Test transcoding a tiled WSI."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader = reader_cls(in_path)
-        writer_cls = self.writer_ext_map[out_ext]
+        writer_cls = WRITER_EXT_MAPPING[out_ext]
         writer = writer_cls(
             path=out_path,
             shape=reader.shape,
@@ -951,3 +1010,87 @@ class TestTranscodeScenarios:
         plt.show(block=True)
 
         return visual_inspections_passed  # noqa: R504
+
+
+class TestConvertScenarios:
+    """Test scenarios for converting between formats."""
+
+    scenarios = [
+        (
+            "j2k_dicom_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region-J2K",
+                "reader_cls": readers.DICOMWSIReader,
+                "writer_cls": writers.ZarrReaderWriter,
+                "out_ext": ".zarr",
+                "compression": "blosc",
+            },
+        ),
+        (
+            "jpeg_dicom_to_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region",
+                "reader_cls": readers.DICOMWSIReader,
+                "writer_cls": writers.ZarrReaderWriter,
+                "out_ext": ".zarr",
+                "compression": "blosc",
+            },
+        ),
+        (
+            "jp2_to_tiff",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.TIFFWriter,
+                "out_ext": ".tiff",
+                "compression": "jpeg",
+            },
+        ),
+        (
+            "jp2_to_zarr",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.ZarrReaderWriter,
+                "out_ext": ".zarr",
+                "compression": "blosc",
+            },
+        ),
+        (
+            "jp2_to_jpeg_svs",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.SVSWriter,
+                "out_ext": ".svs",
+                "compression": "jpeg",
+            },
+        ),
+        (
+            "tiff_to_jp2",
+            {
+                "sample_name": "XYC-half-mpp.tiff",
+                "reader_cls": readers.TIFFReader,
+                "writer_cls": writers.JP2Writer,
+                "out_ext": ".jp2",
+                "compression": "jpeg2000",
+            },
+        ),
+    ]
+
+    @staticmethod
+    def test_convert(
+        samples_path: Path,
+        sample_name: str,
+        reader_cls: readers.Reader,
+        writer_cls: writers.Writer,
+        out_ext: str,
+        tmp_path: Path,
+        compression: str,
+    ):
+        """Test converting between formats."""
+        in_path = samples_path / sample_name
+        out_path = (tmp_path / sample_name).with_suffix(out_ext)
+        reader = reader_cls(in_path)
+        writer = writer_cls(out_path, shape=reader.shape, compression=compression)
+        writer.copy_from_reader(reader)
