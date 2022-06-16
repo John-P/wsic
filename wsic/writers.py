@@ -367,7 +367,7 @@ class JP2Writer(Writer):
             read_tile_size=read_tile_size or self.tile_size,
             timeout=timeout,
         )
-        reader_tile_iterator = self.level_progress(reader_tile_iterator)
+        reader_tile_iterator = iter(self.level_progress(reader_tile_iterator))
         for tile_writer in jp2.get_tilewriters():
             try:
                 tile_writer[:] = next(reader_tile_iterator)

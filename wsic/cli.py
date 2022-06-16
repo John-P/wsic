@@ -1,12 +1,45 @@
 """Console script for wsic."""
 import sys
+from contextlib import suppress
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
-import click
+try:
+    import click
+except ImportError:
+    raise ImportError(
+        "Click is required to use wsic from the command line. "
+        "Install with `pip install click` or `conda install click`."
+    )
 
 import wsic
 from wsic import magic
+
+
+class MutuallyExclusiveOption(click.Option):
+    """Click Option to enforce mutual exclusivity with other options."""
+
+    def __init__(self, *args, **kwargs):
+        self.mutually_exclusive = set(kwargs.pop("mutually_exclusive", []))
+        mutually_exclusive_str = ", ".join(self.mutually_exclusive)
+        if self.mutually_exclusive:
+            kwargs["help"] = kwargs.get("help", "") + (
+                " Note: This argument is mutually exclusive with "
+                f" arguments: [{mutually_exclusive_str}]."
+            )
+        super(MutuallyExclusiveOption, self).__init__(*args, **kwargs)
+
+    def handle_parse_result(self, ctx, opts, args):
+        """Handle parse result."""
+        if self.mutually_exclusive.intersection(opts) and self.name in opts:
+            mutually_exclusive_str = ", ".join(self.mutually_exclusive)
+            raise click.UsageError(
+                f"Illegal usage: `{self.name}` is mutually exclusive with "
+                f"arguments `{mutually_exclusive_str}`."
+            )
+
+        return super(MutuallyExclusiveOption, self).handle_parse_result(ctx, opts, args)
+
 
 ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
@@ -182,6 +215,84 @@ def transcode(
         dtype=reader.dtype,
     )
     writer.transcode_from_reader(reader)
+
+
+# Thumnail generation
+@main.command(no_args_is_help=True)
+@click.option(
+    "-i",
+    "--in-path",
+    help="Path to WSI to read from.",
+    type=click.Path(exists=True),
+)
+@click.option(
+    "-o",
+    "--out-path",
+    help="The path to output to.",
+    type=click.Path(),
+)
+@click.option(
+    "-s",
+    "--size",
+    help="The size of the thumbnail.",
+    type=click.Tuple([int, int]),
+    cls=MutuallyExclusiveOption,
+    mutually_exclusive=["downsample"],
+)
+@click.option(
+    "-d",
+    "--downsample",
+    help="The downsample factor to use.",
+    type=int,
+    cls=MutuallyExclusiveOption,
+    mutually_exclusive=["size"],
+)
+@click.option(
+    "-a",
+    "--approx-ok",
+    help=(
+        "Whether to allow approximate thumbnails."
+        " The output size will be the nearest integer"
+        " (or power of 2 depending on the backend) downsample which is"
+        " greater than or equal to the requested size."
+    ),
+    is_flag=True,
+    default=False,
+)
+def thumbnail(
+    in_path: str,
+    out_path: str,
+    downsample: Optional[int],
+    size: Tuple[int, int],
+    approx_ok: bool,
+):
+    """Create a thumbnail from a WSI."""
+    in_path = Path(in_path)
+    out_path = Path(out_path)
+    reader = wsic.readers.Reader.from_file(in_path)
+    if downsample is not None:
+        out_shape = tuple(x / downsample for x in reader.shape[:2])
+        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
+    else:
+        out_shape = size[::-1]
+        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
+
+    with suppress(ImportError):
+        import cv2
+
+        cv2.imwrite(str(out_path), cv2.cvtColor(thumbnail_image, cv2.COLOR_RGB2BGR))
+        return
+
+    with suppress(ImportError):
+        import PIL.Image
+
+        PIL.Image.fromarray(thumbnail_image).save(out_path)
+        return
+
+    raise Exception(
+        "Failed to save thumbnail with any of: cv2, PIL. "
+        "Please check your installation."
+    )
 
 
 if __name__ == "__main__":
