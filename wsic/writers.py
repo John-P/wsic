@@ -15,6 +15,7 @@ import zarr
 
 from wsic import __version__ as wsic_version
 from wsic.codecs import register_codecs
+from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
 from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
 from wsic.types import PathLike
@@ -23,7 +24,6 @@ from wsic.utils import (
     mean_pool,
     mosaic_shape,
     mpp2ppu,
-    normalise_compression,
     scale_to_fit,
     tile_slices,
     warn_unused,
@@ -43,8 +43,8 @@ class Writer(ABC):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of the output image. Defaults to np.uint8.
-        photometric (str, optional):
-            Photometric interpretation of the output image.
+        color_space (ColorSpace, optional):
+            Color space the output image.
             Defaults to "rgb".
         compression (str, optional):
             Compression codec to use. Defaults to None. Not all
@@ -71,8 +71,8 @@ class Writer(ABC):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",
-        compression: Optional[str] = None,
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,
+        codec: Optional[Codec] = None,
         compression_level: int = 0,
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
@@ -83,8 +83,8 @@ class Writer(ABC):
         self.shape = shape
         self.tile_size = tile_size
         self.dtype = dtype
-        self.photometric = photometric or "rgb"
-        self.compression = compression
+        self.color_space = color_space or "rgb"
+        self.codec = Codec.from_string(codec) if codec else None
         self.compression_level = compression_level or 0
         self.microns_per_pixel = microns_per_pixel
         self.pyramid_downsamples = (
@@ -270,8 +270,8 @@ class JP2Writer(Writer):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of output image. Defaults to np.uint8.
-        photometric (str, optional):
-            Photometric interpretation of the output image.
+        color_space (ColorSpace, optional):
+            Color space the output image.
             Defaults to "rgb".
         compression (str, optional):
             Compression type. Currently only JPEG 2000 compression is
@@ -297,18 +297,18 @@ class JP2Writer(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: str = "rgb",  # Currently unused
-        compression: str = "jpeg2000",  # Currently unused
+        color_space: Optional[ColorSpace] = "rgb",  # Currently unused
+        codec: Optional[Codec] = "jpeg2000",  # Currently unused
         compression_level: int = 0,  # Currently unused
         microns_per_pixel: Optional[Tuple[float, float]] = None,  # Currently unused
         pyramid_downsamples: Optional[List[int]] = None,  # Unused
         overwrite: bool = False,
         verbose: bool = False,
     ) -> None:
-        if photometric != "rgb":
-            warn_unused(photometric)
-        if compression != "jpeg2000":
-            warn_unused(compression)
+        if color_space != "rgb":
+            warn_unused(color_space)
+        if codec != "jpeg2000":
+            warn_unused(codec)
         warn_unused(compression_level, ignore_falsey=True)
         warn_unused(microns_per_pixel)
         warn_unused(pyramid_downsamples, ignore_falsey=True)
@@ -317,8 +317,8 @@ class JP2Writer(Writer):
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -410,8 +410,8 @@ class TIFFWriter(Writer):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of output image. Defaults to np.uint8.
-        photometric (str, optional):
-            Photometric interpretation. Defaults to "rgb".
+        color_space (ColorSpace, optional):
+            color_space. Defaults to "rgb".
         compression (str, optional):
             Compression type.
             Defaults to "jpeg".
@@ -438,8 +438,8 @@ class TIFFWriter(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,  # Currently unused
-        photometric: Optional[str] = "rgb",
-        compression: Optional[str] = "jpeg",
+        color_space: Optional[ColorSpace] = "rgb",
+        codec: Optional[Codec] = "jpeg",
         compression_level: int = -1,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
@@ -455,8 +455,8 @@ class TIFFWriter(Writer):
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -551,8 +551,8 @@ class TIFFWriter(Writer):
                     tile=self.tile_size,
                     shape=reader.shape,
                     dtype=reader.dtype,
-                    photometric=self.photometric,
-                    compression=(self.compression, self.compression_level),
+                    photometric=self.color_space,
+                    compression=(self.codec.condensed(), self.compression_level),
                     resolution=resolution,
                     subifds=len(self.pyramid_downsamples),
                     metadata=metadata,
@@ -597,8 +597,11 @@ class TIFFWriter(Writer):
                             tile=self.tile_size,
                             shape=level_shape,
                             dtype=reader.dtype,
-                            photometric=self.photometric,
-                            compression=(self.compression, self.compression_level),
+                            photometric=self.color_space,
+                            compression=(
+                                self.codec.condensed(),
+                                self.compression_level,
+                            ),
                             subfiletype=1,  # Subfile type: reduced resolution
                         )
 
@@ -620,8 +623,8 @@ class SVSWriter(Writer):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of output image. Defaults to np.uint8.
-        photometric (str, optional):
-            Photometric interpretation. Defaults to "rgb".
+        color_space (ColorSpace, optional):
+            color_space. Defaults to "rgb".
         compression (str, optional):
             Compression type.
             Defaults to "jpeg".
@@ -648,8 +651,8 @@ class SVSWriter(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,  # Currently unused
-        photometric: Optional[str] = "rgb",
-        compression: Optional[str] = "jpeg",
+        color_space: Optional[ColorSpace] = "rgb",
+        codec: Optional[Codec] = "jpeg",
         compression_level: int = 0,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
@@ -660,16 +663,15 @@ class SVSWriter(Writer):
         # Validate inputs
         if dtype is not np.uint8:
             raise ValueError(f"SVSWriter only supports uint8, not {dtype}")
-        if photometric.lower() not in ("rgb", "ycbcr"):
+        if color_space.lower() not in ("rgb", "ycbcr"):
             raise ValueError(
-                f"SVSWriter only supports rgb and ycbcr, not {photometric}"
+                f"SVSWriter only supports rgb and ycbcr, not {color_space}"
             )
-        if compression == "j2k":
-            compression = "aperio_jp2000_ycbc"
-        if compression not in ("jpeg",):  # aperio_jp2000_ycbc not working
+        if codec == "j2k":
+            codec = "aperio_jp2000_ycbc"
+        if codec not in ("jpeg",):  # aperio_jp2000_ycbc not working
             raise ValueError(
-                "SVSWriter currently only supports jpeg compession,"
-                f" not {compression}"
+                "SVSWriter currently only supports jpeg compession," f" not {codec}"
             )
         # Super
         super().__init__(
@@ -677,8 +679,8 @@ class SVSWriter(Writer):
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -782,8 +784,9 @@ class SVSWriter(Writer):
                 OriginalHeight = 32914
                 """
                 aperio_desc_compression = {
-                    "jpeg": f"JPEG/{self.photometric.upper()}",
-                    "aperio_jp2000_ycbc": "J2K/YUV16",
+                    Codec.JPEG: f"JPEG/{self.color_space.upper()}",
+                    Codec.J2K: "J2K/YUV16",
+                    "APERIO_JP2000_YCBC": "J2K/YUV16",
                 }
                 software = f"Aperio wsic Library v{wsic_version}"
                 # Using reader shape for now, could be user specified in future
@@ -792,13 +795,15 @@ class SVSWriter(Writer):
                 # Not sure what these are copying original for now
                 mystery_height = original_height
                 mystery_width = original_width
+                # Get compression in Aperio header format
+                aperio_header_compression = aperio_desc_compression[self.codec.upper()]
                 headers = [
                     (
                         f"{software} \n"
                         f"{original_width}x{original_height} "
                         f"[0,100 {mystery_width}x{mystery_height}] "
                         f"({self.tile_size[0]}x{self.tile_size[1]})"
-                        f" {aperio_desc_compression[self.compression]} "
+                        f" {aperio_header_compression} "
                         f"Q={self.compression_level}"
                     )
                 ]
@@ -839,8 +844,8 @@ class SVSWriter(Writer):
                     tile=self.tile_size,
                     shape=reader.shape,
                     dtype=reader.dtype,
-                    photometric=self.photometric,
-                    compression=(self.compression, self.compression_level),
+                    photometric=self.color_space,
+                    compression=(self.codec.condensed(), self.compression_level),
                     resolution=resolution,
                     subifds=len(self.pyramid_downsamples),
                     description=description,
@@ -859,8 +864,8 @@ class SVSWriter(Writer):
                     data=thumbnail,
                     rowsperstrip=16,
                     dtype=np.uint8,
-                    photometric="rgb",
-                    compression="jpeg",
+                    photometric=ColorSpace.RGB,
+                    compression=Codec.JPEG,
                     description=software,
                     subfiletype=0,
                 )
@@ -904,8 +909,11 @@ class SVSWriter(Writer):
                             tile=self.tile_size,
                             shape=level_shape,
                             dtype=reader.dtype,
-                            photometric=self.photometric,
-                            compression=(self.compression, self.compression_level),
+                            photometric=self.color_space,
+                            compression=(
+                                self.codec.condensed(),
+                                self.compression_level,
+                            ),
                             description=software,  # Optional for OpenSlide
                             subfiletype=1,  # Subfile type: 1 = reduced resolution
                         )
@@ -924,11 +932,11 @@ class ZarrReaderWriter(Writer, Reader):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of the output zarr. Defaults to np.uint8.
-        compression (str, optional):
+        codec (str, optional):
             Compression codec to use. Defaults to None. Not all
             writers support compression.
-        photometric (str, optional):
-            Photometric interpretation. Defaults to "rgb".
+        color_space (ColorSpace, optional):
+            Color space. Defaults to "rgb".
         compression_level (int, optional):
             Compression level to use. Defaults to 0 (lossless /
             maximum).
@@ -955,8 +963,8 @@ class ZarrReaderWriter(Writer, Reader):
         shape: Optional[Tuple[int, int]] = None,
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",  # Currently unused
-        compression: str = "blosc-zstd",
+        color_space: Optional[ColorSpace] = "rgb",  # Currently unused
+        codec: Union[str, Codec] = Codec.BLOSC,
         compression_level: int = 9,
         microns_per_pixel: Tuple[float, float] = None,  # Currently unused
         pyramid_downsamples: Optional[List[int]] = None,  # Currently unused
@@ -965,16 +973,16 @@ class ZarrReaderWriter(Writer, Reader):
         *,
         ome: bool = False,
     ) -> None:
-        if photometric != "rgb":
-            warn_unused(photometric)
+        if color_space != "rgb":
+            warn_unused(color_space)
         warn_unused(microns_per_pixel)
         super().__init__(
             path=path,
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -984,7 +992,7 @@ class ZarrReaderWriter(Writer, Reader):
         self.ome = ome
         self.overwrite = overwrite
         register_codecs()
-        self.compressor = self.get_codec(compression, compression_level)
+        self.compressor = self.get_codec(codec, compression_level)
         if self.path.exists() and not self.path.is_dir():
             raise FileExistsError(
                 f"{self.path} exists but is not a directory. Zarrs must be directories."
@@ -1043,51 +1051,52 @@ class ZarrReaderWriter(Writer, Reader):
 
     def get_codec(
         self,
-        compression: str,
+        codec: Union[str, Codec],
         compression_level: int,
     ) -> Callable[[bytes], bytes]:
         """Get a codec for the given compression method and compression level."""
         from numcodecs import LZ4, LZMA, Blosc, Zlib, Zstd
 
+        codec = Codec.from_string(codec)
+
         numcodecs_codecs = {
-            "lz4": LZ4,
-            "lzma": LZMA,
-            "blosc": Blosc,  # zarr default
-            "blosc-zstd": partial(Blosc, cname="zstd", shuffle=Blosc.BITSHUFFLE),
-            "zlib": Zlib,
-            "zstd": Zstd,
+            Codec.LZ4: LZ4,
+            Codec.LZMA: LZMA,
+            Codec.BLOSC: Blosc,  # zarr default (lz4)
+            Codec.ZLIB: Zlib,
+            Codec.ZSTD: Zstd,
         }
 
         try:
             import imagecodecs
 
             imagecodecs_codecs = {
-                "deflate": imagecodecs.numcodecs.Deflate,
-                "webp": imagecodecs.numcodecs.Webp,
-                "jpeg": imagecodecs.numcodecs.Jpeg,
-                "jpegls": imagecodecs.numcodecs.JpegLs,
-                "jpeg2000": imagecodecs.numcodecs.Jpeg2k,
-                "jpegxl": imagecodecs.numcodecs.JpegXl,
-                "png": imagecodecs.numcodecs.Png,
-                "zfp": imagecodecs.numcodecs.Zfp,
+                Codec.DEFLATE: imagecodecs.numcodecs.Deflate,
+                Codec.WEBP: imagecodecs.numcodecs.Webp,
+                Codec.JPEG: imagecodecs.numcodecs.Jpeg,
+                Codec.JPEGLS: imagecodecs.numcodecs.JpegLs,
+                Codec.JPEG2000: imagecodecs.numcodecs.Jpeg2k,
+                Codec.JPEGXL: imagecodecs.numcodecs.JpegXl,
+                Codec.PNG: imagecodecs.numcodecs.Png,
+                Codec.ZFP: imagecodecs.numcodecs.Zfp,
             }
         except ImportError:
             if self.verbose:
                 print("imagecodecs not installed")
             imagecodecs_codecs = {}
 
-        if compression in numcodecs_codecs:
-            return numcodecs_codecs[compression](clevel=compression_level)
+        if codec in numcodecs_codecs:
+            return numcodecs_codecs[codec](clevel=compression_level)
 
-        if compression in imagecodecs_codecs:
-            return imagecodecs_codecs[compression](level=compression_level)
+        if codec in imagecodecs_codecs:
+            return imagecodecs_codecs[codec](level=compression_level)
 
-        if compression == "qoi":
+        if codec == "qoi":
             from wsic.codecs import QOI
 
             return QOI()
 
-        raise ValueError(f"Compression {compression} not supported.")
+        raise ValueError(f"Compression {codec} not supported.")
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index."""
@@ -1136,8 +1145,8 @@ class ZarrReaderWriter(Writer, Reader):
         # Validate and normalise inputs
         lossy_codecs = ["jpeg"]
         optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
-        lossy = self.compression in lossy_codecs or (
-            self.compression in optionally_lossy_codecs and self.compression_level > 0
+        lossy = self.codec.condensed().lower() in lossy_codecs or (
+            self.codec in optionally_lossy_codecs and self.compression_level > 0
         )
         read_tile_size = read_tile_size or self.tile_size
         write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
@@ -1357,7 +1366,7 @@ class ZarrReaderWriter(Writer, Reader):
             raise ValueError("Dtype must match the reader dtype for transcoding.")
         # 4. Compatible compression
         has_valid_compression = (
-            normalise_compression(reader.compression) in ("JPEG", "JPEG2000", "WebP"),
+            Codec.from_string(reader.codec) in (Codec.JPEG, Codec.JPEG2000, Codec.WEBP),
         )
         # 5. Known supported TIFF formats
         is_generic_tiff = isinstance(reader, TIFFReader) and (
@@ -1401,21 +1410,17 @@ class ZarrReaderWriter(Writer, Reader):
             level = None
 
         # Create the codec object
-        if reader.compression == "JPEG":
+        if reader.codec == Codec.JPEG:
             return Jpeg(
                 tables=reader.jpeg_tables,
-                colorspace_jpeg=reader.colour_space,
-                colorspace_data="RGB",
+                colorspace_jpeg=reader.color_space,
+                colorspace_data=ColorSpace.RGB,
                 level=reader.compression_level,
             )
-        if reader.compression == "APERIO_JP2000_YCBC":
-            return Jpeg2k(codecformat="J2K", colorspace="YCbCr", level=level)
-        if reader.compression == "APERIO_JP2000_RGB":
-            return Jpeg2k(codecformat="J2K", colorspace="RGB", level=level)
-        if reader.compression == "WEBP":
+        if reader.codec == Codec.JPEG2000:
+            return Jpeg2k(codecformat="JP2", colorspace=reader.color_space, level=level)
+        if reader.codec == Codec.WEBP:
             return Webp(level=level)
-        if reader.compression == "JPEG2000":
-            return Jpeg2k(codecformat="JP2", colorspace="RGB", level=level)
         # Out of options
         raise ValueError(
             "Currently only JPEG, J2K (JPEG-2000), and WebP compression "
@@ -1443,7 +1448,7 @@ class ZarrIntermediate(Writer, Reader):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             The data type of the output file. Defaults to np.uint8.
-        photometric (str, optional):
+        color_space (ColorSpace, optional):
             Unused but kept for compatibility with the Writer base
             class.
         compression (str, optional):
@@ -1474,8 +1479,8 @@ class ZarrIntermediate(Writer, Reader):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",  # Currently unused
-        compression: Optional[str] = None,  # Currently unused
+        color_space: Optional[ColorSpace] = "rgb",  # Currently unused
+        codec: Optional[Codec] = None,  # Currently unused
         compression_level: int = 0,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,  # Currently unused
         pyramid_downsamples: Optional[List[int]] = None,  # Currently unused
@@ -1484,9 +1489,9 @@ class ZarrIntermediate(Writer, Reader):
         *,
         zero_after_read: bool = False,
     ) -> None:
-        if photometric != "rgb":
-            warn_unused(photometric)
-        warn_unused(compression)
+        if color_space != "rgb":
+            warn_unused(color_space)
+        warn_unused(codec)
         warn_unused(compression_level, ignore_falsey=True)
         warn_unused(microns_per_pixel)
         warn_unused(pyramid_downsamples, ignore_falsey=True)
@@ -1499,8 +1504,8 @@ class ZarrIntermediate(Writer, Reader):
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,

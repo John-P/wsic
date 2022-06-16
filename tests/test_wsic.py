@@ -30,7 +30,7 @@ def test_jp2_to_deflate_tiled_tiff(samples_path, tmp_path):
             shape=reader.shape,
             overwrite=False,
             tile_size=(256, 256),
-            compression="deflate",
+            codec="deflate",
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
 
@@ -55,7 +55,7 @@ def test_jp2_to_deflate_pyramid_tiff(samples_path, tmp_path):
             shape=reader.shape,
             overwrite=False,
             tile_size=(256, 256),
-            compression="deflate",
+            codec="deflate",
             pyramid_downsamples=pyramid_downsamples,
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
@@ -95,7 +95,7 @@ def test_no_tqdm(samples_path, tmp_path, monkeypatch):
             shape=reader.shape,
             overwrite=False,
             tile_size=(256, 256),
-            compression="deflate",
+            codec="deflate",
             pyramid_downsamples=pyramid_downsamples,
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
@@ -121,7 +121,7 @@ def test_pyramid_tiff(samples_path, tmp_path, monkeypatch):
         shape=reader.shape,
         overwrite=False,
         tile_size=(256, 256),
-        compression="deflate",
+        codec="deflate",
         pyramid_downsamples=pyramid_downsamples,
     )
     writer.copy_from_reader(
@@ -163,7 +163,7 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
         shape=reader.shape,
         overwrite=False,
         tile_size=(256, 256),
-        compression="deflate",
+        codec="deflate",
         pyramid_downsamples=pyramid_downsamples,
     )
     writer.copy_from_reader(
@@ -217,7 +217,7 @@ def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
         shape=reader.shape,
         overwrite=False,
         tile_size=(256, 256),
-        compression="deflate",
+        codec="deflate",
         pyramid_downsamples=pyramid_downsamples,
     )
     writer.copy_from_reader(
@@ -256,7 +256,7 @@ def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
             shape=reader.shape,
             overwrite=False,
             tile_size=(256, 256),
-            compression="WebP",
+            codec="WebP",
             compression_level=-1,  # <0 for lossless
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
@@ -325,7 +325,7 @@ def test_warn_unused(samples_path, tmp_path):
             shape=reader.shape,
             overwrite=False,
             tile_size=(256, 256),
-            compression="WebP",
+            codec="WebP",
             compression_level=70,
         )
 
@@ -721,7 +721,7 @@ def test_write_ycbcr_j2k_svs_fails(samples_path, tmp_path):
             path=tmp_path / "Neo-CMU-1-Small-Region.svs",
             shape=reader.shape,
             pyramid_downsamples=[2, 4],
-            compression="aperio_jp2000_ycbc",  # 33003, APERIO_JP2000_YCBC
+            codec="aperio_jp2000_ycbc",  # 33003, APERIO_JP2000_YCBC
             compression_level=70,
             photometric="rgb",
         )
@@ -1023,7 +1023,7 @@ class TestConvertScenarios:
                 "reader_cls": readers.DICOMWSIReader,
                 "writer_cls": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
-                "compression": "blosc",
+                "codec": "blosc",
             },
         ),
         (
@@ -1033,7 +1033,7 @@ class TestConvertScenarios:
                 "reader_cls": readers.DICOMWSIReader,
                 "writer_cls": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
-                "compression": "blosc",
+                "codec": "blosc",
             },
         ),
         (
@@ -1043,7 +1043,7 @@ class TestConvertScenarios:
                 "reader_cls": readers.JP2Reader,
                 "writer_cls": writers.TIFFWriter,
                 "out_ext": ".tiff",
-                "compression": "jpeg",
+                "codec": "jpeg",
             },
         ),
         (
@@ -1053,7 +1053,7 @@ class TestConvertScenarios:
                 "reader_cls": readers.JP2Reader,
                 "writer_cls": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
-                "compression": "blosc",
+                "codec": "blosc",
             },
         ),
         (
@@ -1063,7 +1063,7 @@ class TestConvertScenarios:
                 "reader_cls": readers.JP2Reader,
                 "writer_cls": writers.SVSWriter,
                 "out_ext": ".svs",
-                "compression": "jpeg",
+                "codec": "jpeg",
             },
         ),
         (
@@ -1073,7 +1073,7 @@ class TestConvertScenarios:
                 "reader_cls": readers.TIFFReader,
                 "writer_cls": writers.JP2Writer,
                 "out_ext": ".jp2",
-                "compression": "jpeg2000",
+                "codec": "jpeg2000",
             },
         ),
     ]
@@ -1086,11 +1086,11 @@ class TestConvertScenarios:
         writer_cls: writers.Writer,
         out_ext: str,
         tmp_path: Path,
-        compression: str,
+        codec: str,
     ):
         """Test converting between formats."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader = reader_cls(in_path)
-        writer = writer_cls(out_path, shape=reader.shape, compression=compression)
+        writer = writer_cls(out_path, shape=reader.shape, codec=codec)
         writer.copy_from_reader(reader)

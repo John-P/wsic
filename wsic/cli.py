@@ -166,7 +166,7 @@ def convert(
         out_path,
         shape=reader.shape,
         tile_size=tile_size,
-        compression=compression,
+        codec=compression,
         compression_level=compression_level,
         pyramid_downsamples=downsample,
         overwrite=overwrite,
