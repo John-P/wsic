@@ -4,22 +4,27 @@ import time
 import warnings
 from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from math import ceil, floor
 from pathlib import Path
-from typing import Iterator, Optional, Tuple, Union
+from typing import Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import zarr
 
+from wsic.enums import Codec, ColorSpace
 from wsic.magic import summon_file_types
 from wsic.multiprocessing import Queue
 from wsic.types import PathLike
 from wsic.utils import (
+    block_downsample_shape,
+    mean_pool,
     mosaic_shape,
-    normalise_color_space,
-    normalise_compression,
     ppu2mpp,
+    resize_array,
+    scale_to_fit,
     tile_slices,
+    warn_unused,
     wrap_index,
 )
 
@@ -54,8 +59,11 @@ class Reader(ABC):
         file_types = summon_file_types(path)
         if ("jp2",) in file_types:
             return JP2Reader(path)
-        if ("tiff", "svs") in file_types:
-            return OpenSlideReader(path)
+        with suppress(ImportError):
+            import openslide
+
+            with suppress(openslide.OpenSlideUnsupportedFormatError):
+                return OpenSlideReader(path)
         if ("tiff",) in file_types:
             return TIFFReader(path)
         if ("dicom",) in file_types or ("dcm",) in file_types:
@@ -65,6 +73,83 @@ class Reader(ABC):
 
             return ZarrReaderWriter(path)
         raise ValueError(f"Unsupported file type: {path}")
+
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        """Generate a thumbnail image of (or near) the requested shape.
+
+        Args:
+            shape (Tuple[int, ...]):
+                Shape of the thumbnail.
+            approx_ok (bool):
+                If True, return a thumbnail that is approximately the
+                requested shape. It will be equal to or larger than the
+                requested shape (the next largest shape possible via
+                an integer block downsampling).
+
+        Returns:
+            np.ndarray: Thumbnail.
+        """
+        # NOTE: Assuming first two are Y and X
+        yx_shape = self.shape[:2]
+        yx_tile_shape = (
+            self.tile_shape[:2] if self.tile_shape else np.minimum(yx_shape, (256, 256))
+        )
+        self_mosaic_shape = (
+            self.mosaic_shape
+            if self.mosaic_shape
+            else mosaic_shape(yx_shape, yx_tile_shape)
+        )
+        downsample_shape = yx_shape
+        downsample_tile_shape = yx_tile_shape
+        downsample = 0
+        while True:
+            new_downsample = downsample + 1
+            next_downsample_shape, new_downsample_tile_shape = block_downsample_shape(
+                yx_shape, new_downsample, yx_tile_shape
+            )
+            if not any(x > max(0, y) for x, y in zip(downsample_shape, shape)):
+                break
+            downsample_shape = next_downsample_shape
+            downsample_tile_shape = new_downsample_tile_shape
+            downsample = new_downsample
+        # NOTE: Assuming channels last
+        channels = self.shape[-1]
+        thumbnail = np.zeros(downsample_shape + (channels,), dtype=np.uint8)
+        # Resize tiles to new_downsample_tile_shape and combine
+        tile_indexes = list(np.ndindex(self_mosaic_shape))
+        for tile_index in self.pbar(tile_indexes, desc="Generating thumbnail"):
+            tile = self[tile_slices(tile_index, yx_tile_shape)]
+            tile = mean_pool(tile.astype(float), downsample).astype(np.uint8)
+            thumbnail[tile_slices(tile_index, downsample_tile_shape)] = tile
+        if approx_ok:
+            return thumbnail
+        return resize_array(thumbnail, shape, "bicubic")
+
+    @staticmethod
+    def pbar(iterable: Iterable, *args, **kwargs) -> Iterator:
+        """Return an iterator that displays a progress bar.
+
+        Uses tqdm if installed, otherwise falls back to a simple iterator.
+
+        Args:
+            iterable (Iterable):
+                Iterable to iterate over.
+            args (tuple):
+                Positional arguments to pass to tqdm.
+            kwargs (dict):
+                Keyword arguments to pass to tqdm.
+
+        Returns:
+            Iterator: Iterator that displays a progress bar.
+        """
+        try:
+            from tqdm.auto import tqdm
+        except ImportError:
+
+            def tqdm(x, *args, **kwargs):
+                return x
+
+        return tqdm(iterable, *args, **kwargs)
 
 
 def get_tile(
@@ -482,6 +567,19 @@ class JP2Reader(Reader):
         """Get pixel data at index."""
         return self.jp2[index]
 
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        scale = scale_to_fit(self.shape[:2], shape)
+        downsample = 1 / scale
+        out_shape = tuple(int(x * scale) for x in self.shape[:2])
+        # Glymur requires a power of two stride
+        pow_2_downsample = 2 ** np.floor(np.log2(downsample))
+        # Get the power of two downsample
+        thumbnail = self.jp2[::pow_2_downsample, ::pow_2_downsample]
+        # Resize the thumbnail if required
+        if approx_ok:
+            return thumbnail
+        return resize_array(thumbnail, out_shape)
+
 
 class TIFFReader(Reader):
     """Reader for TIFF files using tifffile."""
@@ -519,8 +617,9 @@ class TIFFReader(Reader):
                 self.mosaic_shape
             )
         self.jpeg_tables = self.tiff_page.jpegtables
-        self.colour_space = normalise_color_space(self.tiff_page.photometric)
-        self.compression = normalise_compression(self.tiff_page.compression)
+        self.color_space: ColorSpace = ColorSpace.from_tiff(self.tiff_page.photometric)
+        self.codec: Codec = Codec.from_tiff(self.tiff_page.compression)
+        self.compression_level = None  # To be filled in if known later
 
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
@@ -603,8 +702,11 @@ class DICOMWSIReader(Reader):
             raise ValueError(
                 "Number of frames in DICOM dataset does not match mosaic shape."
             )
-        self.compression = normalise_compression(dataset.LossyImageCompressionMethod)
-        self.colour_space = normalise_color_space(dataset.photometric_interpretation)
+        self.codec: Codec = Codec.from_string(dataset.LossyImageCompressionMethod)
+        self.compression_level = (
+            None  # Set if known: dataset.get(LossyImageCompressionRatio)?
+        )
+        self.color_space = ColorSpace.from_dicom(dataset.photometric_interpretation)
         self.jpeg_tables = None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
@@ -695,8 +797,8 @@ class OpenSlideReader(Reader):
         # Fall back to TIFF resolution tags
         try:
             resolution = (
-                self.os_slide.properties["tiff.XResolution"],
-                self.os_slide.properties["tiff.YResolution"],
+                float(self.os_slide.properties["tiff.XResolution"]),
+                float(self.os_slide.properties["tiff.YResolution"]),
             )
             units = self.os_slide.properties["tiff.ResolutionUnit"]
             self._check_sensible_resolution(resolution, units)
@@ -755,3 +857,7 @@ class OpenSlideReader(Reader):
             size=(end_x - start_x, end_y - start_y),
         )
         return np.array(img.convert("RGB"))
+
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        warn_unused(approx_ok, ignore_falsey=True)
+        return np.array(self.os_slide.get_thumbnail(shape[::-1]))
