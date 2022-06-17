@@ -40,7 +40,9 @@ class Codec(str, Enum):
     ZLIBNG = "ZlibNG"  # ZlibNG, zlib replacement for "next generation" systems
     ZOPFLI = "Zopfli"
     ZSTD = "Zstandard"  # Zstandard
-    ISO_10918_1 = "JPEG"  # # noqa: PIE796 ALIAS: JPEG
+    ISO_10918_1 = "JPEG"  # noqa: PIE796
+    ISO_15444_1 = "JPEG 2000"  # noqa: PIE796
+    ISO_14495_1 = "JPEG-LS"  # noqa: PIE796
 
     def condensed(self) -> str:
         """Convert to a string without spaces or dashes."""
@@ -140,26 +142,25 @@ class ColorSpace(str, Enum):
     """Color spaces."""
 
     RGB = "RGB"  # Standard Red Green Blue, assumed to be sRGB
-    SRGB = "RGB"  # noqa: PIE796 ALIAS: RGB
-    RGBA = "RGBA"  # ALIAS:  sRGBA
+    SRGB = "RGB"  # noqa: PIE796
+    RGBA = "RGBA"  #
     LINEAR = "Linear"  # Generic linear color space
     GREY = "Grey"  # Generic greyscale
-    GRAY = "Grey"  # noqa: PIE796 ALIAS: Grey
-    GREYSCALE = "Grey"  # noqa: PIE796 ALIAS: Grey
-    GRAYSCALE = "Grey"  # noqa: PIE796 ALIAS: Grey
-    MINISBLACK = "Grey"  # noqa: PIE796 ALIAS: Grey
+    GRAY = "Grey"  # noqa: PIE796
+    GREYSCALE = "Grey"  # noqa: PIE796
+    GRAYSCALE = "Grey"  # noqa: PIE796
+    MINISBLACK = "Grey"  # noqa: PIE796
     MINISWHITE = "Min is White"
     CMYK = "CMYK"  # Cyan Magenta Yellow Black
     CMYKA = "CMYKA"  # Cyan Magenta Yellow Black Alpha
-    YCBCR = "YCrCb"  # Assumed to be BT.601 / Rec. 601
-    BT601 = "YCrCb"  # noqa: PIE796 ALIAS: YCrCb
-    # BT709 = "YCrCb"  # ALIAS: YCrCb
-    # BT2020 = "YCrCb"  # ALIAS: YCrCb
-    REC601 = "YCrCb"  # noqa: PIE796 ALIAS: YCrCb
+    YCBCR = "YCbCr"  # Assumed to be BT.601 / Rec. 601
+    YCRCB = "YCrCb"
+    BT601 = "YCbCr"  # noqa: PIE796
+    REC601 = "YCbCr"  # noqa: PIE796
     YCOCG = "YCoCg"  # Reversible modified YUV used by JPEG 2000, defined in ITU-T H.273
-    YCC = "YCoCg"  # noqa: PIE796 ALIAS: YCoCg
+    YCC = "YCoCg"  # noqa: PIE796
     YUV = "YUV"  # BT.1700
-    BT1700 = "YUV"  # noqa: PIE796 BT.1700 ALIAS: YUV
+    BT1700 = "YUV"  # noqa: PIE796 BT.1700
     CIELAB = "CIE L*a*b*"  # CIE L*a*b*
     CIELUV = "CIE L*u*v*"  # CIE L*u*v*
     HSV = "HSV"  # Hue Saturation Value
@@ -231,9 +232,9 @@ class ColorSpace(str, Enum):
             "MONOCHROME2": cls.MINISWHITE,
             "RGB": cls.RGB,
             "PALETTE_COLOR": cls.PALETTE,
-            "YBR_FULL": cls.YCBCR,
-            "YBR_FULL_422": cls.YCBCR,
-            "YBR_PARTIAL_420": cls.YCBCR,
+            "YBR_FULL": cls.YCRCB,
+            "YBR_FULL_422": cls.YCRCB,
+            "YBR_PARTIAL_420": cls.YCRCB,
         }
         if photometric in photometric_color_space_mapping:
             return photometric_color_space_mapping[photometric]

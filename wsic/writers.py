@@ -651,8 +651,8 @@ class SVSWriter(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,  # Currently unused
-        color_space: Optional[ColorSpace] = "rgb",
-        codec: Optional[Codec] = "jpeg",
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,
+        codec: Optional[Codec] = Codec.JPEG,
         compression_level: int = 0,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
@@ -663,15 +663,14 @@ class SVSWriter(Writer):
         # Validate inputs
         if dtype is not np.uint8:
             raise ValueError(f"SVSWriter only supports uint8, not {dtype}")
-        if color_space.lower() not in ("rgb", "ycbcr"):
+        if color_space not in (ColorSpace.RGB, ColorSpace.YCBCR):
             raise ValueError(
-                f"SVSWriter only supports rgb and ycbcr, not {color_space}"
+                f"SVSWriter only supports RGB and YCbCr, not {color_space}"
             )
-        if codec == "j2k":
-            codec = "aperio_jp2000_ycbc"
-        if codec not in ("jpeg",):  # aperio_jp2000_ycbc not working
+        codec = Codec.from_string(codec)
+        if codec not in (Codec.JPEG,):  # aperio_jp2000_ycbc not working
             raise ValueError(
-                "SVSWriter currently only supports jpeg compession," f" not {codec}"
+                "SVSWriter currently only supports JPEG compession," f" not {codec}"
             )
         # Super
         super().__init__(
@@ -785,7 +784,7 @@ class SVSWriter(Writer):
                 """
                 aperio_desc_compression = {
                     Codec.JPEG: f"JPEG/{self.color_space.upper()}",
-                    Codec.J2K: "J2K/YUV16",
+                    Codec.JPEG2000: "J2K/YUV16",
                     "APERIO_JP2000_YCBC": "J2K/YUV16",
                 }
                 software = f"Aperio wsic Library v{wsic_version}"
@@ -839,13 +838,14 @@ class SVSWriter(Writer):
                     )
                 )
 
+                compression = self.codec.condensed()
                 tif.write(
                     data=iter(reader_tile_iterator),
                     tile=self.tile_size,
                     shape=reader.shape,
                     dtype=reader.dtype,
                     photometric=self.color_space,
-                    compression=(self.codec.condensed(), self.compression_level),
+                    compression=(compression, self.compression_level),
                     resolution=resolution,
                     subifds=len(self.pyramid_downsamples),
                     description=description,
@@ -911,7 +911,7 @@ class SVSWriter(Writer):
                             dtype=reader.dtype,
                             photometric=self.color_space,
                             compression=(
-                                self.codec.condensed(),
+                                compression,
                                 self.compression_level,
                             ),
                             description=software,  # Optional for OpenSlide

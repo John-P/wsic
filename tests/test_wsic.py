@@ -11,6 +11,7 @@ import zarr
 from click.testing import CliRunner
 
 from wsic import cli, readers, utils, writers
+from wsic.enums import Codec, ColorSpace
 
 
 @pytest.fixture()
@@ -713,17 +714,48 @@ def test_write_rgb_jpeg_svs(samples_path, tmp_path):
     assert mse < 10
 
 
-def test_write_ycbcr_j2k_svs_fails(samples_path, tmp_path):
-    """Test writing an SVS file with YCbCr JP2 compression fails."""
+def test_write_ycbcr_jpeg_svs(samples_path, tmp_path):
+    """Test writing an SVS file with YCbCr JPEG compression."""
     reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
-    with pytest.raises(ValueError, match="only supports jpeg compession"):
+    writer = writers.SVSWriter(
+        path=tmp_path / "Neo-CMU-1-Small-Region.svs",
+        shape=reader.shape,
+        pyramid_downsamples=[2, 4],
+        compression_level=70,
+        color_mode="YCbCr",
+    )
+    writer.copy_from_reader(reader=reader)
+    assert writer.path.exists()
+    assert writer.path.is_file()
+
+    # Pass the tiffile is_svs test
+    tiff = tifffile.TiffFile(str(writer.path))
+    assert tiff.is_svs
+
+    # Read and compare with OpenSlide
+    import openslide
+
+    with openslide.OpenSlide(str(writer.path)) as slide:
+        new_svs_region = slide.read_region((0, 0), 0, (1024, 1024))
+    with openslide.OpenSlide(str(samples_path / "CMU-1-Small-Region.svs")) as slide:
+        old_svs_region = slide.read_region((0, 0), 0, (1024, 1024))
+
+    # Check mean squared error
+    mse = (np.subtract(new_svs_region, old_svs_region) ** 2).mean()
+    assert mse < 10
+
+
+def test_write_ycrcb_j2k_svs_fails(samples_path, tmp_path):
+    """Test writing an SVS file with YCrCb JP2 compression fails."""
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
+    with pytest.raises(ValueError, match="only supports JPEG"):
         writers.SVSWriter(
             path=tmp_path / "Neo-CMU-1-Small-Region.svs",
             shape=reader.shape,
             pyramid_downsamples=[2, 4],
-            codec="aperio_jp2000_ycbc",  # 33003, APERIO_JP2000_YCBC
+            codec=Codec.JPEG2000,
             compression_level=70,
-            photometric="rgb",
+            photometric=ColorSpace.YCBCR,
         )
 
 
