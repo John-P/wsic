@@ -12,6 +12,7 @@ from typing import Iterable, Iterator, Optional, Tuple, Union
 import numpy as np
 import zarr
 
+from wsic.enums import Codec, ColorSpace
 from wsic.magic import summon_file_types
 from wsic.multiprocessing import Queue
 from wsic.types import PathLike
@@ -19,8 +20,6 @@ from wsic.utils import (
     block_downsample_shape,
     mean_pool,
     mosaic_shape,
-    normalise_color_space,
-    normalise_compression,
     ppu2mpp,
     resize_array,
     scale_to_fit,
@@ -618,8 +617,8 @@ class TIFFReader(Reader):
                 self.mosaic_shape
             )
         self.jpeg_tables = self.tiff_page.jpegtables
-        self.colour_space = normalise_color_space(self.tiff_page.photometric)
-        self.compression = normalise_compression(self.tiff_page.compression)
+        self.color_space: ColorSpace = ColorSpace.from_tiff(self.tiff_page.photometric)
+        self.codec: Codec = Codec.from_tiff(self.tiff_page.compression)
         self.compression_level = None  # To be filled in if known later
 
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
@@ -703,11 +702,11 @@ class DICOMWSIReader(Reader):
             raise ValueError(
                 "Number of frames in DICOM dataset does not match mosaic shape."
             )
-        self.compression = normalise_compression(dataset.LossyImageCompressionMethod)
+        self.codec: Codec = Codec.from_string(dataset.LossyImageCompressionMethod)
         self.compression_level = (
             None  # Set if known: dataset.get(LossyImageCompressionRatio)?
         )
-        self.colour_space = normalise_color_space(dataset.photometric_interpretation)
+        self.color_space = ColorSpace.from_dicom(dataset.photometric_interpretation)
         self.jpeg_tables = None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
