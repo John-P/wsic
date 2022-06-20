@@ -1193,8 +1193,8 @@ class TestReaderScenarios:
         ),
     ]
 
+    @staticmethod
     def test_thumbnail(
-        self,
         samples_path: Path,
         sample_name: str,
         reader_cls: readers.Reader,
