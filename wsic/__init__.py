@@ -2,7 +2,7 @@
 
 __author__ = """John Pocock"""
 __email__ = "j.c.pocock@warwick.ac.uk"
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from . import codecs, magic, metadata, multiprocessing, readers, types, writers
 
