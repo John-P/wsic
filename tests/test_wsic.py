@@ -857,6 +857,7 @@ def pytest_generate_tests(metafunc):
 
 WRITER_EXT_MAPPING = {
     ".zarr": writers.ZarrReaderWriter,
+    ".tiff": writers.TIFFWriter,
 }
 
 
@@ -869,6 +870,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.TIFFReader,
+                "out_reader": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
             },
         ),
@@ -877,6 +879,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.jpeg.tiff",
                 "reader_cls": readers.TIFFReader,
+                "out_reader": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
             },
         ),
@@ -885,6 +888,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.webp.tiff",
                 "reader_cls": readers.TIFFReader,
+                "out_reader": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
             },
         ),
@@ -893,6 +897,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.jp2.tiff",
                 "reader_cls": readers.TIFFReader,
+                "out_reader": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
             },
         ),
@@ -901,6 +906,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
+                "out_reader": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
             },
         ),
@@ -909,7 +915,35 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region-J2K",
                 "reader_cls": readers.DICOMWSIReader,
+                "out_reader": writers.ZarrReaderWriter,
                 "out_ext": ".zarr",
+            },
+        ),
+        (
+            "jpeg_dicom_to_tiff",
+            {
+                "sample_name": "CMU-1-Small-Region",
+                "reader_cls": readers.DICOMWSIReader,
+                "out_reader": readers.TIFFReader,
+                "out_ext": ".tiff",
+            },
+        ),
+        (
+            "j2k_dicom_to_tiff",
+            {
+                "sample_name": "CMU-1-Small-Region-J2K",
+                "reader_cls": readers.DICOMWSIReader,
+                "out_reader": readers.TIFFReader,
+                "out_ext": ".tiff",
+            },
+        ),
+        (
+            "webp_tiff_to_tiff",
+            {
+                "sample_name": "CMU-1-Small-Region.webp.tiff",
+                "reader_cls": readers.TIFFReader,
+                "out_reader": readers.TIFFReader,
+                "out_ext": ".tiff",
             },
         ),
     ]
@@ -919,6 +953,7 @@ class TestTranscodeScenarios:
         samples_path: Path,
         sample_name: str,
         reader_cls: readers.Reader,
+        out_reader: readers.Reader,
         out_ext: str,
         tmp_path: Path,
     ):
@@ -933,7 +968,7 @@ class TestTranscodeScenarios:
             tile_size=reader.tile_shape[::-1],
         )
         writer.transcode_from_reader(reader=reader)
-        output_reader = readers.Reader.from_file(out_path)
+        output_reader = out_reader(out_path)
 
         assert output_reader.shape == reader.shape
         assert output_reader.tile_shape == reader.tile_shape
@@ -1059,7 +1094,7 @@ class TestConvertScenarios:
             },
         ),
         (
-            "jpeg_dicom_to_zarr",
+            "jpeg_dicom_to_blosc_zarr",
             {
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
@@ -1069,7 +1104,17 @@ class TestConvertScenarios:
             },
         ),
         (
-            "jp2_to_tiff",
+            "jpeg_dicom_to_jpeg_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region",
+                "reader_cls": readers.DICOMWSIReader,
+                "writer_cls": writers.ZarrReaderWriter,
+                "out_ext": ".zarr",
+                "codec": "jpeg",
+            },
+        ),
+        (
+            "jp2_to_jpeg_tiff",
             {
                 "sample_name": "XYC.jp2",
                 "reader_cls": readers.JP2Reader,
@@ -1108,6 +1153,56 @@ class TestConvertScenarios:
                 "codec": "jpeg2000",
             },
         ),
+        (
+            "jp2_to_zstd_tiff",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.TIFFWriter,
+                "out_ext": ".tiff",
+                "codec": "zstd",
+            },
+        ),
+        (
+            "jp2_to_png_tiff",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.TIFFWriter,
+                "out_ext": ".tiff",
+                "codec": "png",
+            },
+        ),
+        (
+            "jp2_to_jpegxr_tiff",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.TIFFWriter,
+                "out_ext": ".tiff",
+                "codec": "jpegxr",
+            },
+        ),
+        (
+            "jp2_to_deflate_tiff",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.TIFFWriter,
+                "out_ext": ".tiff",
+                "codec": "deflate",
+            },
+        ),
+        (
+            "jp2_to_jpegxl_tiff",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.TIFFWriter,
+                "out_ext": ".tiff",
+                "codec": "jpegxl",
+            },
+        ),
     ]
 
     @staticmethod
@@ -1126,3 +1221,14 @@ class TestConvertScenarios:
         reader = reader_cls(in_path)
         writer = writer_cls(out_path, shape=reader.shape, codec=codec)
         writer.copy_from_reader(reader)
+
+        # Check that the output file exists
+        assert out_path.exists()
+
+        # Check that the output file has non-zero size
+        assert out_path.stat().st_size > 0
+
+        # Check that the output looks the same as the input
+        output_reader = readers.Reader.from_file(out_path)
+        mse = np.mean(np.square(reader[...] - output_reader[...]))
+        assert mse < 100
