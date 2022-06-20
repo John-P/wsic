@@ -162,8 +162,9 @@ class Writer(ABC):
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
             downsample_method (str, optional):
-                Downsample method to use. Defaults to None.
-                Valid downsample methods are: "cv2", "scipy", "np", None.
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         if self.path.exists() and not self.overwrite:
             raise FileExistsError(f"{self.path} exists and overwrite is False.")
@@ -347,6 +348,7 @@ class JP2Writer(Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -360,13 +362,20 @@ class JP2Writer(Writer):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None. Not used for JP2Writer, only here
+                for API consistency.
         """
         super().copy_from_reader(
             reader=reader,
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
+        warn_unused(downsample_method, ignore_falsey=True)
         import glymur
 
         jp2 = glymur.Jp2k(
@@ -510,8 +519,9 @@ class TIFFWriter(Writer):
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
             downsample_method (str, optional):
-                Downsample method to use. Defaults to None.
-                Valid downsample methods are: "cv2", "scipy", "np", None.
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
@@ -768,6 +778,7 @@ class SVSWriter(Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -781,6 +792,10 @@ class SVSWriter(Writer):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
@@ -952,6 +967,7 @@ class SVSWriter(Writer):
                             tile_size=self.tile_size,
                             downsample=downsample,
                             read_intermediate_path=intermediate.path,
+                            downsample_method=downsample_method,
                         )
 
                         tile_generator = pool.imap(
@@ -1187,8 +1203,9 @@ class ZarrReaderWriter(Writer, Reader):
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
             downsample_method (str, optional):
-                Downsample method to use. Defaults to None.
-                Valid downsample methods are: "cv2", "scipy", "np", None.
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
@@ -1612,6 +1629,7 @@ class ZarrIntermediate(Writer, Reader):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Not supported but included for API consistency."""
         raise NotImplementedError()
