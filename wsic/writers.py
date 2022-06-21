@@ -666,7 +666,7 @@ class TIFFWriter(Writer):
             ome=self.ome,
         ) as tiff:
             tiff.write(
-                data=tile_iterator,
+                data=iter(tile_iterator),
                 tile=self.tile_size,
                 shape=reader.shape,
                 dtype=reader.dtype,
