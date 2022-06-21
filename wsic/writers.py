@@ -1081,6 +1081,10 @@ class ZarrReaderWriter(Writer, Reader):
     def tile_shape(self) -> Optional[Tuple[int, int]]:
         return self.zarr[0].chunks[:2] if self.zarr else None
 
+    @property
+    def mosaic_shape(self) -> Optional[Tuple[int, int]]:
+        return mosaic_shape(self.shape, self.tile_shape)
+
     def _init_zarr(self, create: bool = True) -> zarr.Group:
         """Initialize the zarr.
 

@@ -2,7 +2,7 @@
 import sys
 import warnings
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 import numpy as np
 import pytest
@@ -1232,3 +1232,76 @@ class TestConvertScenarios:
         output_reader = readers.Reader.from_file(out_path)
         mse = np.mean(np.square(reader[...] - output_reader[...]))
         assert mse < 100
+
+class TestReaderScenarios:
+    """Test scenarios for readers."""
+
+    scenarios = [
+        (
+            "jpeg_svs_tifffile",
+            {
+                "sample_name": "CMU-1-Small-Region.svs",
+                "reader_cls": readers.TIFFReader,
+                "thumbnail_kwargs": {
+                    "shape": [512, 512],
+                    "approx_ok": True,
+                },
+            },
+        ),
+        (
+            "jpeg_svs_openslide",
+            {
+                "sample_name": "CMU-1-Small-Region.svs",
+                "reader_cls": readers.OpenSlideReader,
+                "thumbnail_kwargs": {
+                    "shape": [512, 512],
+                    "approx_ok": True,
+                },
+            },
+        ),
+        (
+            "j2k_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region-J2K",
+                "reader_cls": readers.DICOMWSIReader,
+                "thumbnail_kwargs": {
+                    "shape": [512, 512],
+                    "approx_ok": True,
+                },
+            },
+        ),
+        (
+            "jpeg_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region",
+                "reader_cls": readers.DICOMWSIReader,
+                "thumbnail_kwargs": {
+                    "shape": [512, 512],
+                    "approx_ok": True,
+                },
+            },
+        ),
+        (
+            "jpeg_zarr",
+            {
+                "sample_name": "CMU-1-Small-Region-JPEG.zarr",
+                "reader_cls": writers.ZarrReaderWriter,
+                "thumbnail_kwargs": {
+                    "shape": [512, 512],
+                    "approx_ok": True,
+                },
+            },
+        ),
+    ]
+
+    @staticmethod
+    def test_thumbnail(
+        samples_path: Path,
+        sample_name: str,
+        reader_cls: readers.Reader,
+        thumbnail_kwargs: Dict[str, Any],
+    ):
+        """Test creating a thumbnail."""
+        in_path = samples_path / sample_name
+        reader: readers.Reader = reader_cls(in_path)
+        reader.thumbnail(**thumbnail_kwargs)

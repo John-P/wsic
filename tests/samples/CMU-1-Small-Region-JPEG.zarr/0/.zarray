@@ -1,0 +1,30 @@
+{
+    "chunks": [
+        240,
+        240,
+        3
+    ],
+    "compressor": {
+        "bitspersample": null,
+        "colorspace_data": "RGB",
+        "colorspace_jpeg": "RGB",
+        "header": null,
+        "id": "imagecodecs_jpeg",
+        "level": null,
+        "optimize": null,
+        "smoothing": null,
+        "subsampling": null,
+        "tables": "/9j/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/2Q=="
+    },
+    "dimension_separator": "/",
+    "dtype": "|u1",
+    "fill_value": 0,
+    "filters": null,
+    "order": "C",
+    "shape": [
+        2967,
+        2220,
+        3
+    ],
+    "zarr_format": 2
+}
