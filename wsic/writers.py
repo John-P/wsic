@@ -337,6 +337,7 @@ class JP2Writer(Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -350,12 +351,17 @@ class JP2Writer(Writer):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use. Defaults to None. Not used for
+                JP2Writer, but included for API consistency.
         """
+        warn_unused(downsample_method, ignore_falsey=True)
         super().copy_from_reader(
             reader=reader,
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
         import glymur
 
@@ -508,6 +514,7 @@ class TIFFWriter(Writer):
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
         import tifffile
 
@@ -727,6 +734,7 @@ class SVSWriter(Writer):
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
         import tifffile
 
@@ -1506,6 +1514,7 @@ class ZarrIntermediate(Writer, Reader):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Not supported but included for API consistency."""
         raise NotImplementedError()
