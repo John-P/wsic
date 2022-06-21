@@ -1233,6 +1233,7 @@ class TestConvertScenarios:
         mse = np.mean(np.square(reader[...] - output_reader[...]))
         assert mse < 100
 
+
 class TestReaderScenarios:
     """Test scenarios for readers."""
 
