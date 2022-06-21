@@ -1087,7 +1087,6 @@ class ZarrWriter(Writer, Reader):
                 Downsample method to use. Defaults to None.
                 Valid downsample methods are: "cv2", "scipy", "np", None.
         """
-
         # Ensure there is a zarr to write to
         self.zarr.create_dataset(
             name="0",
