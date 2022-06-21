@@ -1138,7 +1138,6 @@ class TestReaderScenarios:
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.TIFFReader,
                 "thumbnail_kwargs": {
-                    "ext": ".jpeg",
                     "shape": [512, 512],
                     "approx_ok": True,
                 },
@@ -1150,7 +1149,6 @@ class TestReaderScenarios:
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.OpenSlideReader,
                 "thumbnail_kwargs": {
-                    "ext": ".jpeg",
                     "shape": [512, 512],
                     "approx_ok": True,
                 },
@@ -1162,7 +1160,6 @@ class TestReaderScenarios:
                 "sample_name": "CMU-1-Small-Region-J2K",
                 "reader_cls": readers.DICOMWSIReader,
                 "thumbnail_kwargs": {
-                    "ext": ".jpeg",
                     "shape": [512, 512],
                     "approx_ok": True,
                 },
@@ -1174,7 +1171,6 @@ class TestReaderScenarios:
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
                 "thumbnail_kwargs": {
-                    "ext": ".jpeg",
                     "shape": [512, 512],
                     "approx_ok": True,
                 },
