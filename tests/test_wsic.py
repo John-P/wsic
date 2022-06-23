@@ -892,7 +892,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.TIFFReader,
-                "out_reader": writers.ZarrReaderWriter,
+                "out_reader": readers.ZarrReader,
                 "out_ext": ".zarr",
             },
         ),
@@ -901,7 +901,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.jpeg.tiff",
                 "reader_cls": readers.TIFFReader,
-                "out_reader": writers.ZarrReaderWriter,
+                "out_reader": readers.ZarrReader,
                 "out_ext": ".zarr",
             },
         ),
@@ -910,7 +910,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.webp.tiff",
                 "reader_cls": readers.TIFFReader,
-                "out_reader": writers.ZarrReaderWriter,
+                "out_reader": readers.ZarrReader,
                 "out_ext": ".zarr",
             },
         ),
@@ -919,7 +919,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.jp2.tiff",
                 "reader_cls": readers.TIFFReader,
-                "out_reader": writers.ZarrReaderWriter,
+                "out_reader": readers.ZarrReader,
                 "out_ext": ".zarr",
             },
         ),
@@ -928,7 +928,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
-                "out_reader": writers.ZarrReaderWriter,
+                "out_reader": readers.ZarrReader,
                 "out_ext": ".zarr",
             },
         ),
@@ -937,7 +937,7 @@ class TestTranscodeScenarios:
             {
                 "sample_name": "CMU-1-Small-Region-J2K",
                 "reader_cls": readers.DICOMWSIReader,
-                "out_reader": writers.ZarrReaderWriter,
+                "out_reader": readers.ZarrReader,
                 "out_ext": ".zarr",
             },
         ),
@@ -1130,7 +1130,7 @@ class TestConvertScenarios:
             {
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
-                "writer_cls": writers.ZarrReaderWriter,
+                "writer_cls": writers.ZarrWriter,
                 "out_ext": ".zarr",
                 "codec": "jpeg",
             },
