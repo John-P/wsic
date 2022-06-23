@@ -239,3 +239,15 @@ class ColorSpace(str, Enum):
         if photometric in photometric_color_space_mapping:
             return photometric_color_space_mapping[photometric]
         raise ValueError(f"Unsupported DICOM photometric interpretation: {photometric}")
+
+    def to_jp2(self) -> "ColorSpace":
+        """Convert to JPEG2000 color space."""
+        if self == ColorSpace.RGB:
+            return 16
+        if self == ColorSpace.CMYK:
+            return 12
+        if self == ColorSpace.GRAYSCALE:
+            return 17
+        if self == ColorSpace.YCBCR:
+            return 18
+        raise ValueError(f"Color space `{self}` has no known JP2 equivalent.")
