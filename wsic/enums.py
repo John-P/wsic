@@ -1,6 +1,7 @@
 """Enumerated types used by wsic."""
 from enum import Enum
-from typing import Optional
+from numbers import Number
+from typing import Any, Dict, Optional
 
 
 class Codec(str, Enum):
@@ -48,15 +49,22 @@ class Codec(str, Enum):
         """Convert to a string without spaces or dashes."""
         return self.value.replace(" ", "").replace("-", "")
 
-    def numcodecs_id(self) -> str:
+    def to_numcodecs_config(self, level: Number = None) -> Dict[str, Any]:
         """Convert to numcodecs Codec ID string."""
         if self in WSIC_CODECS:
-            return "imagecodecs_" + self.condensed().lower()
+            return {"id": "imagecodecs_" + self.condensed().lower()}
         if self in NUMCODECS_CODECS:
-            return self.condensed.lower()
+            return {"id": self.condensed().lower(), "clevel": level}
+        if self == Codec.JPEG2000:
+            return {"id": "imagecodecs_jpeg2k", "codecformat": "jp2", "level": level}
+        if self == Codec.J2K:
+            return {"id": "imagecodecs_jpeg2k", "codecformat": "j2k", "level": level}
         if self in IMAGECODECS_CODECS:
-            return "imagecodecs_" + self.condensed().lower()
-        return self.condensed().lower()
+            return {"id": "imagecodecs_" + self.condensed().lower(), "level": level}
+        result = {"id": self.condensed().lower()}
+        if level is not None:
+            result["level"] = level
+        return result
 
     @classmethod
     def from_string(cls, string: str) -> "Codec":

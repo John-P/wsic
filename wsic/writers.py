@@ -9,7 +9,7 @@ from functools import partial
 from math import floor
 from numbers import Number
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -139,7 +139,7 @@ class Writer(ABC):
         self, index: Tuple[Union[int, slice], ...], value: np.ndarray
     ) -> None:
         """Return pixel data at index."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
     def copy_from_reader(
@@ -1031,54 +1031,18 @@ class ZarrWriter(Writer, Reader):
     def mosaic_shape(self) -> Optional[Tuple[int, int]]:
         return mosaic_shape(self.shape, self.tile_shape)
 
+    @staticmethod
     def get_codec(
-        self,
         codec: Union[str, Codec],
-        compression_level: int,
+        level: int,
+        **kwargs: Dict[str, Any],
     ) -> Callable[[bytes], bytes]:
         """Get a codec for the given compression method and compression level."""
-        from numcodecs import LZ4, LZMA, Blosc, Zlib, Zstd
+        import numcodecs
 
-        codec = Codec.from_string(codec)
-
-        numcodecs_codecs = {
-            Codec.LZ4: LZ4,
-            Codec.LZMA: LZMA,
-            Codec.BLOSC: Blosc,  # zarr default (lz4)
-            Codec.ZLIB: Zlib,
-            Codec.ZSTD: Zstd,
-        }
-
-        try:
-            import imagecodecs
-
-            imagecodecs_codecs = {
-                Codec.DEFLATE: imagecodecs.numcodecs.Deflate,
-                Codec.WEBP: imagecodecs.numcodecs.Webp,
-                Codec.JPEG: imagecodecs.numcodecs.Jpeg,
-                Codec.JPEGLS: imagecodecs.numcodecs.JpegLs,
-                Codec.JPEG2000: imagecodecs.numcodecs.Jpeg2k,
-                Codec.JPEGXL: imagecodecs.numcodecs.JpegXl,
-                Codec.PNG: imagecodecs.numcodecs.Png,
-                Codec.ZFP: imagecodecs.numcodecs.Zfp,
-            }
-        except ImportError:
-            if self.verbose:
-                print("imagecodecs not installed")
-            imagecodecs_codecs = {}
-
-        if codec in numcodecs_codecs:
-            return numcodecs_codecs[codec](clevel=compression_level)
-
-        if codec in imagecodecs_codecs:
-            return imagecodecs_codecs[codec](level=compression_level)
-
-        if codec == "qoi":
-            from wsic.codecs import QOI
-
-            return QOI()
-
-        raise ValueError(f"Compression {codec} not supported.")
+        config = Codec.from_string(codec).to_numcodecs_config(level=level)
+        config.update(kwargs)
+        return numcodecs.get_codec(config)
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index."""

@@ -767,6 +767,20 @@ def test_write_ycrcb_j2k_svs_fails(samples_path, tmp_path):
         )
 
 
+def test_missing_imagecodecs_codec(samples_path, tmp_path):
+    """Test writing an SVS file with YCrCb JP2 compression fails."""
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
+    with pytest.raises(ValueError, match="Unknown"):
+        writers.ZarrWriter(
+            path=tmp_path / "test.zarr",
+            shape=reader.shape,
+            pyramid_downsamples=[2, 4],
+            codec="foo",
+            compression_level=70,
+            color_space=ColorSpace.RGB,
+        )
+
+
 def test_cli_convert_timeout(samples_path, tmp_path):
     """Check that CLI convert raises IOError when reading times out."""
     runner = CliRunner()
