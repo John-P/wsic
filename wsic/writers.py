@@ -138,7 +138,7 @@ class Writer(ABC):
         self, index: Tuple[Union[int, slice], ...], value: np.ndarray
     ) -> None:
         """Return pixel data at index."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
     def copy_from_reader(
