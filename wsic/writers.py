@@ -1014,8 +1014,8 @@ class ZarrWriter(Writer, Reader):
     def mosaic_shape(self) -> Optional[Tuple[int, int]]:
         return mosaic_shape(self.shape, self.tile_shape)
 
+    @staticmethod
     def get_codec(
-        self,
         codec: Union[str, Codec],
         level: int,
         **kwargs: Dict[str, Any],
