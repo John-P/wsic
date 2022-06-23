@@ -12,8 +12,10 @@ from typing import Iterable, Iterator, Optional, Tuple, Union
 import numpy as np
 import zarr
 
+from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.magic import summon_file_types
+from wsic.metadata import ngff
 from wsic.multiprocessing import Queue
 from wsic.types import PathLike
 from wsic.utils import (
@@ -69,9 +71,7 @@ class Reader(ABC):
         if ("dicom",) in file_types or ("dcm",) in file_types:
             return DICOMWSIReader(path)
         if ("zarr",) in file_types:
-            from wsic.writers import ZarrReaderWriter
-
-            return ZarrReaderWriter(path)
+            return ZarrReader(path)
         raise ValueError(f"Unsupported file type: {path}")
 
     def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
@@ -124,6 +124,32 @@ class Reader(ABC):
         if approx_ok:
             return thumbnail
         return resize_array(thumbnail, shape, "bicubic")
+
+    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
+        """Get tile at index.
+
+        Args:
+            index (Tuple[int, int]):
+                The index of the tile to get.
+            decode (bool, optional):
+                Whether to decode the tile. Defaults to True.
+
+        Returns:
+            np.ndarray:
+                The tile at index.
+        """
+        # Naive base implementation using __getitem__
+        if not decode:
+            raise NotImplementedError(
+                "Fetching tiles without decoding is not supported."
+            )
+        if not hasattr(self, "tile_shape"):
+            raise ValueError(
+                "Cannot get tile from a non-tiled reader"
+                " (must have attr 'tile_shape')."
+            )
+        slices = tile_slices(index, self.tile_shape)
+        return self[slices]
 
     @staticmethod
     def pbar(iterable: Iterable, *args, **kwargs) -> Iterator:
@@ -501,23 +527,6 @@ class JP2Reader(Reader):
         self.microns_per_pixel = self._get_mpp()
         self.tile_shape = self._get_tile_shape()
 
-    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
-        """Get tile at index.
-
-        Args:
-            index (Tuple[int, int]):
-                The index of the tile to get.
-            decode (bool, optional):
-                Whether to decode the tile. Defaults to True.
-
-        Returns:
-            np.ndarray:
-                The tile at index.
-        """
-        if not decode:
-            raise NotImplementedError("Returning encoded JP2 tiles is not supported.")
-        return self.jp2[tile_slices(index, self.tile_shape)]
-
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
 
@@ -863,3 +872,96 @@ class OpenSlideReader(Reader):
     def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
         warn_unused(approx_ok, ignore_falsey=True)
         return np.array(self.os_slide.get_thumbnail(shape[::-1]))
+
+
+class ZarrReader(Reader):
+    """Reader for zarr files."""
+
+    def __init__(self, path: PathLike, axes: Optional[str] = None) -> None:
+        super().__init__(path)
+        register_codecs()
+        self.zarr = zarr.open(str(path), mode="r")
+
+        # If it is a zarr array, put it in a group
+        if isinstance(self.zarr, zarr.Array):
+            group = zarr.group()
+            group[0] = self.zarr
+            self.zarr = group
+
+        self.shape = self.zarr[0].shape
+        if len(self.shape) not in (2, 3, 4, 5):
+            raise ValueError(
+                "Only Zarrs with between 2 (e.g. YX) and 5 (e.g. TCZYX) "
+                "dimensions are supported."
+            )
+        self.dtype = self.zarr[0].dtype
+
+        # Assume the axes, this will be used if not given or specified in metadata
+        assumed_axes_mapping = {
+            2: "YX",
+            3: "YXC",
+            4: "CZYX",
+            5: "TCZYX",
+        }
+        self.axes = assumed_axes_mapping[len(self.shape)]
+
+        # Use the NGFF metadata NGFF if present
+        self.is_ngff = "omero" in self.zarr.attrs
+        self.zattrs = None
+        if self.is_ngff:
+            self.zattrs = self._load_zattrs()
+            self.axes = "".join(
+                multiscale.axis.name for multiscale in self.zattrs.multiscales
+            ).upper()
+        # Use the given axes if not None
+        self.axes = axes or self.axes
+
+        # Tile shape and mosaic attrs
+        self.tile_shape = self.zarr[0].chunks[:2]
+        self.mosaic_shape = mosaic_shape(self.shape, self.tile_shape)
+
+    def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
+        return self.zarr[0][index]
+
+    def _load_zattrs(self) -> ngff.Zattrs:
+        """Load the zarr attrs dictionary into dataclasses."""
+        return ngff.Zattrs(
+            _creator=ngff.Creator(**self.zattrs.get("_creator")),
+            multiscales=[
+                ngff.Multiscale(
+                    axes=[ngff.Axis(**axis) for axis in multiscale.get("axes", [])],
+                    datasets=[
+                        ngff.Dataset(
+                            path=dataset.get("path"),
+                            coordinateTransformations=[
+                                ngff.CoordinateTransformation(
+                                    **coordinate_transformation
+                                )
+                                for coordinate_transformation in dataset.get(
+                                    "coordinateTransformations", []
+                                )
+                            ],
+                        )
+                        for dataset in multiscale.get("datasets", [])
+                    ],
+                    version=multiscale.get("version"),
+                )
+                for multiscale in self.zarr.attrs.get("multiscales", [])
+            ],
+            _ARRAY_DIMENSIONS=self.zarr.attrs.get("_ARRAY_DIMENSIONS"),
+            omero=ngff.Omero(
+                name=self.zarr.attrs.get("omero", {}).get("name"),
+                channels=[
+                    ngff.Channel(
+                        name=channel.get("name"),
+                        coefficient=channel.get("coefficient"),
+                        color=channel.get("color"),
+                        family=channel.get("family"),
+                        inverted=channel.get("inverted"),
+                        label=channel.get("label"),
+                        window=ngff.Window(**channel.get("window", {})),
+                    )
+                    for channel in self.zattrs.get("omero", {}).get("channels", [])
+                ],
+            ),
+        )

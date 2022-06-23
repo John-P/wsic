@@ -44,7 +44,7 @@ class MutuallyExclusiveOption(click.Option):
 ext2writer = {
     ".jp2": wsic.writers.JP2Writer,
     ".tiff": wsic.writers.TIFFWriter,
-    ".zarr": wsic.writers.ZarrReaderWriter,
+    ".zarr": wsic.writers.ZarrWriter,
     ".svs": wsic.writers.SVSWriter,
 }
 
@@ -209,7 +209,7 @@ def transcode(
         raise click.BadParameter(
             f"Input file type {suffixes} could not be transcribed", param_hint="in_path"
         )
-    writer = wsic.writers.ZarrReaderWriter(
+    writer = wsic.writers.ZarrWriter(
         out_path,
         tile_size=reader.tile_shape[::-1],
         dtype=reader.dtype,

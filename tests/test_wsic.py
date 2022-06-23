@@ -276,8 +276,9 @@ def test_jp2_to_zarr(samples_path, tmp_path):
         warnings.simplefilter("error")
 
         reader = readers.Reader.from_file(samples_path / "XYC.jp2")
-        writer = writers.ZarrReaderWriter(
+        writer = writers.ZarrWriter(
             path=tmp_path / "XYC.zarr",
+            shape=reader.shape,
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
 
@@ -296,8 +297,9 @@ def test_jp2_to_pyramid_zarr(samples_path, tmp_path):
 
         reader = readers.Reader.from_file(samples_path / "XYC.jp2")
         pyramid_downsamples = [2, 4, 8, 16, 32]
-        writer = writers.ZarrReaderWriter(
+        writer = writers.ZarrWriter(
             path=tmp_path / "XYC.zarr",
+            shape=reader.shape,
             pyramid_downsamples=pyramid_downsamples,
             tile_size=(256, 256),
         )
@@ -360,8 +362,9 @@ def test_tiff_get_tile(samples_path):
 def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
     """Test that we can transcode an JPEG SVS to a Zarr."""
     reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
-    writer = writers.ZarrReaderWriter(
+    writer = writers.ZarrWriter(
         path=tmp_path / "CMU-1-Small-Region.zarr",
+        shape=reader.shape,
         tile_size=reader.tile_shape[::-1],
         dtype=reader.dtype,
     )
@@ -387,7 +390,7 @@ def test_transcode_svs_to_zarr(samples_path, tmp_path):
             "_-merge.ome.tiff"
         )
     )
-    writer = writers.ZarrReaderWriter(
+    writer = writers.ZarrWriter(
         path=tmp_path
         / (
             "XYC_-compression_JPEG-2000"
@@ -395,6 +398,7 @@ def test_transcode_svs_to_zarr(samples_path, tmp_path):
             "-pyramid-scale_2_"
             "-merge.zarr"
         ),
+        shape=reader.shape,
         tile_size=reader.tile_shape[::-1],
         dtype=reader.dtype,
     )
@@ -429,8 +433,9 @@ def test_transcode_svs_to_pyramid_ome_zarr(samples_path, tmp_path):
         "-pyramid-scale_2_"
         "-merge.zarr"
     )
-    writer = writers.ZarrReaderWriter(
+    writer = writers.ZarrWriter(
         path=out_path,
+        shape=reader.shape,
         tile_size=reader.tile_shape[::-1],
         dtype=reader.dtype,
         pyramid_downsamples=[2, 4, 8],
@@ -456,8 +461,9 @@ def test_transcode_svs_to_pyramid_ome_zarr(samples_path, tmp_path):
 def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
     """Test that we can transcode a JPEG compressed DICOM WSI to a Zarr."""
     reader = readers.DICOMWSIReader(samples_path / "CMU-1-Small-Region")
-    writer = writers.ZarrReaderWriter(
+    writer = writers.ZarrWriter(
         path=tmp_path / "CMU-1.zarr",
+        shape=reader.shape,
         tile_size=reader.tile_shape[::-1],
         dtype=reader.dtype,
     )
@@ -485,8 +491,9 @@ def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
 def test_transcode_j2k_dicom_wsi_to_zarr(samples_path, tmp_path):
     """Test that we can transcode a J2K compressed DICOM WSI to a Zarr."""
     reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region-J2K")
-    writer = writers.ZarrReaderWriter(
+    writer = writers.ZarrWriter(
         path=tmp_path / "CMU-1.zarr",
+        shape=reader.shape,
         tile_size=reader.tile_shape[::-1],
         dtype=reader.dtype,
     )
@@ -548,8 +555,9 @@ def test_cli_transcode_svs_to_zarr(samples_path, tmp_path):
 def test_copy_from_reader_timeout(samples_path, tmp_path):
     """Check that Writer.copy_from_reader raises IOError when timed out."""
     reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
-    writer = writers.ZarrReaderWriter(
+    writer = writers.ZarrWriter(
         path=tmp_path / "CMU-1-Small-Region.zarr",
+        shape=reader.shape,
         tile_size=reader.tile_shape[::-1],
         dtype=reader.dtype,
     )
@@ -759,6 +767,20 @@ def test_write_ycrcb_j2k_svs_fails(samples_path, tmp_path):
         )
 
 
+def test_missing_imagecodecs_codec(samples_path, tmp_path):
+    """Test writing an SVS file with YCrCb JP2 compression fails."""
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
+    with pytest.raises(ValueError, match="Unknown"):
+        writers.ZarrWriter(
+            path=tmp_path / "test.zarr",
+            shape=reader.shape,
+            pyramid_downsamples=[2, 4],
+            codec="foo",
+            compression_level=70,
+            color_space=ColorSpace.RGB,
+        )
+
+
 def test_cli_convert_timeout(samples_path, tmp_path):
     """Check that CLI convert raises IOError when reading times out."""
     runner = CliRunner()
@@ -856,7 +878,7 @@ def pytest_generate_tests(metafunc):
 
 
 WRITER_EXT_MAPPING = {
-    ".zarr": writers.ZarrReaderWriter,
+    ".zarr": writers.ZarrWriter,
     ".tiff": writers.TIFFWriter,
 }
 
@@ -1088,7 +1110,7 @@ class TestConvertScenarios:
             {
                 "sample_name": "CMU-1-Small-Region-J2K",
                 "reader_cls": readers.DICOMWSIReader,
-                "writer_cls": writers.ZarrReaderWriter,
+                "writer_cls": writers.ZarrWriter,
                 "out_ext": ".zarr",
                 "codec": "blosc",
             },
@@ -1098,7 +1120,7 @@ class TestConvertScenarios:
             {
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
-                "writer_cls": writers.ZarrReaderWriter,
+                "writer_cls": writers.ZarrWriter,
                 "out_ext": ".zarr",
                 "codec": "blosc",
             },
@@ -1128,7 +1150,7 @@ class TestConvertScenarios:
             {
                 "sample_name": "XYC.jp2",
                 "reader_cls": readers.JP2Reader,
-                "writer_cls": writers.ZarrReaderWriter,
+                "writer_cls": writers.ZarrWriter,
                 "out_ext": ".zarr",
                 "codec": "blosc",
             },
@@ -1286,7 +1308,7 @@ class TestReaderScenarios:
             "jpeg_zarr",
             {
                 "sample_name": "CMU-1-Small-Region-JPEG.zarr",
-                "reader_cls": writers.ZarrReaderWriter,
+                "reader_cls": readers.ZarrReader,
                 "thumbnail_kwargs": {
                     "shape": [512, 512],
                     "approx_ok": True,

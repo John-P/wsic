@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from functools import partial
 from math import floor
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -138,7 +138,7 @@ class Writer(ABC):
         self, index: Tuple[Union[int, slice], ...], value: np.ndarray
     ) -> None:
         """Return pixel data at index."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
     def copy_from_reader(
@@ -363,11 +363,10 @@ class JP2Writer(Writer):
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
             downsample_method (str, optional):
-                Downsample method to use when building pyramid levels.
-                Defaults to None. Valid downsample methods are: "cv2",
-                "scipy", "np", None. Not used for JP2Writer, only here
-                for API consistency.
+                Downsample method to use. Defaults to None. Not used for
+                JP2Writer, but included for API consistency.
         """
+        warn_unused(downsample_method, ignore_falsey=True)
         super().copy_from_reader(
             reader=reader,
             num_workers=num_workers,
@@ -528,6 +527,7 @@ class TIFFWriter(Writer):
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
         import tifffile
 
@@ -802,6 +802,7 @@ class SVSWriter(Writer):
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
         import tifffile
 
@@ -997,7 +998,7 @@ class SVSWriter(Writer):
                         )
 
 
-class ZarrReaderWriter(Writer, Reader):
+class ZarrWriter(Writer, Reader):
     """Zarr reader and writer.
 
     Args:
@@ -1038,7 +1039,7 @@ class ZarrReaderWriter(Writer, Reader):
     def __init__(
         self,
         path: Path,
-        shape: Optional[Tuple[int, int]] = None,
+        shape: Tuple[int, int] = None,
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
         color_space: Optional[ColorSpace] = ColorSpace.RGB,  # Currently unused
@@ -1069,13 +1070,7 @@ class ZarrReaderWriter(Writer, Reader):
         self.overwrite = overwrite
         register_codecs()
         self.compressor = self.get_codec(codec, compression_level)
-        if self.path.exists() and not self.path.is_dir():
-            raise FileExistsError(
-                f"{self.path} exists but is not a directory. Zarrs must be directories."
-            )
-
-        self.zarr = None
-        self._init_zarr(create=False)
+        self.zarr = zarr.open(self.path, mode="a")
 
     @property
     def tile_shape(self) -> Optional[Tuple[int, int]]:
@@ -1085,98 +1080,18 @@ class ZarrReaderWriter(Writer, Reader):
     def mosaic_shape(self) -> Optional[Tuple[int, int]]:
         return mosaic_shape(self.shape, self.tile_shape)
 
-    def _init_zarr(self, create: bool = True) -> zarr.Group:
-        """Initialize the zarr.
-
-        If the zarr already exists, it will be opened. Otherwise, it will be
-        created if there is a shape.
-
-        Args:
-            create (bool):
-                Create the zarr if it does not exist.
-
-        Returns:
-            zarr.Group:
-                The zarr.
-        """
-        # Read an existing zarr
-        if self.path.is_dir():
-            self.zarr = zarr.open(
-                self.path,
-                mode="r+" if self.overwrite else "r",
-            )
-        # Create a new zarr group with one array if a shape was given
-        if create:
-            self.zarr = zarr.open_group(
-                zarr.NestedDirectoryStore(self.path),
-                mode="a",
-            )
-            self.zarr[0] = zarr.zeros(
-                shape=self.shape,
-                chunks=self.tile_size,
-                dtype=self.dtype,
-                compressor=self.compressor,
-            )
-        # If it is an array zarr, put it in a group
-        if isinstance(self.zarr, zarr.Array):
-            group = zarr.group()
-            group[0] = self.zarr
-            self.zarr = group
-        # Get the shape and dtype from the zarr if possible
-        if self.zarr is not None:
-            self.shape = self.zarr[0].shape
-            self.dtype = self.zarr[0].dtype
-        # self.zarr may be None if the zarr was not created (no shape given)
-        return self.zarr
-
+    @staticmethod
     def get_codec(
-        self,
         codec: Union[str, Codec],
-        compression_level: int,
+        level: int,
+        **kwargs: Dict[str, Any],
     ) -> Callable[[bytes], bytes]:
         """Get a codec for the given compression method and compression level."""
-        from numcodecs import LZ4, LZMA, Blosc, Zlib, Zstd
+        import numcodecs
 
-        codec = Codec.from_string(codec)
-
-        numcodecs_codecs = {
-            Codec.LZ4: LZ4,
-            Codec.LZMA: LZMA,
-            Codec.BLOSC: Blosc,  # zarr default (lz4)
-            Codec.ZLIB: Zlib,
-            Codec.ZSTD: Zstd,
-        }
-
-        try:
-            import imagecodecs
-
-            imagecodecs_codecs = {
-                Codec.DEFLATE: imagecodecs.numcodecs.Deflate,
-                Codec.WEBP: imagecodecs.numcodecs.Webp,
-                Codec.JPEG: imagecodecs.numcodecs.Jpeg,
-                Codec.JPEGLS: imagecodecs.numcodecs.JpegLs,
-                Codec.JPEG2000: imagecodecs.numcodecs.Jpeg2k,
-                Codec.JPEGXL: imagecodecs.numcodecs.JpegXl,
-                Codec.PNG: imagecodecs.numcodecs.Png,
-                Codec.ZFP: imagecodecs.numcodecs.Zfp,
-            }
-        except ImportError:
-            if self.verbose:
-                print("imagecodecs not installed")
-            imagecodecs_codecs = {}
-
-        if codec in numcodecs_codecs:
-            return numcodecs_codecs[codec](clevel=compression_level)
-
-        if codec in imagecodecs_codecs:
-            return imagecodecs_codecs[codec](level=compression_level)
-
-        if codec == "qoi":
-            from wsic.codecs import QOI
-
-            return QOI()
-
-        raise ValueError(f"Compression {codec} not supported.")
+        config = Codec.from_string(codec).to_numcodecs_config(level=level)
+        config.update(kwargs)
+        return numcodecs.get_codec(config)
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index."""
@@ -1211,17 +1126,14 @@ class ZarrReaderWriter(Writer, Reader):
                 Defaults to None. Valid downsample methods are: "cv2",
                 "scipy", "np", None.
         """
-        super().copy_from_reader(
-            reader=reader,
-            num_workers=num_workers,
-            read_tile_size=read_tile_size,
-            timeout=timeout,
-        )
-
         # Ensure there is a zarr to write to
-        if self.shape is None:
-            self.shape = reader.shape
-        self._init_zarr()
+        self.zarr.create_dataset(
+            name="0",
+            shape=self.shape,
+            dtype=self.dtype,
+            chunks=(*reader.tile_shape, reader.shape[-1]),
+            compressor=self.compressor,
+        )
 
         # Validate and normalise inputs
         lossy_codecs = ["jpeg"]
@@ -1267,12 +1179,12 @@ class ZarrReaderWriter(Writer, Reader):
         """
         if self.ome:
             multiscales = [
-                ngff.Multiscales(
+                ngff.Multiscale(
                     datasets=[
                         ngff.Dataset(
                             path=str(level),
                             coordinateTransformations=[
-                                ngff.CoordinateTransform(
+                                ngff.CoordinateTransformation(
                                     "scale",
                                     [
                                         1,

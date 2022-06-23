@@ -89,7 +89,7 @@ class Creator:
 
 
 @dataclass
-class CoordinateTransform:
+class CoordinateTransformation:
     """Transformation from the zarr to slide coordinate system.
 
     Attributes:
@@ -117,8 +117,8 @@ class Dataset:
     """
 
     path: str = "0"
-    coordinateTransformations: List[CoordinateTransform] = field(  # noqa: N815
-        default_factory=lambda: [CoordinateTransform()]
+    coordinateTransformations: List[CoordinateTransformation] = field(  # noqa: N815
+        default_factory=lambda: [CoordinateTransformation()]
     )
 
 
@@ -143,7 +143,7 @@ class Axis:
 
 
 @dataclass
-class Multiscales:
+class Multiscale:
     """Description of multiple resolutions present.
 
     Attributes:
@@ -278,6 +278,6 @@ class Zattrs:
     """
 
     _creator: Creator = field(default_factory=Creator)
-    multiscales: List[Multiscales] = field(default_factory=lambda: [Multiscales()])
+    multiscales: List[Multiscale] = field(default_factory=lambda: [Multiscale()])
     _ARRAY_DIMENSIONS: List[TCZYX] = field(default_factory=lambda: ["y", "x", "c"])
     omero: Omero = field(default_factory=Omero)
