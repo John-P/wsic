@@ -7,6 +7,7 @@ import warnings
 from abc import ABC, abstractmethod
 from functools import partial
 from math import floor
+from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Union
 
@@ -298,21 +299,25 @@ class JP2Writer(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        color_space: Optional[ColorSpace] = "rgb",  # Currently unused
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,
         codec: Optional[Codec] = "jpeg2000",  # Currently unused
-        compression_level: int = 0,  # Currently unused
+        compression_level: int = 0,
         microns_per_pixel: Optional[Tuple[float, float]] = None,  # Currently unused
-        pyramid_downsamples: Optional[List[int]] = None,  # Unused
+        pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
     ) -> None:
-        if color_space != "rgb":
-            warn_unused(color_space)
         if codec != "jpeg2000":
             warn_unused(codec)
-        warn_unused(compression_level, ignore_falsey=True)
         warn_unused(microns_per_pixel)
-        warn_unused(pyramid_downsamples, ignore_falsey=True)
+        pyramid_downsamples = pyramid_downsamples or []
+        if not np.array_equal(
+            pyramid_downsamples,
+            [2 ** (x + 1) for x in range(len(pyramid_downsamples))],
+        ):
+            raise ValueError(
+                "Pyramid downsamples must be consecutive powers of 2 for JP2."
+            )
         super().__init__(
             path=path,
             shape=shape,
@@ -365,8 +370,20 @@ class JP2Writer(Writer):
         )
         import glymur
 
+        numres = len(self.pyramid_downsamples) + 1 if self.pyramid_downsamples else None
+        psnr = (
+            [self.compression_level]
+            if isinstance(self.compression_level, Number)
+            else self.compression_level
+        )
         jp2 = glymur.Jp2k(
-            self.path, shape=reader.shape, tilesize=self.tile_size, verbose=self.verbose
+            self.path,
+            shape=reader.shape,
+            tilesize=self.tile_size,
+            verbose=self.verbose,
+            numres=numres,
+            psnr=psnr,
+            colorspace=self.color_space,
         )
         reader_tile_iterator = self.reader_tile_iterator(
             reader=reader,
