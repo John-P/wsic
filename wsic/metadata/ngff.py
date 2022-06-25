@@ -101,7 +101,7 @@ class CoordinateTransformation:
     """
 
     type: str = "scale"  # noqa: A003
-    scale: List[float] = field(default_factory=[1.0, 0.5, 0.5])
+    scale: List[float] = field(default_factory=lambda: [1.0, 0.5, 0.5])
 
 
 @dataclass
