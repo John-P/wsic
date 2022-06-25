@@ -45,7 +45,7 @@ class Reader(ABC):
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     @classmethod
     def from_file(cls, path: Path) -> "Reader":
