@@ -18,8 +18,14 @@ requirements = [
 # Requirements which improve performance
 performance_requirements = ["opencv-python"]
 
+# Extra format support
+format_support = [
+    "tifffile",  # For reading, writing and repackaging TIFF files
+    "glymur",  # For reading and writing JP2 files
+]
+
 # Extra codecs support
-codec_requirements = ["glymur", "imagecodecs", "qoi"]
+codec_requirements = ["imagecodecs", "qoi"]
 
 test_requirements = [
     "pytest>=3",
@@ -50,6 +56,7 @@ ux_requirements = ["tqdm"]
 all_extra_requirements = (
     test_requirements
     + docs_requirements
+    + format_support
     + codec_requirements
     + alternative_requirements
     + cli_requirements
@@ -64,6 +71,7 @@ extra_requirements = {
     "cli": cli_requirements,
     "ux": ux_requirements,
     "performance": performance_requirements,
+    "formats": format_support,
     "codecs": codec_requirements,
     "jpeg2000": ["glymur"],
 }

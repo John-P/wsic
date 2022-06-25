@@ -64,7 +64,7 @@ class Reader(ABC):
         with suppress(ImportError):
             import openslide
 
-            with suppress(openslide.OpenSlideUnsupportedFormatError):
+            with suppress(openslide.OpenSlideError):
                 return OpenSlideReader(path)
         if ("tiff",) in file_types:
             return TIFFReader(path)
@@ -848,6 +848,8 @@ class OpenSlideReader(Reader):
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
+        if index is ...:
+            return np.array(self.os_slide.get_thumbnail(self.os_slide.dimensions))
         xs = index[1]
         ys = index[0]
         start_x = xs.start or 0

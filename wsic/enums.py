@@ -40,7 +40,7 @@ class Codec(str, Enum):
     ZLIB = "Zlib"
     ZLIBNG = "ZlibNG"  # ZlibNG, zlib replacement for "next generation" systems
     ZOPFLI = "Zopfli"
-    ZSTD = "Zstandard"  # Zstandard
+    ZSTD = "Zstd"  # Zstandard
     ISO_10918_1 = "JPEG"  # noqa: PIE796
     ISO_15444_1 = "JPEG 2000"  # noqa: PIE796
     ISO_14495_1 = "JPEG-LS"  # noqa: PIE796
@@ -90,8 +90,9 @@ class Codec(str, Enum):
             34712: cls.JPEG2000,
             33003: cls.JPEG2000,  # Leica Aperio YCBC
             33005: cls.JPEG2000,  # Leica Aperio RGB
+            34933: cls.PNG,
             34934: cls.JPEGXR,
-            22610: cls.JPEGXR,
+            22610: cls.JPEGXR,  # NDPI JPEG XR
             34927: cls.WEBP,  # Deprecated
             50001: cls.WEBP,
             34926: cls.ZSTD,  # Deprecated
@@ -194,6 +195,13 @@ class ColorSpace(str, Enum):
             return getattr(cls, condensed_upper)
         except AttributeError:
             raise ValueError(f"Unknown color space: {string}")
+
+    def to_tiff(self) -> "ColorSpace":
+        """Convert to tifffile compatible color space."""
+        # tifffile doesn't recognise YCrCb, so use YCbCr as this works
+        if self == ColorSpace.YCRCB:
+            return ColorSpace.YCBCR
+        return self
 
     @classmethod
     def from_tiff(

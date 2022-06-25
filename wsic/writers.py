@@ -162,9 +162,20 @@ class Writer(ABC):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         if self.path.exists() and not self.overwrite:
             raise FileExistsError(f"{self.path} exists and overwrite is False.")
+
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        raise NotImplementedError()
 
     @staticmethod
     def level_progress(iterable: Iterable, **kwargs) -> Iterator:
@@ -368,6 +379,7 @@ class JP2Writer(Writer):
             timeout=timeout,
             downsample_method=downsample_method,
         )
+        warn_unused(downsample_method, ignore_falsey=True)
         import glymur
 
         numres = len(self.pyramid_downsamples) + 1 if self.pyramid_downsamples else None
@@ -523,8 +535,9 @@ class TIFFWriter(Writer):
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
             downsample_method (str, optional):
-                Downsample method to use. Defaults to None.
-                Valid downsample methods are: "cv2", "scipy", "np", None.
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
@@ -629,6 +642,57 @@ class TIFFWriter(Writer):
                             ),
                             subfiletype=1,  # Subfile type: reduced resolution
                         )
+
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        import tifffile
+
+        microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
+        resolution = (
+            (
+                round(mpp2ppu(microns_per_pixel[0], "cm")),
+                round(mpp2ppu(microns_per_pixel[1], "cm")),
+                "CENTIMETER",
+            )
+            if microns_per_pixel
+            else None
+        )
+
+        reader_mosaic_shape = mosaic_shape(reader.shape[:2], self.tile_size)
+        tile_generator = (
+            reader.get_tile(tile_index, decode=False)
+            for tile_index in np.ndindex(reader_mosaic_shape)
+        )
+        tile_iterator = self.level_progress(
+            tile_generator, total=np.product(reader_mosaic_shape)
+        )
+        metadata = {}
+        if self.ome and self.microns_per_pixel:
+            metadata["PhysicalSizeXUnit"] = "µm"
+            metadata["PhysicalSizeYUnit"] = "µm"
+            metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
+            metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
+
+        # Copy baseline tiles
+        with tifffile.TiffWriter(
+            self.path,
+            bigtiff=True,
+            ome=self.ome,
+        ) as tiff:
+            tiff.write(
+                data=iter(tile_iterator),
+                tile=self.tile_size,
+                shape=reader.shape,
+                dtype=reader.dtype,
+                photometric=reader.color_space.to_tiff(),
+                jpegtables=reader.jpeg_tables,
+                compression=reader.codec.condensed(),
+                metadata=metadata,
+                resolution=resolution,
+            )
 
 
 class SVSWriter(Writer):
@@ -745,6 +809,10 @@ class SVSWriter(Writer):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
@@ -964,7 +1032,7 @@ class ZarrWriter(Writer, Reader):
             Compression codec to use. Defaults to None. Not all
             writers support compression.
         color_space (ColorSpace, optional):
-            Color space. Defaults to "rgb".
+            Color space. Defaults to RGB.
         compression_level (int, optional):
             Compression level to use. Defaults to 0 (lossless /
             maximum).
@@ -991,7 +1059,7 @@ class ZarrWriter(Writer, Reader):
         shape: Tuple[int, int] = None,
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        color_space: Optional[ColorSpace] = "rgb",  # Currently unused
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,  # Currently unused
         codec: Union[str, Codec] = Codec.BLOSC,
         compression_level: int = 9,
         microns_per_pixel: Tuple[float, float] = None,  # Currently unused
@@ -1001,8 +1069,6 @@ class ZarrWriter(Writer, Reader):
         *,
         ome: bool = False,
     ) -> None:
-        if color_space != "rgb":
-            warn_unused(color_space)
         warn_unused(microns_per_pixel)
         super().__init__(
             path=path,
@@ -1073,8 +1139,9 @@ class ZarrWriter(Writer, Reader):
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
             downsample_method (str, optional):
-                Downsample method to use. Defaults to None.
-                Valid downsample methods are: "cv2", "scipy", "np", None.
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         # Ensure there is a zarr to write to
         self.zarr.create_dataset(
