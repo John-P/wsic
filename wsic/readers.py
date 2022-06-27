@@ -798,8 +798,8 @@ class OpenSlideReader(Reader):
         """
         try:
             return (
-                self.os_slide.properties["openslide.mpp-x"],
-                self.os_slide.properties["openslide.mpp-y"],
+                float(self.os_slide.properties["openslide.mpp-x"]),
+                float(self.os_slide.properties["openslide.mpp-y"]),
             )
         except KeyError:
             warnings.warn("OpenSlide could not find MPP.")
