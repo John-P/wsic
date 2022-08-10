@@ -7,7 +7,7 @@ Welcome to wsic's documentation!
 
    readme
    installation
-   usage
+   how_do_i
    modules
    contributing
    authors
@@ -17,4 +17,4 @@ Indices and tables
 ==================
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`
+* :ref:`search`a
