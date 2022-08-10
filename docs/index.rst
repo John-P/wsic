@@ -5,7 +5,6 @@ Welcome to wsic's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   readme
    installation
    how_do_i
    modules
