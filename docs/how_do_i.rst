@@ -77,7 +77,7 @@ JPEG      'Quality' (0-100)
 JPEG XL   'Effort' / Speed
 JPEG-LS   Max MAE
 JPEG2000  PSNR (db)
-PNG       'Effory' / Speed
+PNG       'Effort' / Speed
 Zstd      'Effort' / Speed
 ========  =================
 
@@ -95,21 +95,32 @@ given.::
     wsic convert -i <input> -o <output> -d 2 -d 4 -d 8
 
 
-...speed up convertion?
+...speed up conversion?
 -----------------------
 
-There are a few different ways to speed up convertion: increasing the read tile size, increasing the number of workers.
+There are a few different ways to speed up conversion: increasing the
+read tile size, increasing the number of workers, or using repackaing /
+transcoding instead of conversion by copying decoded pixel data.
 
 
 Read Tile Size
 ^^^^^^^^^^^^^^
 
-One way to speed up convertion is to increase the size of the area read
-at each step of the convertion. This can be done from the CLI with the
+One way to speed up conversion is to increase the size of the area read
+at each step of the conversion. This can be done from the CLI with the
 `--read-size` or `-rt` option. The default read size is to use the tile
 size of the input file or 4096x4096, whichever is lower.::
 
     wsic convert -i <input> -o <output> --read-size 512 512
+
+
+Note that you may also need to increase the tile read timeout for large
+tile read sizes using the `--timeout` or `-to` option. There is a
+default timeout of 10 seconds to prevent the CLI tool from haning
+indefinately. Setting this to a negative value will lead to an unbounded
+read time allowed.::
+
+    wsic convert -i <input> -o <output> --read-size 512 512 -to 30
 
 
 Number of Workers
@@ -123,6 +134,21 @@ number of (virtual) CPUs available.::
     wsic convert -i <input> -o <output> --workers 4
 
 
+Repackaging
+^^^^^^^^^^^^
+
+Repackaging is a much faster way to convert the WSI from one format to
+another. However, it is more restrictive. Only certain formats can be
+repacked, and the compression codec must be preserved. This is because
+repackaing is takeing the already encoded tile data and rearranging
+those encoded tiles.::
+
+    wsic transcode -i <input> -o <output> --repackage
+
+This is currently supported with a source image in TIFF, Zarr, and DICOM
+format and with an output format of TIFF or Zarr (NGFF).
+
+
 ...write an OME-TIFF
 --------------------
 
@@ -132,8 +158,8 @@ the `--ome` flag with an `.ome.tiff` output path.::
     wsic convert -i <input> -o <output.ome.tiff> --ome
 
 
-...write and NGFF Zarr
-----------------------
+...write an NGFF Zarr
+---------------------
 
 To write a Zarr which follows the NGFF spec (v0.4), use the `--ome` flag
 with a `.zarr`` output file path.::
