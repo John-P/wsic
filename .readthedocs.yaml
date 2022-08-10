@@ -10,9 +10,11 @@ build:
     - openslide-tools
     - libopenjp2-7-dev
 python:
-  version: "3.8"
   install:
     - requirements: requirements.txt
     - requirements: docs/requirements.txt
 sphinx:
   configuration: docs/conf.py
+formats:
+  - pdf
+  - epub
