@@ -6,4 +6,4 @@ build:
     python: "3.8"
 python:
   install:
-    - requirements: docs/requirements.txt
+    - requirements: requirements.txt
