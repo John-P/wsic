@@ -180,6 +180,7 @@ def main(ctx):
     help="The writer to use. Overrides writer detected by output file extension.",
     type=click.Choice(
         [
+            "auto",
             "jp2",
             "svs",
             "tiff",
