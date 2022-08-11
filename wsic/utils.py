@@ -407,7 +407,7 @@ def mean_pool(image: np.ndarray, pool_size: int) -> np.ndarray:
 
     .. math::
         \left\lfloor
-        \frac{\texttt{image.shape}}{\texttt{pool_size}}
+        \frac{\texttt{image.shape}}{\texttt{pool\_size}}
         \right\rfloor
 
     Args:
