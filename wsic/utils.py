@@ -441,10 +441,11 @@ def resize_array(
 
     Tries to use the fastest method available by trying several
     libraries in turn. The order of preference is:
-        1. `cv2.resize`
-        2. 'PIL.Image.resize'
-        3. `scipy.ndimage.zoom`
-        4. Nearest neighbour subsampling
+
+    1. `cv2.resize`
+    2. 'PIL.Image.resize'
+    3. `scipy.ndimage.zoom`
+    4. Nearest neighbour subsampling
 
     Args:
         array (np.ndarray):
