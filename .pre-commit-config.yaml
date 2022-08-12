@@ -1,4 +1,13 @@
 repos:
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.14
+    hooks:
+    - id: mdformat
+      # Optionally add plugins
+      additional_dependencies:
+      - mdformat-gfm
+      - mdformat-black
+      - mdformat-shfmt
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.3.0
     hooks:
