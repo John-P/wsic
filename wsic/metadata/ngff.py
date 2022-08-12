@@ -77,7 +77,7 @@ TCZYX = Literal["t", "c", "z", "y", "x"]
 class Creator:
     """Record the creator (wsic) information.
 
-    Attributes:
+    Parameters:
         name (str):
             The name of the creator.
         version (str):
@@ -92,7 +92,7 @@ class Creator:
 class CoordinateTransformation:
     """Transformation from the zarr to slide coordinate system.
 
-    Attributes:
+    Parameters:
         type (str):
             The type of coordinate transform. E.g. "scale".
         scale (List[float]):
@@ -108,7 +108,7 @@ class CoordinateTransformation:
 class Dataset:
     """Description of a single resolution.
 
-    Attributes:
+    Parameters:
         path (str):
             Path to the dataset. This will usually be a string of an
             integer e.g. "0".
@@ -126,7 +126,7 @@ class Dataset:
 class Axis:
     """Description of an axis including type and units.
 
-    Attributes:
+    Parameters:
         name (str):
             The name of the axis. Must be one of: "t", "c", "z", "y",
             "x".
@@ -146,7 +146,7 @@ class Axis:
 class Multiscale:
     """Description of multiple resolutions present.
 
-    Attributes:
+    Parameters:
         axes (List[Axis]):
             The axes of the multiscales.
         datasets (List[Dataset]):
@@ -170,7 +170,7 @@ class Multiscale:
 class Window:
     """The range of values within a channel.
 
-    Attributes:
+    Parameters:
         end (int):
             The end of the window.
         max (int):
@@ -191,7 +191,7 @@ class Window:
 class Channel:
     """Description of a single channel.
 
-    Attributes:
+    Parameters:
         active (bool):
             Whether the channel is active by default.
         color (str):
@@ -218,7 +218,7 @@ class Channel:
 class RDefs:
     """Defaults for axes and colour model.
 
-    Attributes:
+    Parameters:
         defaultT (int):
             Default timepoint.
         defaultZ (int):
@@ -236,7 +236,7 @@ class RDefs:
 class Omero:
     """Display information e.g. colour channel information.
 
-    Attributes:
+    Parameters:
         name (str):
             The display name.
         id (int):
@@ -266,7 +266,7 @@ class Omero:
 class Zattrs:
     """Root metadata.
 
-    Attributes:
+    Parameters:
         _creator (Creator):
             Information about the creator.
         multiscales (Multiscales):

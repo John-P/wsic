@@ -1,6 +1,14 @@
 wsic package
 ============
 
+Subpackages
+-----------
+
+.. toctree::
+    :maxdepth: 4
+
+    wsic.metadata
+
 Submodules
 ----------
 
@@ -20,10 +28,26 @@ wsic.codecs module
     :undoc-members:
     :show-inheritance:
 
+wsic.enums module
+-----------------
+
+.. automodule:: wsic.enums
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 wsic.magic module
 -----------------
 
 .. automodule:: wsic.magic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+wsic.multiprocessing module
+---------------------------
+
+.. automodule:: wsic.multiprocessing
     :members:
     :undoc-members:
     :show-inheritance:

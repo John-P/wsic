@@ -421,19 +421,19 @@ class TIFFWriter(Writer):
     same size and must be written in the order left-to-right, then
     top-to-bottom (row-by-row). Tiles cannot be skipped.
 
-    TIFF 6.0 Specification Notes
-    ----------------------------
+    Notes:
+        The following notes are from the TIFF 6.0 Specification.
 
-    - TileWidth and TileLength (height) must each be a multiple of 16.
-    - "Offsets [bytes from the start of file to each tile blob and
-      therefore the tile ordering when writing] are ordered
-      left-to-right and top-to-bottom."
-    - "For PlanarConfiguration = 2, the offsets for the first component
-      plane are stored first, followed by all the offsets for the second
-      component plane, and so on."
+        - TileWidth and TileLength (height) must each be a multiple of 16.
+        - "Offsets [bytes from the start of file to each tile blob and
+          therefore the tile ordering when writing] are ordered
+          left-to-right and top-to-bottom."
+        - "For PlanarConfiguration = 2, the offsets for the first
+          component plane are stored first, followed by all the offsets
+          for the second component plane, and so on."
 
-      Full specification at:
-      https://web.archive.org/web/20210108174645/https://www.adobe.io/content/dam/udp/en/open/standards/tiff/TIFF6.pdf
+        The full specification is available at:
+        https://web.archive.org/web/20210108174645/https://www.adobe.io/content/dam/udp/en/open/standards/tiff/TIFF6.pdf
 
 
     Args:
