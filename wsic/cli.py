@@ -48,6 +48,31 @@ ext2writer = {
     ".svs": wsic.writers.SVSWriter,
 }
 
+writers = {
+    "jp2": wsic.writers.JP2Writer,
+    "tiff": wsic.writers.TIFFWriter,
+    "zarr": wsic.writers.ZarrWriter,
+    "svs": wsic.writers.SVSWriter,
+}
+
+
+def get_writer_class(out_path: Path, writer: str) -> wsic.writers.Writer:
+    """Get writer class for given extension and writer.
+
+    Args:
+        out_path (Path):
+            Output path.
+        writer (str):
+            Writer.
+
+    Returns:
+        wsic.writers.Writer:
+            Writer class.
+    """
+    if writer == "auto":
+        return ext2writer[out_path.suffix]
+    return writers[writer]
+
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(wsic.__version__)
@@ -96,7 +121,18 @@ def main(ctx):
     "--compression",
     help="The compression to use.",
     type=click.Choice(
-        ["deflate", "webp", "jpeg", "jpeg2000", "blosc", "aperio_jp2000_ycbc"]
+        [
+            "blosc",
+            "deflate",
+            "jpeg xl",
+            "jpeg-ls",
+            "jpeg",
+            "jpeg2000",
+            "lzw",
+            "png",
+            "webp",
+            "zstd",
+        ]
     ),
     default="deflate",
 )
@@ -138,6 +174,21 @@ def main(ctx):
     type=float,
     default=10,
 )
+@click.option(
+    "-W",
+    "--writer",
+    help="The writer to use. Overrides writer detected by output file extension.",
+    type=click.Choice(
+        [
+            "auto",
+            "jp2",
+            "svs",
+            "tiff",
+            "zarr",
+        ]
+    ),
+    default="auto",
+)
 def convert(
     in_path: str,
     out_path: str,
@@ -151,17 +202,13 @@ def convert(
     ome: bool,
     overwrite: bool,
     timeout: float,
+    writer: str,
 ):
     """Convert a WSI."""
     in_path = Path(in_path)
     out_path = Path(out_path)
     reader = wsic.readers.Reader.from_file(in_path)
-    try:
-        writer_cls = ext2writer[out_path.suffix]
-    except KeyError:
-        raise click.BadParameter(
-            f"Unknown file extension {out_path.suffix}", param_hint="out_path"
-        )
+    writer_cls = get_writer_class(out_path, writer)
     writer = writer_cls(
         out_path,
         shape=reader.shape,
