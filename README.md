@@ -23,6 +23,8 @@ formats:
 ```bash
 Usage: wsic convert [OPTIONS]
 
+  Convert a WSI.
+
 Options:
   -i, --in-path PATH              Path to WSI to read from.
   -o, --out-path PATH             The path to output to.
@@ -31,7 +33,7 @@ Options:
   -rt, --read-tile-size <INTEGER INTEGER>...
                                   The size of the tiles to read.
   -w, --workers INTEGER           The number of workers to use.
-  -c, --compression [deflate|webp|jpeg|jpeg2000]
+  -c, --compression [blosc|deflate|jpeg xl|jpeg-ls|jpeg|jpeg2000|lzw|png|webp|zstd]
                                   The compression to use.
   -cl, --compression-level INTEGER
                                   The compression level to use.
@@ -40,6 +42,10 @@ Options:
                                   The microns per pixel to use.
   -ome, --ome / --no-ome          Save with OME-TIFF metadata (OME-XML).
   --overwrite / --no-overwrite    Whether to overwrite the output file.
+  -to, --timeout FLOAT            Timeout in seconds for reading a tile.
+  -W, --writer [auto|jp2|svs|tiff|zarr]
+                                  The writer to use. Overrides writer detected
+                                  by output file extension.
   -h, --help                      Show this message and exit.
 ```
 
