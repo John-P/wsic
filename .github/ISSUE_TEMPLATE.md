@@ -1,6 +1,6 @@
-* wsic version:
-* Python version:
-* Operating System:
+- wsic version:
+- Python version:
+- Operating System:
 
 ### Description
 

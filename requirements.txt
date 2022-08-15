@@ -12,7 +12,6 @@ pip==21.1
 pytest==6.2.4
 pytest-cov>=3.0.0
 scipy>=1.7.3
-Sphinx==1.8.5
 tifffile>=2022.4.28
 tox==3.14.0
 twine==1.14.0
