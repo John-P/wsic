@@ -45,7 +45,7 @@ class Reader(ABC):
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     @classmethod
     def from_file(cls, path: Path) -> "Reader":
@@ -493,12 +493,13 @@ class MultiProcessTileIterator:
         if self.read_pbar is not None:
             self.read_pbar.close()
         # Join processes in parallel threads
-        with ThreadPoolExecutor(len(self.processes)) as executor:
-            executor.map(lambda p: p.join(1), self.processes)
-        # Terminate any child processes if still alive
-        for process in self.processes:
-            if process.is_alive():
-                process.terminate()
+        if self.processes:
+            with ThreadPoolExecutor(len(self.processes)) as executor:
+                executor.map(lambda p: p.join(1), self.processes)
+            # Terminate any child processes if still alive
+            for process in self.processes:
+                if process.is_alive():
+                    process.terminate()
 
     def __del__(self):
         """Destructor."""
