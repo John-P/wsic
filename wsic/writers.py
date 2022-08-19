@@ -320,7 +320,6 @@ class JP2Writer(Writer):
     ) -> None:
         if codec != "jpeg2000":
             warn_unused(codec)
-        warn_unused(microns_per_pixel)
         pyramid_downsamples = pyramid_downsamples or []
         if not np.array_equal(
             pyramid_downsamples,
@@ -379,7 +378,6 @@ class JP2Writer(Writer):
             timeout=timeout,
             downsample_method=downsample_method,
         )
-        warn_unused(downsample_method, ignore_falsey=True)
         import glymur
 
         numres = len(self.pyramid_downsamples) + 1 if self.pyramid_downsamples else None
@@ -387,6 +385,11 @@ class JP2Writer(Writer):
             [self.compression_level]
             if isinstance(self.compression_level, Number)
             else self.compression_level
+        )
+        capture_resolution = (
+            tuple(mpp2ppu(x, "cm") for x in self.microns_per_pixel)
+            if self.microns_per_pixel
+            else None
         )
         jp2 = glymur.Jp2k(
             self.path,
@@ -396,6 +399,7 @@ class JP2Writer(Writer):
             numres=numres,
             psnr=psnr,
             colorspace=self.color_space,
+            capture_resolution=capture_resolution,
         )
         reader_tile_iterator = self.reader_tile_iterator(
             reader=reader,

@@ -767,6 +767,22 @@ def test_write_ycrcb_j2k_svs_fails(samples_path, tmp_path):
         )
 
 
+def test_write_jp2_resolution(samples_path, tmp_path):
+    """Test writing a JP2 with capture resolution metadata."""
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
+    out_path = tmp_path / "CMU-1-Small-Region.jp2"
+    writer = writers.JP2Writer(
+        path=out_path,
+        shape=reader.shape,
+        pyramid_downsamples=[2, 4, 8],
+        compression_level=70,
+        microns_per_pixel=(0.5, 0.5),
+    )
+    writer.copy_from_reader(reader=reader)
+    jp2_reader = readers.JP2Reader(out_path)
+    assert jp2_reader.microns_per_pixel == (0.5, 0.5)
+
+
 def test_missing_imagecodecs_codec(samples_path, tmp_path):
     """Test writing an SVS file with YCrCb JP2 compression fails."""
     reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
