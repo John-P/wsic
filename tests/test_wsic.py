@@ -153,7 +153,7 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
     # Sanity check the import fails
     with pytest.raises(ImportError):
 
-        import cv2  # noqa # skipcq
+        import cv2  # noqa  # skipcq
 
     # Try to make a pyramid TIFF
     reader = readers.Reader.from_file(samples_path / "XYC.jp2")
@@ -281,7 +281,7 @@ def test_jp2_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[:512, :512] == output[0][:512, :512])
@@ -304,7 +304,7 @@ def test_jp2_to_pyramid_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[:512, :512] == output[0][:512, :512])
@@ -369,7 +369,7 @@ def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[...] == output[0][...])
@@ -403,7 +403,7 @@ def test_transcode_svs_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -442,7 +442,7 @@ def test_transcode_svs_to_pyramid_ome_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -468,7 +468,7 @@ def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -498,7 +498,7 @@ def test_transcode_j2k_dicom_wsi_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -602,7 +602,7 @@ def test_thumbnail_pil(samples_path, monkeypatch):
 
     # Sanity check that cv2 is not installed
     with pytest.raises(ImportError):
-        import cv2  # noqa: F401 # skipcq
+        import cv2  # noqa #skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
@@ -1035,8 +1035,8 @@ class TestTranscodeScenarios:
         """
         import inspect
 
-        from matplotlib import pyplot as plt
-        from matplotlib.widgets import Button
+        from matplotlib import pyplot as plt  # type: ignore
+        from matplotlib.widgets import Button  # type: ignore
 
         current_frame = inspect.currentframe()
         class_name = self.__class__.__name__
