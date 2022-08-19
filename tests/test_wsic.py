@@ -153,7 +153,7 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
     # Sanity check the import fails
     with pytest.raises(ImportError):
 
-        import cv2  # noqa  # skipcq
+        import cv2  # noqa # skipcq
 
     # Try to make a pyramid TIFF
     reader = readers.Reader.from_file(samples_path / "XYC.jp2")
@@ -602,7 +602,7 @@ def test_thumbnail_pil(samples_path, monkeypatch):
 
     # Sanity check that cv2 is not installed
     with pytest.raises(ImportError):
-        import cv2  # noqa #skipcq
+        import cv2  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
@@ -628,9 +628,9 @@ def test_thumbnail_no_cv2_no_pil(samples_path, monkeypatch):
 
     # Sanity check that cv2 and Pillow are not installed
     with pytest.raises(ImportError):
-        import cv2  # noqa: F401 # skipcq
+        import cv2  # noqa # skipcq
     with pytest.raises(ImportError):
-        import PIL  # noqa: F401 # skipcq
+        import PIL  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
@@ -653,11 +653,11 @@ def test_thumbnail_no_cv2_no_pil_no_scipy(samples_path, monkeypatch):
 
     # Sanity check that modules are not installed
     with pytest.raises(ImportError):
-        import cv2  # noqa: F401 # skipcq
+        import cv2  # noqa # skipcq
     with pytest.raises(ImportError):
-        import PIL  # noqa: F401 # skipcq
+        import PIL  # noqa # skipcq
     with pytest.raises(ImportError):
-        import scipy  # noqa: F401 # skipcq
+        import scipy  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     with pytest.warns(UserWarning, match="slower"):
