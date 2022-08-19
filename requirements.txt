@@ -15,7 +15,7 @@ scipy>=1.7.3
 tifffile>=2022.4.28
 tox==3.14.0
 twine==1.14.0
-watchdog==0.9.0
+watchdog==2.1.9
 wheel==0.33.6
 wsidicom>=0.2.0
 zarr==2.11.1
