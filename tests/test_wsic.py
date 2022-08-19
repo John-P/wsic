@@ -4,6 +4,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict
 
+import cv2 as _cv2  # Avoid adding "cv2" to sys.modules for fallback tests
 import numpy as np
 import pytest
 import tifffile
@@ -146,8 +147,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
     This will use SciPy. This method has a high error on synthetic data,
     e.g. a test grid image. It performns better on natural images.
     """
-    import cv2 as _cv2
-
     # Make cv2 unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
 
@@ -200,8 +199,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
 
 def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
     """Test pyramid generation when neither cv2 or scipy are installed."""
-    import cv2 as _cv2
-
     # Make cv2 and scipy unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "scipy", None)
@@ -586,11 +583,9 @@ def test_block_downsample_shape():
 def test_thumbnail(samples_path):
     """Test generating a thumbnail from a reader."""
     # Compare with cv2 downsampling
-    import cv2  # noqa # skipcq
-
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
-    cv2_thumbnail = cv2.resize(reader[...], (64, 64), interpolation=cv2.INTER_AREA)
+    cv2_thumbnail = _cv2.resize(reader[...], (64, 64), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (64, 64, 3)
     assert np.allclose(thumbnail, cv2_thumbnail, atol=1)
 
@@ -627,8 +622,6 @@ def test_thumbnail_no_cv2_no_pil(samples_path, monkeypatch):
 
     This should fall back to scipy.ndimage.zoom.
     """
-    import cv2 as _cv2
-
     # Monkeypatch cv2 and Pillow to not be installed
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "PIL", None)
@@ -653,8 +646,6 @@ def test_thumbnail_no_cv2_no_pil_no_scipy(samples_path, monkeypatch):
 
     This should be the raw numpy fallaback.
     """
-    import cv2 as _cv2
-
     # Monkeypatch cv2 and Pillow to not be installed
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "PIL", None)
@@ -682,11 +673,9 @@ def test_thumbnail_non_power_two(samples_path):
     Outputs a non power of two sized thumbnail.
     """
     # Compare with cv2 downsampling
-    import cv2  # noqa # skipcq
-
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(59, 59))
-    cv2_thumbnail = cv2.resize(reader[...], (59, 59), interpolation=cv2.INTER_AREA)
+    cv2_thumbnail = _cv2.resize(reader[...], (59, 59), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (59, 59, 3)
     assert np.mean(thumbnail) == pytest.approx(np.mean(cv2_thumbnail), abs=0.5)
 
