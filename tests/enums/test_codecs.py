@@ -22,7 +22,6 @@ def _register_codecs():
 
     # Teardown
     numcodecs.registry.codec_registry = codec_registry_backup
-    return
 
 
 def test_condensed():
