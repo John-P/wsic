@@ -1,4 +1,6 @@
 """Custom codecs for wsic."""
+
+import contextlib
 import warnings
 from typing import IO
 
@@ -53,12 +55,10 @@ def register_codecs() -> None:
     import numcodecs
 
     # Register wsci codecs
-    try:
+    with contextlib.suppress(ImportError):
         import qoi  # noqa: F401
 
         numcodecs.register_codec(QOI)
-    except ImportError:
-        pass
 
     try:
         from imagecodecs.numcodecs import register_codecs as register_imagecodecs_codecs
