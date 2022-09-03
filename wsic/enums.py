@@ -73,7 +73,7 @@ class Codec(str, Enum):
             Codec.LZW: {"id": "imagecodecs_lzw"},
             Codec.PACKBITS: {"id": "imagecodecs_packbits"},
             Codec.PNG: {"id": "imagecodecs_png"},
-            Codec.QOI: {"id": "wsic_qoi"},
+            Codec.QOI: {"id": "imagecodecs_qoi"},
             Codec.SNAPPY: {"id": "imagecodecs_snappy"},
             Codec.WEBP: {"id": "imagecodecs_webp"},
             Codec.ZFP: {"id": "imagecodecs_zfp"},
@@ -140,8 +140,6 @@ class Codec(str, Enum):
             return compression_codec_mapping[compression]
         raise ValueError(f"Unknown TIFF compression: {compression}")
 
-
-WSIC_CODECS = (Codec.QOI,)
 
 NUMCODECS_CODECS = (
     Codec.BLOSC,
