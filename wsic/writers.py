@@ -133,6 +133,7 @@ class Writer(ABC):
             num_workers=num_workers,
             verbose=self.verbose,
             timeout=timeout,
+            match_tile_sizes=not isinstance(self, ZarrWriter),
         )
 
     def __setitem__(
@@ -1162,6 +1163,7 @@ class ZarrWriter(Writer, Reader):
             self.codec in optionally_lossy_codecs and self.compression_level > 0
         )
         read_tile_size = read_tile_size or self.tile_shape[:2][::-1]
+        yield_tile_size = self.tile_shape[:2][::-1]
         write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
         if lossy and not write_multiple_of_read:
             raise ValueError(
@@ -1169,25 +1171,30 @@ class ZarrWriter(Writer, Reader):
                 "multiple of the read tile size."
             )
 
-        # Create a reader tile iterator
-        reader_tile_iterator = self.reader_tile_iterator(
-            reader,
-            read_tile_size=read_tile_size,
-            yield_tile_size=self.tile_shape[:2][::-1],
-            num_workers=num_workers,
-            timeout=timeout,
-        )
-        reader_tile_iterator = self.level_progress(reader_tile_iterator)
+        with ZarrIntermediate(
+            None, shape=reader.shape, zero_after_read=False
+        ) as intermediate:
+            tile_sizes_match = read_tile_size == yield_tile_size
+            # Create a reader tile iterator
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader,
+                read_tile_size=read_tile_size,
+                yield_tile_size=yield_tile_size,
+                num_workers=num_workers,
+                timeout=timeout,
+                intermediate=None if tile_sizes_match else intermediate,
+            )
+            reader_tile_iterator = self.level_progress(reader_tile_iterator)
 
-        # Write the reader tile iterator to the writer
-        tiles_shape = mosaic_shape(
-            reader.shape,
-            read_tile_size[::-1],
-        )
-        tiles_index = np.ndindex(tiles_shape)
-        for ji, tile in zip(tiles_index, reader_tile_iterator):
-            level_0 = self.zarr[0]
-            level_0[tile_slices(ji, read_tile_size)] = tile
+            # Write the reader tile iterator to the writer
+            tiles_shape = mosaic_shape(
+                reader.shape,
+                yield_tile_size[::-1],
+            )
+            tiles_index = np.ndindex(tiles_shape)
+            for ji, tile in zip(tiles_index, reader_tile_iterator):
+                level_0 = self.zarr[0]
+                level_0[tile_slices(ji, yield_tile_size)] = tile
 
         self._build_pyramid(downsample_method)
         self._write_ome_metadata()
@@ -1488,7 +1495,7 @@ class ZarrIntermediate(Writer, Reader):
 
     def __init__(
         self,
-        path: PathLike,
+        path: Optional[PathLike],
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,

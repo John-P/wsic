@@ -250,6 +250,7 @@ class MultiProcessTileIterator:
         intermediate=None,
         verbose: bool = False,
         timeout: float = 10.0,
+        match_tile_sizes: bool = True,
     ) -> None:
         self.reader = reader
         self.shape = reader.shape
@@ -290,7 +291,8 @@ class MultiProcessTileIterator:
             self.read_pbar = None
 
         # Validation and error handling
-        if self.read_tile_size != self.yield_tile_size and not self.intermediate:
+        read_matches_yield = self.read_tile_size == self.yield_tile_size
+        if match_tile_sizes and not read_matches_yield and not self.intermediate:
             raise ValueError(
                 f"read_tile_size ({self.read_tile_size})"
                 f" != yield_tile_size ({self.yield_tile_size})"

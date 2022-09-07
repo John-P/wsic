@@ -280,11 +280,15 @@ def test_jp2_to_zarr(samples_path, tmp_path):
             path=tmp_path / "XYC.zarr",
             shape=reader.shape,
         )
-        writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
+        writer.copy_from_reader(
+            reader=reader,
+            num_workers=3,
+            read_tile_size=(512, 512),
+        )
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[:512, :512] == output[0][:512, :512])
