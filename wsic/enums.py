@@ -10,7 +10,7 @@ class Codec(str, Enum):
     AVIF = "AVIF"  # AV1 Image Format (HEIF)
     BLOSC = "Blosc"  # Block based meta-compression algorithm
     BLOSC2 = "Blosc2"  # Block based meta-compression version 2
-    BROTLIT = "Brotli"  # Google Brotli
+    BROTLI = "Brotli"  # Google Brotli
     BZ2 = "BZ2"  # Bzip2
     DEFLATE = "DEFLATE"
     DELTA = "Delta"  # Delta coding
@@ -49,22 +49,37 @@ class Codec(str, Enum):
         """Convert to a string without spaces or dashes."""
         return self.value.replace(" ", "").replace("-", "")
 
-    def to_numcodecs_config(self, level: Number = None) -> Dict[str, Any]:
+    def to_numcodecs_config(self, level: Optional[Number] = None) -> Dict[str, Any]:
         """Convert to numcodecs Codec ID string."""
-        if self in WSIC_CODECS:
-            return {"id": "imagecodecs_" + self.condensed().lower()}
-        if self in NUMCODECS_CODECS:
-            return {"id": self.condensed().lower(), "clevel": level}
-        if self == Codec.JPEG2000:
-            return {"id": "imagecodecs_jpeg2k", "codecformat": "jp2", "level": level}
-        if self == Codec.J2K:
-            return {"id": "imagecodecs_jpeg2k", "codecformat": "j2k", "level": level}
-        if self in IMAGECODECS_CODECS:
-            return {"id": "imagecodecs_" + self.condensed().lower(), "level": level}
-        result = {"id": self.condensed().lower()}
-        if level is not None:
-            result["level"] = level
-        return result
+        configs = {
+            Codec.BLOSC: {"id": "blosc"},
+            Codec.BLOSC2: {"id": "imagecodecs_blosc2"},
+            Codec.BROTLI: {"id": "imagecodecs_brotli"},
+            Codec.DEFLATE: {"id": "imagecodecs_deflate"},
+            Codec.GIF: {"id": "imagecodecs_gif"},
+            Codec.J2K: {"id": "imagecodecs_jpeg2k", "codecformat": "j2k"},
+            Codec.JPEG: {"id": "imagecodecs_jpeg"},
+            Codec.JPEG2000: {"id": "imagecodecs_jpeg2k", "codecformat": "jp2"},
+            Codec.JPEGLS: {"id": "imagecodecs_jpegls"},
+            Codec.JPEGXL: {"id": "imagecodecs_jpegxl"},
+            Codec.JPEGXR: {"id": "imagecodecs_jpegxr"},
+            Codec.LZ4: {"id": "lz4"},
+            Codec.LZW: {"id": "imagecodecs_lzw"},
+            Codec.PNG: {"id": "imagecodecs_png"},
+            Codec.QOI: {"codec": "wsic_qoi"},
+            Codec.WEBP: {"id": "imagecodecs_webp"},
+            Codec.ZFP: {"id": "imagecodecs_zfp"},
+            Codec.ZSTD: {"id": "zstd"},
+        }
+
+        try:
+            config = configs[self]
+        except KeyError as e:
+            raise ValueError(f"{self} is not a supported codec") from e
+        if level is not None and self not in FIXED_LEVEL_CODECS:
+            level_key = "clevel" if self in NUMCODECS_CODECS else "level"
+            config[level_key] = level
+        return config
 
     @classmethod
     def from_string(cls, string: str) -> "Codec":
@@ -109,7 +124,6 @@ WSIC_CODECS = (Codec.QOI,)
 
 NUMCODECS_CODECS = (
     Codec.BLOSC,
-    Codec.DEFLATE,
     Codec.DELTA,
     Codec.GZIP,
     Codec.LZ4,
@@ -122,7 +136,8 @@ NUMCODECS_CODECS = (
 
 IMAGECODECS_CODECS = (
     Codec.AVIF,
-    Codec.BROTLIT,
+    Codec.BLOSC2,
+    Codec.BROTLI,
     Codec.DEFLATE,
     Codec.DELTA,
     Codec.GIF,
@@ -144,7 +159,10 @@ IMAGECODECS_CODECS = (
     Codec.ZLIB,
     Codec.ZLIBNG,
     Codec.ZOPFLI,
+    Codec.LZW,
 )
+
+FIXED_LEVEL_CODECS = (Codec.LZ4, Codec.LZW, Codec.ZSTD)
 
 
 class ColorSpace(str, Enum):
@@ -255,3 +273,15 @@ class ColorSpace(str, Enum):
         if photometric in photometric_color_space_mapping:
             return photometric_color_space_mapping[photometric]
         raise ValueError(f"Unsupported DICOM photometric interpretation: {photometric}")
+
+    def to_jp2(self) -> "ColorSpace":
+        """Convert to JPEG2000 color space."""
+        if self == ColorSpace.RGB:
+            return 16
+        if self == ColorSpace.CMYK:
+            return 12
+        if self == ColorSpace.GRAYSCALE:
+            return 17
+        if self == ColorSpace.YCBCR:
+            return 18
+        raise ValueError(f"Color space `{self}` has no known JP2 equivalent.")
