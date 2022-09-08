@@ -180,12 +180,7 @@ IMAGECODECS_CODECS = (
     Codec.LZW,
 )
 
-FIXED_LEVEL_CODECS = (
-    Codec.DELTA,
-    Codec.LZ4,
-    Codec.LZW,
-    Codec.ZSTD,
-)
+FIXED_LEVEL_CODECS = (Codec.LZ4, Codec.LZW, Codec.ZSTD)
 
 
 class ColorSpace(str, Enum):
