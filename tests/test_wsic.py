@@ -4,6 +4,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict
 
+import cv2 as _cv2  # Avoid adding "cv2" to sys.modules for fallback tests
 import numpy as np
 import pytest
 import tifffile
@@ -146,8 +147,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
     This will use SciPy. This method has a high error on synthetic data,
     e.g. a test grid image. It performns better on natural images.
     """
-    import cv2 as _cv2
-
     # Make cv2 unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
 
@@ -200,8 +199,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
 
 def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
     """Test pyramid generation when neither cv2 or scipy are installed."""
-    import cv2 as _cv2
-
     # Make cv2 and scipy unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "scipy", None)
@@ -311,7 +308,7 @@ def test_jp2_to_pyramid_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[:512, :512] == output[0][:512, :512])
@@ -376,7 +373,7 @@ def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[...] == output[0][...])
@@ -410,7 +407,7 @@ def test_transcode_svs_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -449,7 +446,7 @@ def test_transcode_svs_to_pyramid_ome_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -475,7 +472,7 @@ def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -505,7 +502,7 @@ def test_transcode_j2k_dicom_wsi_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -590,11 +587,9 @@ def test_block_downsample_shape():
 def test_thumbnail(samples_path):
     """Test generating a thumbnail from a reader."""
     # Compare with cv2 downsampling
-    import cv2  # noqa # skipcq
-
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
-    cv2_thumbnail = cv2.resize(reader[...], (64, 64), interpolation=cv2.INTER_AREA)
+    cv2_thumbnail = _cv2.resize(reader[...], (64, 64), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (64, 64, 3)
     assert np.allclose(thumbnail, cv2_thumbnail, atol=1)
 
@@ -631,8 +626,6 @@ def test_thumbnail_no_cv2_no_pil(samples_path, monkeypatch):
 
     This should fall back to scipy.ndimage.zoom.
     """
-    import cv2 as _cv2
-
     # Monkeypatch cv2 and Pillow to not be installed
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "PIL", None)
@@ -657,8 +650,6 @@ def test_thumbnail_no_cv2_no_pil_no_scipy(samples_path, monkeypatch):
 
     This should be the raw numpy fallaback.
     """
-    import cv2 as _cv2
-
     # Monkeypatch cv2 and Pillow to not be installed
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "PIL", None)
@@ -686,11 +677,9 @@ def test_thumbnail_non_power_two(samples_path):
     Outputs a non power of two sized thumbnail.
     """
     # Compare with cv2 downsampling
-    import cv2  # noqa # skipcq
-
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(59, 59))
-    cv2_thumbnail = cv2.resize(reader[...], (59, 59), interpolation=cv2.INTER_AREA)
+    cv2_thumbnail = _cv2.resize(reader[...], (59, 59), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (59, 59, 3)
     assert np.mean(thumbnail) == pytest.approx(np.mean(cv2_thumbnail), abs=0.5)
 
@@ -769,6 +758,22 @@ def test_write_ycrcb_j2k_svs_fails(samples_path, tmp_path):
             compression_level=70,
             photometric=ColorSpace.YCBCR,
         )
+
+
+def test_write_jp2_resolution(samples_path, tmp_path):
+    """Test writing a JP2 with capture resolution metadata."""
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
+    out_path = tmp_path / "CMU-1-Small-Region.jp2"
+    writer = writers.JP2Writer(
+        path=out_path,
+        shape=reader.shape,
+        pyramid_downsamples=[2, 4, 8],
+        compression_level=70,
+        microns_per_pixel=(0.5, 0.5),
+    )
+    writer.copy_from_reader(reader=reader)
+    jp2_reader = readers.JP2Reader(out_path)
+    assert jp2_reader.microns_per_pixel == (0.5, 0.5)
 
 
 def test_missing_imagecodecs_codec(samples_path, tmp_path):
@@ -1034,8 +1039,8 @@ class TestTranscodeScenarios:
         """
         import inspect
 
-        from matplotlib import pyplot as plt
-        from matplotlib.widgets import Button
+        from matplotlib import pyplot as plt  # type: ignore
+        from matplotlib.widgets import Button  # type: ignore
 
         current_frame = inspect.currentframe()
         class_name = self.__class__.__name__

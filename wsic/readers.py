@@ -2,7 +2,7 @@ import multiprocessing
 import os
 import time
 import warnings
-from abc import ABC
+from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from math import ceil, floor
@@ -43,6 +43,7 @@ class Reader(ABC):
         """
         self.path = Path(path)
 
+    @abstractmethod
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
         raise NotImplementedError  # pragma: no cover
