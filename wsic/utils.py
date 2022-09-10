@@ -209,7 +209,7 @@ def mpp2ppu(mpp: float, units: Union[str, int]) -> float:
     mpp_to_upp = {
         "um": 1,
         "mm": 1e3,
-        "cm": 1e6,
+        "cm": 1e4,
         "inch": 25400,
         2: 25400,
         3: 1e6,

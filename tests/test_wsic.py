@@ -4,6 +4,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict
 
+import cv2 as _cv2  # Avoid adding "cv2" to sys.modules for fallback tests
 import numpy as np
 import pytest
 import tifffile
@@ -146,8 +147,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
     This will use SciPy. This method has a high error on synthetic data,
     e.g. a test grid image. It performns better on natural images.
     """
-    import cv2 as _cv2
-
     # Make cv2 unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
 
@@ -200,8 +199,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
 
 def test_pyramid_tiff_no_cv2_no_scipy(samples_path, tmp_path, monkeypatch):
     """Test pyramid generation when neither cv2 or scipy are installed."""
-    import cv2 as _cv2
-
     # Make cv2 and scipy unavailable
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "scipy", None)
@@ -280,11 +277,15 @@ def test_jp2_to_zarr(samples_path, tmp_path):
             path=tmp_path / "XYC.zarr",
             shape=reader.shape,
         )
-        writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
+        writer.copy_from_reader(
+            reader=reader,
+            num_workers=3,
+            read_tile_size=(512, 512),
+        )
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[:512, :512] == output[0][:512, :512])
@@ -307,7 +308,7 @@ def test_jp2_to_pyramid_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[:512, :512] == output[0][:512, :512])
@@ -372,7 +373,7 @@ def test_transcode_jpeg_svs_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     assert np.all(reader[...] == output[0][...])
@@ -406,7 +407,7 @@ def test_transcode_svs_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -445,7 +446,7 @@ def test_transcode_svs_to_pyramid_ome_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -471,7 +472,7 @@ def test_transcode_jpeg_dicom_wsi_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -501,7 +502,7 @@ def test_transcode_j2k_dicom_wsi_to_zarr(samples_path, tmp_path):
 
     assert writer.path.exists()
     assert writer.path.is_dir()
-    assert len(list(writer.path.iterdir())) > 0
+    assert list(writer.path.iterdir())
 
     output = zarr.open(writer.path)
     original = reader[...]
@@ -586,11 +587,9 @@ def test_block_downsample_shape():
 def test_thumbnail(samples_path):
     """Test generating a thumbnail from a reader."""
     # Compare with cv2 downsampling
-    import cv2  # noqa # skipcq
-
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
-    cv2_thumbnail = cv2.resize(reader[...], (64, 64), interpolation=cv2.INTER_AREA)
+    cv2_thumbnail = _cv2.resize(reader[...], (64, 64), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (64, 64, 3)
     assert np.allclose(thumbnail, cv2_thumbnail, atol=1)
 
@@ -607,7 +606,7 @@ def test_thumbnail_pil(samples_path, monkeypatch):
 
     # Sanity check that cv2 is not installed
     with pytest.raises(ImportError):
-        import cv2  # noqa: F401 # skipcq
+        import cv2  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
@@ -627,17 +626,15 @@ def test_thumbnail_no_cv2_no_pil(samples_path, monkeypatch):
 
     This should fall back to scipy.ndimage.zoom.
     """
-    import cv2 as _cv2
-
     # Monkeypatch cv2 and Pillow to not be installed
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "PIL", None)
 
     # Sanity check that cv2 and Pillow are not installed
     with pytest.raises(ImportError):
-        import cv2  # noqa: F401 # skipcq
+        import cv2  # noqa # skipcq
     with pytest.raises(ImportError):
-        import PIL  # noqa: F401 # skipcq
+        import PIL  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(64, 64))
@@ -653,8 +650,6 @@ def test_thumbnail_no_cv2_no_pil_no_scipy(samples_path, monkeypatch):
 
     This should be the raw numpy fallaback.
     """
-    import cv2 as _cv2
-
     # Monkeypatch cv2 and Pillow to not be installed
     monkeypatch.setitem(sys.modules, "cv2", None)
     monkeypatch.setitem(sys.modules, "PIL", None)
@@ -662,11 +657,11 @@ def test_thumbnail_no_cv2_no_pil_no_scipy(samples_path, monkeypatch):
 
     # Sanity check that modules are not installed
     with pytest.raises(ImportError):
-        import cv2  # noqa: F401 # skipcq
+        import cv2  # noqa # skipcq
     with pytest.raises(ImportError):
-        import PIL  # noqa: F401 # skipcq
+        import PIL  # noqa # skipcq
     with pytest.raises(ImportError):
-        import scipy  # noqa: F401 # skipcq
+        import scipy  # noqa # skipcq
 
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     with pytest.warns(UserWarning, match="slower"):
@@ -682,11 +677,9 @@ def test_thumbnail_non_power_two(samples_path):
     Outputs a non power of two sized thumbnail.
     """
     # Compare with cv2 downsampling
-    import cv2  # noqa # skipcq
-
     reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
     thumbnail = reader.thumbnail(shape=(59, 59))
-    cv2_thumbnail = cv2.resize(reader[...], (59, 59), interpolation=cv2.INTER_AREA)
+    cv2_thumbnail = _cv2.resize(reader[...], (59, 59), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (59, 59, 3)
     assert np.mean(thumbnail) == pytest.approx(np.mean(cv2_thumbnail), abs=0.5)
 
@@ -765,6 +758,22 @@ def test_write_ycrcb_j2k_svs_fails(samples_path, tmp_path):
             compression_level=70,
             photometric=ColorSpace.YCBCR,
         )
+
+
+def test_write_jp2_resolution(samples_path, tmp_path):
+    """Test writing a JP2 with capture resolution metadata."""
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
+    out_path = tmp_path / "CMU-1-Small-Region.jp2"
+    writer = writers.JP2Writer(
+        path=out_path,
+        shape=reader.shape,
+        pyramid_downsamples=[2, 4, 8],
+        compression_level=70,
+        microns_per_pixel=(0.5, 0.5),
+    )
+    writer.copy_from_reader(reader=reader)
+    jp2_reader = readers.JP2Reader(out_path)
+    assert jp2_reader.microns_per_pixel == (0.5, 0.5)
 
 
 def test_missing_imagecodecs_codec(samples_path, tmp_path):
@@ -1030,8 +1039,8 @@ class TestTranscodeScenarios:
         """
         import inspect
 
-        from matplotlib import pyplot as plt
-        from matplotlib.widgets import Button
+        from matplotlib import pyplot as plt  # type: ignore
+        from matplotlib.widgets import Button  # type: ignore
 
         current_frame = inspect.currentframe()
         class_name = self.__class__.__name__
@@ -1254,6 +1263,70 @@ class TestConvertScenarios:
         output_reader = readers.Reader.from_file(out_path)
         mse = np.mean(np.square(reader[...] - output_reader[...]))
         assert mse < 100
+
+
+class TestWriterScenarios:
+    """Test scenarios for writing to formats with codecs."""
+
+    scenarios = [
+        ("svs_jpeg", {"writer_cls": writers.SVSWriter, "codec": "jpeg"}),
+        # Unsupported by tifffile
+        # ("tiff_blosc", {"writer_cls": writers.TIFFWriter, "codec": "blosc"}),
+        # ("tiff_blosc2", {"writer_cls": writers.TIFFWriter, "codec": "blosc2"}),
+        # ("tiff_brotli", {"writer_cls": writers.TIFFWriter, "codec": "brotli"}),
+        ("tiff_deflate", {"writer_cls": writers.TIFFWriter, "codec": "deflate"}),
+        # Unsupported by tifffile
+        # ("tiff_j2k", {"writer_cls": writers.TIFFWriter, "codec": "j2k"}),
+        ("tiff_jp2", {"writer_cls": writers.TIFFWriter, "codec": "jpeg2000"}),
+        ("tiff_jpeg", {"writer_cls": writers.TIFFWriter, "codec": "jpeg"}),
+        # Unsupported by tifffile
+        # ("tiff_jpls", {"writer_cls": writers.TIFFWriter, "codec": "jpegls"}),
+        ("tiff_jpxl", {"writer_cls": writers.TIFFWriter, "codec": "jpegxl"}),
+        ("tiff_jpxr", {"writer_cls": writers.TIFFWriter, "codec": "jpegxr"}),
+        # Unsupported by tifffile
+        # ("tiff_lz4", {"writer_cls": writers.TIFFWriter, "codec": "lz4"}),
+        # Encode unsupported by imagecodecs
+        # ("tiff_lzw", {"writer_cls": writers.TIFFWriter, "codec": "lzw"}),
+        ("tiff_png", {"writer_cls": writers.TIFFWriter, "codec": "png"}),
+        ("tiff_webp", {"writer_cls": writers.TIFFWriter, "codec": "webp"}),
+        # Unsupported by tifffile
+        # ("tiff_zfp", {"writer_cls": writers.TIFFWriter, "codec": "zfp"}),
+        ("tiff_zstd", {"writer_cls": writers.TIFFWriter, "codec": "zstd"}),
+        ("zarr_blosc", {"writer_cls": writers.ZarrWriter, "codec": "blosc"}),
+        ("zarr_blosc2", {"writer_cls": writers.ZarrWriter, "codec": "blosc2"}),
+        ("zarr_brotli", {"writer_cls": writers.ZarrWriter, "codec": "brotli"}),
+        ("zarr_deflate", {"writer_cls": writers.ZarrWriter, "codec": "deflate"}),
+        ("zarr_j2k", {"writer_cls": writers.ZarrWriter, "codec": "j2k"}),
+        ("zarr_jp2", {"writer_cls": writers.ZarrWriter, "codec": "jpeg2000"}),
+        ("zarr_jpeg", {"writer_cls": writers.ZarrWriter, "codec": "jpeg"}),
+        ("zarr_jpls", {"writer_cls": writers.ZarrWriter, "codec": "jpegls"}),
+        ("zarr_jpxl", {"writer_cls": writers.ZarrWriter, "codec": "jpegxl"}),
+        ("zarr_jpxr", {"writer_cls": writers.ZarrWriter, "codec": "jpegxr"}),
+        ("zarr_lz4", {"writer_cls": writers.ZarrWriter, "codec": "lz4"}),
+        # Encode unsupported by imagecodecs
+        # ("zarr_lzw", {"writer_cls": writers.ZarrWriter, "codec": "lzw"}),
+        ("zarr_png", {"writer_cls": writers.ZarrWriter, "codec": "png"}),
+        ("zarr_webp", {"writer_cls": writers.ZarrWriter, "codec": "webp"}),
+        (
+            "zarr_zfp",
+            {"writer_cls": writers.ZarrWriter, "codec": "zfp"},
+        ),  # Wrong data type
+        ("zarr_zstd", {"writer_cls": writers.ZarrWriter, "codec": "zstd"}),
+    ]
+
+    @staticmethod
+    def test_write(
+        samples_path: Path, tmp_path: Path, writer_cls: writers.Writer, codec: str
+    ):
+        """Test writing to a format does not error."""
+        reader = readers.Reader.from_file(samples_path / "CMU-1-Small-Region.svs")
+        writer = writer_cls(
+            tmp_path / "image",
+            shape=reader.shape,
+            codec=codec,
+            dtype=float if codec == "zfp" else np.uint8,
+        )
+        writer.copy_from_reader(reader)
 
 
 class TestReaderScenarios:
