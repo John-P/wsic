@@ -7,6 +7,7 @@ import warnings
 from abc import ABC, abstractmethod
 from functools import partial
 from math import floor
+from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
@@ -132,6 +133,7 @@ class Writer(ABC):
             num_workers=num_workers,
             verbose=self.verbose,
             timeout=timeout,
+            match_tile_sizes=not isinstance(self, ZarrWriter),
         )
 
     def __setitem__(
@@ -309,21 +311,24 @@ class JP2Writer(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        color_space: Optional[ColorSpace] = "rgb",  # Currently unused
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,
         codec: Optional[Codec] = "jpeg2000",  # Currently unused
-        compression_level: int = 0,  # Currently unused
+        compression_level: int = 0,
         microns_per_pixel: Optional[Tuple[float, float]] = None,  # Currently unused
-        pyramid_downsamples: Optional[List[int]] = None,  # Unused
+        pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
     ) -> None:
-        if color_space != "rgb":
-            warn_unused(color_space)
         if codec != "jpeg2000":
             warn_unused(codec)
-        warn_unused(compression_level, ignore_falsey=True)
-        warn_unused(microns_per_pixel)
-        warn_unused(pyramid_downsamples, ignore_falsey=True)
+        pyramid_downsamples = pyramid_downsamples or []
+        if not np.array_equal(
+            pyramid_downsamples,
+            [2 ** (x + 1) for x in range(len(pyramid_downsamples))],
+        ):
+            raise ValueError(
+                "Pyramid downsamples must be consecutive powers of 2 for JP2."
+            )
         super().__init__(
             path=path,
             shape=shape,
@@ -374,11 +379,28 @@ class JP2Writer(Writer):
             timeout=timeout,
             downsample_method=downsample_method,
         )
-        warn_unused(downsample_method, ignore_falsey=True)
         import glymur
 
+        numres = len(self.pyramid_downsamples) + 1 if self.pyramid_downsamples else None
+        psnr = (
+            [self.compression_level]
+            if isinstance(self.compression_level, Number)
+            else self.compression_level
+        )
+        capture_resolution = (
+            tuple(mpp2ppu(x, "cm") for x in self.microns_per_pixel)
+            if self.microns_per_pixel
+            else None
+        )
         jp2 = glymur.Jp2k(
-            self.path, shape=reader.shape, tilesize=self.tile_size, verbose=self.verbose
+            self.path,
+            shape=reader.shape,
+            tilesize=self.tile_size,
+            verbose=self.verbose,
+            numres=numres,
+            psnr=psnr,
+            colorspace=self.color_space,
+            capture_resolution=capture_resolution,
         )
         reader_tile_iterator = self.reader_tile_iterator(
             reader=reader,
@@ -1071,10 +1093,7 @@ class ZarrWriter(Writer, Reader):
         register_codecs()
         self.compressor = self.get_codec(codec, compression_level)
         self.zarr = zarr.open(self.path, mode="a")
-
-    @property
-    def tile_shape(self) -> Optional[Tuple[int, int]]:
-        return self.zarr[0].chunks[:2] if self.zarr else None
+        self.tile_shape = tile_size[::-1]
 
     @property
     def mosaic_shape(self) -> Optional[Tuple[int, int]]:
@@ -1131,7 +1150,7 @@ class ZarrWriter(Writer, Reader):
             name="0",
             shape=self.shape,
             dtype=self.dtype,
-            chunks=(*reader.tile_shape, reader.shape[-1]),
+            chunks=(*self.tile_shape, reader.shape[-1]),
             compressor=self.compressor,
         )
 
@@ -1141,7 +1160,8 @@ class ZarrWriter(Writer, Reader):
         lossy = self.codec.condensed().lower() in lossy_codecs or (
             self.codec in optionally_lossy_codecs and self.compression_level > 0
         )
-        read_tile_size = read_tile_size or self.tile_size
+        read_tile_size = read_tile_size or self.tile_shape[:2][::-1]
+        yield_tile_size = self.tile_shape[:2][::-1]
         write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
         if lossy and not write_multiple_of_read:
             raise ValueError(
@@ -1149,25 +1169,30 @@ class ZarrWriter(Writer, Reader):
                 "multiple of the read tile size."
             )
 
-        # Create a reader tile iterator
-        reader_tile_iterator = self.reader_tile_iterator(
-            reader,
-            read_tile_size=read_tile_size,
-            yield_tile_size=read_tile_size,
-            num_workers=num_workers,
-            timeout=timeout,
-        )
-        reader_tile_iterator = self.level_progress(reader_tile_iterator)
+        with ZarrIntermediate(
+            None, shape=reader.shape, zero_after_read=False
+        ) as intermediate:
+            tile_sizes_match = read_tile_size == yield_tile_size
+            # Create a reader tile iterator
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader,
+                read_tile_size=read_tile_size,
+                yield_tile_size=yield_tile_size,
+                num_workers=num_workers,
+                timeout=timeout,
+                intermediate=None if tile_sizes_match else intermediate,
+            )
+            reader_tile_iterator = self.level_progress(reader_tile_iterator)
 
-        # Write the reader tile iterator to the writer
-        tiles_shape = mosaic_shape(
-            reader.shape,
-            read_tile_size[::-1],
-        )
-        tiles_index = np.ndindex(tiles_shape)
-        for ji, tile in zip(tiles_index, reader_tile_iterator):
-            level_0 = self.zarr[0]
-            level_0[tile_slices(ji, read_tile_size)] = tile
+            # Write the reader tile iterator to the writer
+            tiles_shape = mosaic_shape(
+                reader.shape,
+                yield_tile_size[::-1],
+            )
+            tiles_index = np.ndindex(tiles_shape)
+            for ji, tile in zip(tiles_index, reader_tile_iterator):
+                level_0 = self.zarr[0]
+                level_0[tile_slices(ji, yield_tile_size)] = tile
 
         self._build_pyramid(downsample_method)
         self._write_ome_metadata()
@@ -1242,7 +1267,7 @@ class ZarrWriter(Writer, Reader):
             level_array = self.zarr.zeros(
                 name=level,
                 shape=level_shape,
-                chunks=(*self.tile_size, self.shape[-1]),
+                chunks=(*self.tile_shape, self.shape[-1]),
                 dtype=self.dtype,
                 compressor=self.compressor,
             )
@@ -1312,7 +1337,7 @@ class ZarrWriter(Writer, Reader):
             name="0",
             shape=self.shape,
             dtype=self.dtype,
-            chunks=(*reader.tile_shape, reader.shape[-1]),
+            chunks=(*self.tile_shape, reader.shape[-1]),
             compressor=codec,
         )
 
@@ -1468,7 +1493,7 @@ class ZarrIntermediate(Writer, Reader):
 
     def __init__(
         self,
-        path: PathLike,
+        path: Optional[PathLike],
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
