@@ -2,7 +2,7 @@ import multiprocessing
 import os
 import time
 import warnings
-from abc import ABC
+from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from math import ceil, floor
@@ -43,9 +43,10 @@ class Reader(ABC):
         """
         self.path = Path(path)
 
+    @abstractmethod
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     @classmethod
     def from_file(cls, path: Path) -> "Reader":
@@ -250,6 +251,7 @@ class MultiProcessTileIterator:
         intermediate=None,
         verbose: bool = False,
         timeout: float = 10.0,
+        match_tile_sizes: bool = True,
     ) -> None:
         self.reader = reader
         self.shape = reader.shape
@@ -290,7 +292,8 @@ class MultiProcessTileIterator:
             self.read_pbar = None
 
         # Validation and error handling
-        if self.read_tile_size != self.yield_tile_size and not self.intermediate:
+        read_matches_yield = self.read_tile_size == self.yield_tile_size
+        if match_tile_sizes and not read_matches_yield and not self.intermediate:
             raise ValueError(
                 f"read_tile_size ({self.read_tile_size})"
                 f" != yield_tile_size ({self.yield_tile_size})"
@@ -493,12 +496,13 @@ class MultiProcessTileIterator:
         if self.read_pbar is not None:
             self.read_pbar.close()
         # Join processes in parallel threads
-        with ThreadPoolExecutor(len(self.processes)) as executor:
-            executor.map(lambda p: p.join(1), self.processes)
-        # Terminate any child processes if still alive
-        for process in self.processes:
-            if process.is_alive():
-                process.terminate()
+        if self.processes:
+            with ThreadPoolExecutor(len(self.processes)) as executor:
+                executor.map(lambda p: p.join(1), self.processes)
+            # Terminate any child processes if still alive
+            for process in self.processes:
+                if process.is_alive():
+                    process.terminate()
 
     def __del__(self):
         """Destructor."""
