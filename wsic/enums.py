@@ -17,7 +17,7 @@ class Codec(str, Enum):
     GIF = "GIF"  # Graphics Interchange Format
     GZIP = "GZIP"  # Gzip
     J2K = "J2K"  # JPEG 2000 raw codestream
-    JPEG = "JPEG"  # Original JPEG
+    JPEG = "JPEG"  # Original JPEG  # noqa: PIE796
     JPEG2000 = "JPEG 2000"
     JPEGLS = "JPEG-LS"  # Lossless (or near) JPEG
     JPEGXL = "JPEG XL"
@@ -36,40 +36,52 @@ class Codec(str, Enum):
     SNAPPY = "Snappy"  # Google Snappy
     WEBP = "WebP"
     ZFP = "ZFP"  # Floating point compression (up to 4 dimensions)
-    ZFPY = "ZFPY"  # Python version of ZFP
     ZLIB = "Zlib"
     ZLIBNG = "ZlibNG"  # ZlibNG, zlib replacement for "next generation" systems
     ZOPFLI = "Zopfli"
     ZSTD = "Zstd"  # Zstandard
-    ISO_10918_1 = "JPEG"  # noqa: PIE796
-    ISO_15444_1 = "JPEG 2000"  # noqa: PIE796
-    ISO_14495_1 = "JPEG-LS"  # noqa: PIE796
 
     def condensed(self) -> str:
         """Convert to a string without spaces or dashes."""
         return self.value.replace(" ", "").replace("-", "")
 
-    def to_numcodecs_config(self, level: Optional[Number] = None) -> Dict[str, Any]:
+    def to_numcodecs_config(
+        self, level: Optional[Number] = None, dtype: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Convert to numcodecs Codec ID string."""
         configs = {
+            Codec.AVIF: {"id": "imagecodecs_avif"},
             Codec.BLOSC: {"id": "blosc"},
             Codec.BLOSC2: {"id": "imagecodecs_blosc2"},
             Codec.BROTLI: {"id": "imagecodecs_brotli"},
             Codec.DEFLATE: {"id": "imagecodecs_deflate"},
+            Codec.BZ2: {"id": "imagecodecs_bz2"},
+            Codec.DELTA: {"id": "delta", "dtype": "uint8"},
             Codec.GIF: {"id": "imagecodecs_gif"},
+            Codec.GZIP: {"id": "gzip"},
             Codec.J2K: {"id": "imagecodecs_jpeg2k", "codecformat": "j2k"},
             Codec.JPEG: {"id": "imagecodecs_jpeg"},
             Codec.JPEG2000: {"id": "imagecodecs_jpeg2k", "codecformat": "jp2"},
             Codec.JPEGLS: {"id": "imagecodecs_jpegls"},
             Codec.JPEGXL: {"id": "imagecodecs_jpegxl"},
             Codec.JPEGXR: {"id": "imagecodecs_jpegxr"},
+            Codec.LERC: {"id": "imagecodecs_lerc"},
+            Codec.LJPEG: {"id": "imagecodecs_ljpeg"},
             Codec.LZ4: {"id": "lz4"},
+            Codec.LZ4F: {"id": "imagecodecs_lz4f"},
+            Codec.LZMA: {"id": "lzma"},
             Codec.LZW: {"id": "imagecodecs_lzw"},
+            Codec.PACKBITS: {"id": "imagecodecs_packbits"},
             Codec.PNG: {"id": "imagecodecs_png"},
-            Codec.QOI: {"codec": "wsic_qoi"},
+            Codec.QOI: {"id": "imagecodecs_qoi"},
+            Codec.SNAPPY: {"id": "imagecodecs_snappy"},
             Codec.WEBP: {"id": "imagecodecs_webp"},
             Codec.ZFP: {"id": "imagecodecs_zfp"},
+            Codec.ZLIB: {"id": "zlib"},
+            Codec.ZLIBNG: {"id": "imagecodecs_zlibng"},
+            Codec.ZOPFLI: {"id": "imagecodecs_zopfli"},
             Codec.ZSTD: {"id": "zstd"},
+            Codec.NONE: {},
         }
 
         try:
@@ -79,16 +91,25 @@ class Codec(str, Enum):
         if level is not None and self not in FIXED_LEVEL_CODECS:
             level_key = "clevel" if self in NUMCODECS_CODECS else "level"
             config[level_key] = level
+        if dtype:
+            config["dtype"] = dtype
         return config
 
     @classmethod
     def from_string(cls, string: str) -> "Codec":
         """Convert string to Compression enum."""
         condensed_upper = string.replace(" ", "").replace("-", "").upper()
+        iso_names_map = {
+            "ISO_10918_1": "JPEG",
+            "ISO_14495_1": "JPEGLS",
+            "ISO_15444_1": "JPEG2000",
+        }
+
+        condensed_upper = iso_names_map.get(condensed_upper, condensed_upper)
         try:
             return getattr(cls, condensed_upper)
-        except AttributeError:
-            raise ValueError(f"Unknown compression: {string}")
+        except AttributeError as e:
+            raise ValueError(f"Unknown codec: {string}") from e
 
     @classmethod
     def from_tiff(cls, compression: int) -> "Codec":
@@ -120,8 +141,6 @@ class Codec(str, Enum):
         raise ValueError(f"Unknown TIFF compression: {compression}")
 
 
-WSIC_CODECS = (Codec.QOI,)
-
 NUMCODECS_CODECS = (
     Codec.BLOSC,
     Codec.DELTA,
@@ -131,7 +150,6 @@ NUMCODECS_CODECS = (
     Codec.PACKBITS,
     Codec.ZLIB,
     Codec.ZSTD,
-    Codec.ZFPY,
 )
 
 IMAGECODECS_CODECS = (
@@ -209,17 +227,16 @@ class ColorSpace(str, Enum):
         condensed_upper = (
             string.replace(" ", "").replace("-", "").replace("*", "").upper()
         )
+
         try:
             return getattr(cls, condensed_upper)
-        except AttributeError:
-            raise ValueError(f"Unknown color space: {string}")
+        except AttributeError as e:
+            raise ValueError(f"Unknown color space: {string}") from e
 
     def to_tiff(self) -> "ColorSpace":
         """Convert to tifffile compatible color space."""
         # tifffile doesn't recognise YCrCb, so use YCbCr as this works
-        if self == ColorSpace.YCRCB:
-            return ColorSpace.YCBCR
-        return self
+        return ColorSpace.YCBCR if self == ColorSpace.YCRCB else self
 
     @classmethod
     def from_tiff(
