@@ -15,12 +15,6 @@ from wsic import cli, readers, utils, writers
 from wsic.enums import Codec, ColorSpace
 
 
-@pytest.fixture()
-def samples_path():
-    """Return the path to the samples."""
-    return Path(__file__).parent / "samples"
-
-
 def test_jp2_to_deflate_tiled_tiff(samples_path, tmp_path):
     """Test that we can convert a JP2 to a DEFLATE compressed tiled TIFF."""
     with warnings.catch_warnings():
@@ -866,25 +860,6 @@ def test_help():
 
 
 # Test Scenarios
-
-
-def pytest_generate_tests(metafunc):
-    """Generate test scenarios.
-
-    See
-    https://docs.pytest.org/en/7.1.x/example/parametrize.html#a-quick-port-of-testscenarios
-    """
-    id_list = []
-    arg_values = []
-    if metafunc.cls is None:
-        return
-    for scenario in metafunc.cls.scenarios:
-        id_list.append(scenario[0])
-        items = scenario[1].items()
-        arg_names = [x[0] for x in items]
-        arg_values.append([x[1] for x in items])
-    metafunc.parametrize(arg_names, arg_values, ids=id_list, scope="class")
-
 
 WRITER_EXT_MAPPING = {
     ".zarr": writers.ZarrWriter,
