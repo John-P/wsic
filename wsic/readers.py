@@ -1,77 +1,34 @@
 import multiprocessing
-import multiprocessing.queues
 import os
 import time
 import warnings
-from abc import ABC
+from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from math import ceil, floor
 from pathlib import Path
-from typing import Any, Iterator, Optional, Tuple, Union
+from typing import Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import zarr
 
+from wsic.codecs import register_codecs
+from wsic.enums import Codec, ColorSpace
 from wsic.magic import summon_file_types
+from wsic.metadata import ngff
+from wsic.multiprocessing import Queue
 from wsic.types import PathLike
 from wsic.utils import (
+    block_downsample_shape,
+    mean_pool,
     mosaic_shape,
-    normalise_color_space,
-    normalise_compression,
     ppu2mpp,
+    resize_array,
+    scale_to_fit,
     tile_slices,
+    warn_unused,
     wrap_index,
 )
-
-
-class Queue(multiprocessing.queues.Queue):
-    """A multiprocessing.Queue subclass with a shared counter.
-
-    The `multiprocessing.Queue.qsize` is unreliable and may raise
-    `NotImplementedError` on Unix platforms like macOS where
-    `sem_getvalue()` is not implemented. Here we use a shared counter
-    instead.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """Initialise the queue."""
-        super().__init__(*args, ctx=multiprocessing.get_context(), **kwargs)
-        self.counter = multiprocessing.Value("i", 0)
-
-    def put(self, *args, **kwargs) -> None:
-        """Put an item into the queue."""
-        with self.counter.get_lock():
-            self.counter.value += 1
-        return super().put(*args, **kwargs)
-
-    def get(self, *args, **kwargs) -> Any:
-        """Remove and return an item from the queue."""
-        value = super().get(*args, **kwargs)
-        with self.counter.get_lock():
-            self.counter.value -= 1
-        return value  # noqa: R504
-
-    def qsize(self) -> int:
-        """Return the number of items in the queue."""
-        return self.counter.value
-
-    def empty(self) -> bool:
-        """Return True if the queue is empty."""
-        return self.qsize() == 0
-
-    def clear(self) -> None:
-        """Clear the queue."""
-        while not self.empty():
-            self.get()
-
-    def __getstate__(self) -> Any:
-        """Return the state of the queue."""
-        return (self.counter, super().__getstate__())
-
-    def __setstate__(self, state: Any) -> None:
-        """Restore the state of the queue."""
-        self.counter, state = state
-        super().__setstate__(state)
-        self._after_fork()
 
 
 class Reader(ABC):
@@ -86,9 +43,10 @@ class Reader(ABC):
         """
         self.path = Path(path)
 
+    @abstractmethod
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     @classmethod
     def from_file(cls, path: Path) -> "Reader":
@@ -104,17 +62,121 @@ class Reader(ABC):
         file_types = summon_file_types(path)
         if ("jp2",) in file_types:
             return JP2Reader(path)
-        if ("tiff", "svs") in file_types:
-            return OpenSlideReader(path)
+        with suppress(ImportError):
+            import openslide
+
+            with suppress(openslide.OpenSlideError):
+                return OpenSlideReader(path)
         if ("tiff",) in file_types:
             return TIFFReader(path)
         if ("dicom",) in file_types or ("dcm",) in file_types:
             return DICOMWSIReader(path)
         if ("zarr",) in file_types:
-            from wsic.writers import ZarrReaderWriter
-
-            return ZarrReaderWriter(path)
+            return ZarrReader(path)
         raise ValueError(f"Unsupported file type: {path}")
+
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        """Generate a thumbnail image of (or near) the requested shape.
+
+        Args:
+            shape (Tuple[int, ...]):
+                Shape of the thumbnail.
+            approx_ok (bool):
+                If True, return a thumbnail that is approximately the
+                requested shape. It will be equal to or larger than the
+                requested shape (the next largest shape possible via
+                an integer block downsampling).
+
+        Returns:
+            np.ndarray: Thumbnail.
+        """
+        # NOTE: Assuming first two are Y and X
+        yx_shape = self.shape[:2]
+        yx_tile_shape = (
+            self.tile_shape[:2] if self.tile_shape else np.minimum(yx_shape, (256, 256))
+        )
+        self_mosaic_shape = (
+            self.mosaic_shape
+            if self.mosaic_shape
+            else mosaic_shape(yx_shape, yx_tile_shape)
+        )
+        downsample_shape = yx_shape
+        downsample_tile_shape = yx_tile_shape
+        downsample = 0
+        while True:
+            new_downsample = downsample + 1
+            next_downsample_shape, new_downsample_tile_shape = block_downsample_shape(
+                yx_shape, new_downsample, yx_tile_shape
+            )
+            if not any(x > max(0, y) for x, y in zip(downsample_shape, shape)):
+                break
+            downsample_shape = next_downsample_shape
+            downsample_tile_shape = new_downsample_tile_shape
+            downsample = new_downsample
+        # NOTE: Assuming channels last
+        channels = self.shape[-1]
+        thumbnail = np.zeros(downsample_shape + (channels,), dtype=np.uint8)
+        # Resize tiles to new_downsample_tile_shape and combine
+        tile_indexes = list(np.ndindex(self_mosaic_shape))
+        for tile_index in self.pbar(tile_indexes, desc="Generating thumbnail"):
+            tile = self[tile_slices(tile_index, yx_tile_shape)]
+            tile = mean_pool(tile.astype(float), downsample).astype(np.uint8)
+            thumbnail[tile_slices(tile_index, downsample_tile_shape)] = tile
+        if approx_ok:
+            return thumbnail
+        return resize_array(thumbnail, shape, "bicubic")
+
+    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
+        """Get tile at index.
+
+        Args:
+            index (Tuple[int, int]):
+                The index of the tile to get.
+            decode (bool, optional):
+                Whether to decode the tile. Defaults to True.
+
+        Returns:
+            np.ndarray:
+                The tile at index.
+        """
+        # Naive base implementation using __getitem__
+        if not decode:
+            raise NotImplementedError(
+                "Fetching tiles without decoding is not supported."
+            )
+        if not hasattr(self, "tile_shape"):
+            raise ValueError(
+                "Cannot get tile from a non-tiled reader"
+                " (must have attr 'tile_shape')."
+            )
+        slices = tile_slices(index, self.tile_shape)
+        return self[slices]
+
+    @staticmethod
+    def pbar(iterable: Iterable, *args, **kwargs) -> Iterator:
+        """Return an iterator that displays a progress bar.
+
+        Uses tqdm if installed, otherwise falls back to a simple iterator.
+
+        Args:
+            iterable (Iterable):
+                Iterable to iterate over.
+            args (tuple):
+                Positional arguments to pass to tqdm.
+            kwargs (dict):
+                Keyword arguments to pass to tqdm.
+
+        Returns:
+            Iterator: Iterator that displays a progress bar.
+        """
+        try:
+            from tqdm.auto import tqdm
+        except ImportError:
+
+            def tqdm(x, *args, **kwargs):
+                return x
+
+        return tqdm(iterable, *args, **kwargs)
 
 
 def get_tile(
@@ -189,6 +251,7 @@ class MultiProcessTileIterator:
         intermediate=None,
         verbose: bool = False,
         timeout: float = 10.0,
+        match_tile_sizes: bool = True,
     ) -> None:
         self.reader = reader
         self.shape = reader.shape
@@ -229,7 +292,8 @@ class MultiProcessTileIterator:
             self.read_pbar = None
 
         # Validation and error handling
-        if self.read_tile_size != self.yield_tile_size and not self.intermediate:
+        read_matches_yield = self.read_tile_size == self.yield_tile_size
+        if match_tile_sizes and not read_matches_yield and not self.intermediate:
             raise ValueError(
                 f"read_tile_size ({self.read_tile_size})"
                 f" != yield_tile_size ({self.yield_tile_size})"
@@ -275,10 +339,10 @@ class MultiProcessTileIterator:
         self.yield_index, overflow = wrap_index(
             self.yield_index, self.yield_mosaic_shape
         )
-        if overflow and self.verbose:
-            print("All tiles yielded.")
-        elif overflow:
-            self.read_pbar.close()
+        if overflow:
+            if self.verbose:
+                print("All tiles yielded.")
+            self.close()
             raise StopIteration
 
     def __next__(self) -> np.ndarray:
@@ -338,8 +402,7 @@ class MultiProcessTileIterator:
         )
         print(f"Intermediate Read slices {intermediate_read_slices}")
         # Terminate the read processes
-        for process in self.processes:
-            process.terminate()
+        self.close()
         raise IOError(f"Tile read timed out at index {self.yield_index}")
 
     def read_next_from_intermediate(self) -> Optional[np.ndarray]:
@@ -375,6 +438,7 @@ class MultiProcessTileIterator:
                     self.read_tile_size,
                     self.reader.path,
                 ),
+                daemon=True,
             )
             process.start()
             self.processes.add(process)
@@ -423,10 +487,26 @@ class MultiProcessTileIterator:
             self.update_read_pbar()
         return None
 
+    def close(self):
+        """Safely end any dependants (threads, processes, and files).
+
+        Close progress bars and join child processes. Terminate children
+        if they fail to join after one second.
+        """
+        if self.read_pbar is not None:
+            self.read_pbar.close()
+        # Join processes in parallel threads
+        if self.processes:
+            with ThreadPoolExecutor(len(self.processes)) as executor:
+                executor.map(lambda p: p.join(1), self.processes)
+            # Terminate any child processes if still alive
+            for process in self.processes:
+                if process.is_alive():
+                    process.terminate()
+
     def __del__(self):
         """Destructor."""
-        for process in self.processes:
-            process.terminate()
+        self.close()
 
 
 class JP2Reader(Reader):
@@ -500,6 +580,19 @@ class JP2Reader(Reader):
         """Get pixel data at index."""
         return self.jp2[index]
 
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        scale = scale_to_fit(self.shape[:2], shape)
+        downsample = 1 / scale
+        out_shape = tuple(int(x * scale) for x in self.shape[:2])
+        # Glymur requires a power of two stride
+        pow_2_downsample = 2 ** np.floor(np.log2(downsample))
+        # Get the power of two downsample
+        thumbnail = self.jp2[::pow_2_downsample, ::pow_2_downsample]
+        # Resize the thumbnail if required
+        if approx_ok:
+            return thumbnail
+        return resize_array(thumbnail, out_shape)
+
 
 class TIFFReader(Reader):
     """Reader for TIFF files using tifffile."""
@@ -515,6 +608,7 @@ class TIFFReader(Reader):
         super().__init__(path)
         self.tiff = tifffile.TiffFile(str(path))
         self.tiff_page = self.tiff.pages[0]
+        self.microns_per_pixel = self._get_mpp()
         self.array = self.tiff_page.asarray()
         self.shape = self.array.shape
         self.dtype = self.array.dtype
@@ -536,8 +630,29 @@ class TIFFReader(Reader):
                 self.mosaic_shape
             )
         self.jpeg_tables = self.tiff_page.jpegtables
-        self.colour_space = normalise_color_space(self.tiff_page.photometric)
-        self.compression = normalise_compression(self.tiff_page.compression)
+        self.color_space: ColorSpace = ColorSpace.from_tiff(self.tiff_page.photometric)
+        self.codec: Codec = Codec.from_tiff(self.tiff_page.compression)
+        self.compression_level = None  # To be filled in if known later
+
+    def _get_mpp(self) -> Optional[Tuple[float, float]]:
+        """Get the microns per pixel for the image.
+
+        This checks the resolution and resolution unit TIFF tags.
+
+        Returns:
+            Optional[Tuple[float, float]]:
+                The resolution of the image in microns per pixel.
+                If the resolution is not available, this will be None.
+        """
+        try:
+            y_resolution = self.tiff_page.tags["YResolution"].value[0]
+            x_resolution = self.tiff_page.tags["XResolution"].value[0]
+            resolution_units = self.tiff_page.tags["ResolutionUnit"].value
+            return ppu2mpp(x_resolution, resolution_units), ppu2mpp(
+                y_resolution, resolution_units
+            )
+        except KeyError:
+            return None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
@@ -600,8 +715,11 @@ class DICOMWSIReader(Reader):
             raise ValueError(
                 "Number of frames in DICOM dataset does not match mosaic shape."
             )
-        self.compression = normalise_compression(dataset.LossyImageCompressionMethod)
-        self.colour_space = normalise_color_space(dataset.photometric_interpretation)
+        self.codec: Codec = Codec.from_string(dataset.LossyImageCompressionMethod)
+        self.compression_level = (
+            None  # Set if known: dataset.get(LossyImageCompressionRatio)?
+        )
+        self.color_space = ColorSpace.from_dicom(dataset.photometric_interpretation)
         self.jpeg_tables = None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
@@ -660,6 +778,21 @@ class OpenSlideReader(Reader):
         self.tile_shape = None  # No easy way to get tile shape currently
         self.microns_per_pixel = self._get_mpp()
 
+    def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
+        """Get tile at index.
+
+        Args:
+            index (Tuple[int, int]):
+                The index of the tile to get.
+            decode (bool, optional):
+                Whether to decode the tile. Defaults to True.
+
+        Returns:
+            np.ndarray:
+                The tile at index.
+        """
+        raise NotImplementedError("OpenSlideReader does not support reading tiles.")
+
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
 
@@ -669,16 +802,16 @@ class OpenSlideReader(Reader):
         """
         try:
             return (
-                self.os_slide.properties["openslide.mpp-x"],
-                self.os_slide.properties["openslide.mpp-y"],
+                float(self.os_slide.properties["openslide.mpp-x"]),
+                float(self.os_slide.properties["openslide.mpp-y"]),
             )
         except KeyError:
             warnings.warn("OpenSlide could not find MPP.")
         # Fall back to TIFF resolution tags
         try:
             resolution = (
-                self.os_slide.properties["tiff.XResolution"],
-                self.os_slide.properties["tiff.YResolution"],
+                float(self.os_slide.properties["tiff.XResolution"]),
+                float(self.os_slide.properties["tiff.YResolution"]),
             )
             units = self.os_slide.properties["tiff.ResolutionUnit"]
             self._check_sensible_resolution(resolution, units)
@@ -719,6 +852,8 @@ class OpenSlideReader(Reader):
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
         """Get pixel data at index."""
+        if index is ...:
+            return np.array(self.os_slide.get_thumbnail(self.os_slide.dimensions))
         xs = index[1]
         ys = index[0]
         start_x = xs.start or 0
@@ -737,3 +872,100 @@ class OpenSlideReader(Reader):
             size=(end_x - start_x, end_y - start_y),
         )
         return np.array(img.convert("RGB"))
+
+    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
+        warn_unused(approx_ok, ignore_falsey=True)
+        return np.array(self.os_slide.get_thumbnail(shape[::-1]))
+
+
+class ZarrReader(Reader):
+    """Reader for zarr files."""
+
+    def __init__(self, path: PathLike, axes: Optional[str] = None) -> None:
+        super().__init__(path)
+        register_codecs()
+        self.zarr = zarr.open(str(path), mode="r")
+
+        # If it is a zarr array, put it in a group
+        if isinstance(self.zarr, zarr.Array):
+            group = zarr.group()
+            group[0] = self.zarr
+            self.zarr = group
+
+        self.shape = self.zarr[0].shape
+        if len(self.shape) not in (2, 3, 4, 5):
+            raise ValueError(
+                "Only Zarrs with between 2 (e.g. YX) and 5 (e.g. TCZYX) "
+                "dimensions are supported."
+            )
+        self.dtype = self.zarr[0].dtype
+
+        # Assume the axes, this will be used if not given or specified in metadata
+        assumed_axes_mapping = {
+            2: "YX",
+            3: "YXC",
+            4: "CZYX",
+            5: "TCZYX",
+        }
+        self.axes = assumed_axes_mapping[len(self.shape)]
+
+        # Use the NGFF metadata NGFF if present
+        self.is_ngff = "omero" in self.zarr.attrs
+        self.zattrs = None
+        if self.is_ngff:
+            self.zattrs = self._load_zattrs()
+            self.axes = "".join(
+                multiscale.axis.name for multiscale in self.zattrs.multiscales
+            ).upper()
+        # Use the given axes if not None
+        self.axes = axes or self.axes
+
+        # Tile shape and mosaic attrs
+        self.tile_shape = self.zarr[0].chunks[:2]
+        self.mosaic_shape = mosaic_shape(self.shape, self.tile_shape)
+
+    def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
+        return self.zarr[0][index]
+
+    def _load_zattrs(self) -> ngff.Zattrs:
+        """Load the zarr attrs dictionary into dataclasses."""
+        return ngff.Zattrs(
+            _creator=ngff.Creator(**self.zattrs.get("_creator")),
+            multiscales=[
+                ngff.Multiscale(
+                    axes=[ngff.Axis(**axis) for axis in multiscale.get("axes", [])],
+                    datasets=[
+                        ngff.Dataset(
+                            path=dataset.get("path"),
+                            coordinateTransformations=[
+                                ngff.CoordinateTransformation(
+                                    **coordinate_transformation
+                                )
+                                for coordinate_transformation in dataset.get(
+                                    "coordinateTransformations", []
+                                )
+                            ],
+                        )
+                        for dataset in multiscale.get("datasets", [])
+                    ],
+                    version=multiscale.get("version"),
+                )
+                for multiscale in self.zarr.attrs.get("multiscales", [])
+            ],
+            _ARRAY_DIMENSIONS=self.zarr.attrs.get("_ARRAY_DIMENSIONS"),
+            omero=ngff.Omero(
+                name=self.zarr.attrs.get("omero", {}).get("name"),
+                channels=[
+                    ngff.Channel(
+                        name=channel.get("name"),
+                        coefficient=channel.get("coefficient"),
+                        color=channel.get("color"),
+                        family=channel.get("family"),
+                        inverted=channel.get("inverted"),
+                        label=channel.get("label"),
+                        window=ngff.Window(**channel.get("window", {})),
+                    )
+                    for channel in self.zattrs.get("omero", {}).get("channels", [])
+                ],
+            ),
+        )

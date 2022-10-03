@@ -7,21 +7,25 @@ import warnings
 from abc import ABC, abstractmethod
 from functools import partial
 from math import floor
+from numbers import Number
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import zarr
 
+from wsic import __version__ as wsic_version
 from wsic.codecs import register_codecs
+from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
 from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
 from wsic.types import PathLike
 from wsic.utils import (
-    dowmsample_shape,
+    downsample_shape,
     mean_pool,
     mosaic_shape,
     mpp2ppu,
+    scale_to_fit,
     tile_slices,
     warn_unused,
 )
@@ -40,8 +44,8 @@ class Writer(ABC):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of the output image. Defaults to np.uint8.
-        photometric (str, optional):
-            Photometric interpretation of the output image.
+        color_space (ColorSpace, optional):
+            Color space the output image.
             Defaults to "rgb".
         compression (str, optional):
             Compression codec to use. Defaults to None. Not all
@@ -68,8 +72,8 @@ class Writer(ABC):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",
-        compression: Optional[str] = None,
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,
+        codec: Optional[Codec] = None,
         compression_level: int = 0,
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
@@ -80,11 +84,13 @@ class Writer(ABC):
         self.shape = shape
         self.tile_size = tile_size
         self.dtype = dtype
-        self.photometric = photometric or "rgb"
-        self.compression = compression
+        self.color_space = color_space or "rgb"
+        self.codec = Codec.from_string(codec) if codec else None
         self.compression_level = compression_level or 0
         self.microns_per_pixel = microns_per_pixel
-        self.pyramid_downsamples = list(pyramid_downsamples) if pyramid_downsamples else []
+        self.pyramid_downsamples = (
+            list(pyramid_downsamples) if pyramid_downsamples else []
+        )
         self.overwrite = overwrite
         self.verbose = verbose
 
@@ -127,13 +133,14 @@ class Writer(ABC):
             num_workers=num_workers,
             verbose=self.verbose,
             timeout=timeout,
+            match_tile_sizes=not isinstance(self, ZarrWriter),
         )
 
     def __setitem__(
         self, index: Tuple[Union[int, slice], ...], value: np.ndarray
     ) -> None:
         """Return pixel data at index."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
     def copy_from_reader(
@@ -142,6 +149,7 @@ class Writer(ABC):
         num_workers: int = 2,
         read_tile_size: Tuple[int, int] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -155,9 +163,20 @@ class Writer(ABC):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         if self.path.exists() and not self.overwrite:
             raise FileExistsError(f"{self.path} exists and overwrite is False.")
+
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        raise NotImplementedError()
 
     @staticmethod
     def level_progress(iterable: Iterable, **kwargs) -> Iterator:
@@ -265,8 +284,8 @@ class JP2Writer(Writer):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of output image. Defaults to np.uint8.
-        photometric (str, optional):
-            Photometric interpretation of the output image.
+        color_space (ColorSpace, optional):
+            Color space the output image.
             Defaults to "rgb".
         compression (str, optional):
             Compression type. Currently only JPEG 2000 compression is
@@ -292,28 +311,31 @@ class JP2Writer(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: str = "rgb",  # Currently unused
-        compression: str = "jpeg2000",  # Currently unused
-        compression_level: int = 0,  # Currently unused
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,
+        codec: Optional[Codec] = "jpeg2000",  # Currently unused
+        compression_level: int = 0,
         microns_per_pixel: Optional[Tuple[float, float]] = None,  # Currently unused
-        pyramid_downsamples: Optional[List[int]] = None,  # Unused
+        pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
     ) -> None:
-        if photometric != "rgb":
-            warn_unused(photometric)
-        if compression != "jpeg2000":
-            warn_unused(compression)
-        warn_unused(compression_level, ignore_falsey=True)
-        warn_unused(microns_per_pixel)
-        warn_unused(pyramid_downsamples, ignore_falsey=True)
+        if codec != "jpeg2000":
+            warn_unused(codec)
+        pyramid_downsamples = pyramid_downsamples or []
+        if not np.array_equal(
+            pyramid_downsamples,
+            [2 ** (x + 1) for x in range(len(pyramid_downsamples))],
+        ):
+            raise ValueError(
+                "Pyramid downsamples must be consecutive powers of 2 for JP2."
+            )
         super().__init__(
             path=path,
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -331,6 +353,7 @@ class JP2Writer(Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -344,17 +367,40 @@ class JP2Writer(Writer):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use. Defaults to None. Not used for
+                JP2Writer, but included for API consistency.
         """
+        warn_unused(downsample_method, ignore_falsey=True)
         super().copy_from_reader(
             reader=reader,
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
         import glymur
 
+        numres = len(self.pyramid_downsamples) + 1 if self.pyramid_downsamples else None
+        psnr = (
+            [self.compression_level]
+            if isinstance(self.compression_level, Number)
+            else self.compression_level
+        )
+        capture_resolution = (
+            tuple(mpp2ppu(x, "cm") for x in self.microns_per_pixel)
+            if self.microns_per_pixel
+            else None
+        )
         jp2 = glymur.Jp2k(
-            self.path, shape=reader.shape, tilesize=self.tile_size, verbose=self.verbose
+            self.path,
+            shape=reader.shape,
+            tilesize=self.tile_size,
+            verbose=self.verbose,
+            numres=numres,
+            psnr=psnr,
+            colorspace=self.color_space,
+            capture_resolution=capture_resolution,
         )
         reader_tile_iterator = self.reader_tile_iterator(
             reader=reader,
@@ -362,7 +408,7 @@ class JP2Writer(Writer):
             read_tile_size=read_tile_size or self.tile_size,
             timeout=timeout,
         )
-        reader_tile_iterator = self.level_progress(reader_tile_iterator)
+        reader_tile_iterator = iter(self.level_progress(reader_tile_iterator))
         for tile_writer in jp2.get_tilewriters():
             try:
                 tile_writer[:] = next(reader_tile_iterator)
@@ -380,6 +426,21 @@ class TIFFWriter(Writer):
     same size and must be written in the order left-to-right, then
     top-to-bottom (row-by-row). Tiles cannot be skipped.
 
+    Notes:
+        The following notes are from the TIFF 6.0 Specification.
+
+        - TileWidth and TileLength (height) must each be a multiple of 16.
+        - "Offsets [bytes from the start of file to each tile blob and
+          therefore the tile ordering when writing] are ordered
+          left-to-right and top-to-bottom."
+        - "For PlanarConfiguration = 2, the offsets for the first
+          component plane are stored first, followed by all the offsets
+          for the second component plane, and so on."
+
+        The full specification is available at:
+        https://web.archive.org/web/20210108174645/https://www.adobe.io/content/dam/udp/en/open/standards/tiff/TIFF6.pdf
+
+
     Args:
         path (PathLike):
             Path to output file.
@@ -390,13 +451,13 @@ class TIFFWriter(Writer):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of output image. Defaults to np.uint8.
-        photometric (str, optional):
-            Photometric interpretation. Defaults to "rgb".
+        color_space (ColorSpace, optional):
+            color_space. Defaults to "rgb".
         compression (str, optional):
             Compression type.
             Defaults to "jpeg".
         compression_level (int, optional):
-            Compression level. Defaults to 95. Currently unused.
+            Compression level. Defaults to -1 (highest / lossless).
         microns_per_pixel (Tuple[float, float], optional):
             A (width, height) tuple of microns per pixel.
             Defaults to None.
@@ -418,9 +479,9 @@ class TIFFWriter(Writer):
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,  # Currently unused
-        photometric: Optional[str] = "rgb",
-        compression: Optional[str] = "jpeg",
-        compression_level: int = 0,  # Currently unused
+        color_space: Optional[ColorSpace] = "rgb",
+        codec: Optional[Codec] = "jpeg",
+        compression_level: int = -1,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,
         pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
@@ -430,14 +491,13 @@ class TIFFWriter(Writer):
     ) -> None:
         if dtype is not np.uint8:
             warn_unused(dtype)
-        warn_unused(compression_level, ignore_falsey=True)
         super().__init__(
             path=path,
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -465,6 +525,7 @@ class TIFFWriter(Writer):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -478,12 +539,17 @@ class TIFFWriter(Writer):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
         super().copy_from_reader(
             reader=reader,
             num_workers=num_workers,
             read_tile_size=read_tile_size,
             timeout=timeout,
+            downsample_method=downsample_method,
         )
         import tifffile
 
@@ -524,12 +590,12 @@ class TIFFWriter(Writer):
                     metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
                 tif.write(
-                    data=reader_tile_iterator,
+                    data=iter(reader_tile_iterator),
                     tile=self.tile_size,
                     shape=reader.shape,
                     dtype=reader.dtype,
-                    photometric=self.photometric,
-                    compression=self.compression,
+                    photometric=self.color_space,
+                    compression=(self.codec.condensed(), self.compression_level),
                     resolution=resolution,
                     subifds=len(self.pyramid_downsamples),
                     metadata=metadata,
@@ -554,6 +620,7 @@ class TIFFWriter(Writer):
                             tile_size=self.tile_size,
                             downsample=downsample,
                             read_intermediate_path=intermediate.path,
+                            downsample_method=downsample_method,
                         )
 
                         tile_generator = pool.imap(
@@ -569,17 +636,391 @@ class TIFFWriter(Writer):
                         )
 
                         tif.write(
-                            data=tile_generator,
+                            data=iter(tile_generator),
                             tile=self.tile_size,
                             shape=level_shape,
                             dtype=reader.dtype,
-                            photometric=self.photometric,
-                            compression=self.compression,
+                            photometric=self.color_space,
+                            compression=(
+                                self.codec.condensed(),
+                                self.compression_level,
+                            ),
                             subfiletype=1,  # Subfile type: reduced resolution
                         )
 
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        import tifffile
 
-class ZarrReaderWriter(Writer, Reader):
+        microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
+        resolution = (
+            (
+                round(mpp2ppu(microns_per_pixel[0], "cm")),
+                round(mpp2ppu(microns_per_pixel[1], "cm")),
+                "CENTIMETER",
+            )
+            if microns_per_pixel
+            else None
+        )
+
+        reader_mosaic_shape = mosaic_shape(reader.shape[:2], self.tile_size)
+        tile_generator = (
+            reader.get_tile(tile_index, decode=False)
+            for tile_index in np.ndindex(reader_mosaic_shape)
+        )
+        tile_iterator = self.level_progress(
+            tile_generator, total=np.product(reader_mosaic_shape)
+        )
+        metadata = {}
+        if self.ome and self.microns_per_pixel:
+            metadata["PhysicalSizeXUnit"] = "µm"
+            metadata["PhysicalSizeYUnit"] = "µm"
+            metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
+            metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
+
+        # Copy baseline tiles
+        with tifffile.TiffWriter(
+            self.path,
+            bigtiff=True,
+            ome=self.ome,
+        ) as tiff:
+            tiff.write(
+                data=iter(tile_iterator),
+                tile=self.tile_size,
+                shape=reader.shape,
+                dtype=reader.dtype,
+                photometric=reader.color_space.to_tiff(),
+                jpegtables=reader.jpeg_tables,
+                compression=reader.codec.condensed(),
+                metadata=metadata,
+                resolution=resolution,
+            )
+
+
+class SVSWriter(Writer):
+    """Aperio SVS writer using tifffile.
+
+    Note that when writing tiled TIFF files, the tiles must all be the
+    same size and must be written in the order left-to-right, then
+    top-to-bottom (row-by-row). Tiles cannot be skipped.
+
+    Args:
+        path (PathLike):
+            Path to output file.
+        shape (Tuple[int, int]):
+            A (width, height) tuple of image size in pixels.
+        tile_size (Tuple[int, int], optional):
+            A (width, height) tuple of tile size in pixels.
+            Defaults to (256, 256).
+        dtype (np.dtype, optional):
+            Data type of output image. Defaults to np.uint8.
+        color_space (ColorSpace, optional):
+            color_space. Defaults to "rgb".
+        compression (str, optional):
+            Compression type.
+            Defaults to "jpeg".
+        compression_level (int, optional):
+            Compression level. Defaults to 95. Currently unused.
+        microns_per_pixel (Tuple[float, float], optional):
+            A (width, height) tuple of microns per pixel.
+            Defaults to None.
+        pyramid_downsamples (List[int], optional):
+            A list of downsamples to create. Should be strictly
+            inceasing for maximum compatibility.
+            Defaults to None.
+        overwrite (bool, optional):
+            Overwrite existing file. Defaults to False.
+        verbose (bool, optional):
+            Print more output. Defaults to False.
+        ome (bool):
+            Write OME-TIFF metadata. Defaults to False.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        shape: Tuple[int, int],
+        tile_size: Tuple[int, int] = (256, 256),
+        dtype: np.dtype = np.uint8,  # Currently unused
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,
+        codec: Optional[Codec] = Codec.JPEG,
+        compression_level: int = 0,  # Currently unused
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
+        overwrite: bool = False,
+        verbose: bool = False,
+        **kwargs,
+    ) -> None:
+        # Validate inputs
+        if dtype is not np.uint8:
+            raise ValueError(f"SVSWriter only supports uint8, not {dtype}")
+        if color_space not in (ColorSpace.RGB, ColorSpace.YCBCR):
+            raise ValueError(
+                f"SVSWriter only supports RGB and YCbCr, not {color_space}"
+            )
+        codec = Codec.from_string(codec)
+        if codec not in (Codec.JPEG,):  # aperio_jp2000_ycbc not working
+            raise ValueError(
+                "SVSWriter currently only supports JPEG compession," f" not {codec}"
+            )
+        # Super
+        super().__init__(
+            path=path,
+            shape=shape,
+            tile_size=tile_size,
+            dtype=dtype,
+            color_space=color_space,
+            codec=codec,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
+
+    def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
+        """Write pixel data at index. Not supported for TIFFWriter.
+
+        In theory this is possible but it can be complex. If the new tile
+        is larger in bytes, the tile will have to be added to the end of the
+        file. The old tile will remain in the file and waste space unless it
+        is later overwritten by another of length smaller or equal to the
+        original tile.
+        """
+        raise NotImplementedError(
+            "Compressed tiled TIFF files do not support random access writes."
+        )
+
+    def copy_from_reader(
+        self,
+        reader: Reader,
+        num_workers: int = 2,
+        read_tile_size: Optional[Tuple[int, int]] = None,
+        timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        """Write pixel data to by copying from a Reader.
+
+        Args:
+            reader (Reader):
+                Reader object.
+            num_workers (int, optional):
+                Number of workers to use. Defaults to 2.
+            read_tile_size (Tuple[int, int], optional):
+                Tile size to read. Defaults to None.
+                This will use the tile size of the writer if None.
+            timeout (float, optional):
+                Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
+        """
+        super().copy_from_reader(
+            reader=reader,
+            num_workers=num_workers,
+            read_tile_size=read_tile_size,
+            timeout=timeout,
+            downsample_method=downsample_method,
+        )
+        import tifffile
+
+        microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
+        resolution = (
+            (
+                round(mpp2ppu(microns_per_pixel[0], "cm")),
+                round(mpp2ppu(microns_per_pixel[1], "cm")),
+                "CENTIMETER",
+            )
+            if microns_per_pixel
+            else None
+        )
+
+        with ZarrIntermediate(
+            None, reader.shape, zero_after_read=False
+        ) as intermediate:
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader=reader,
+                num_workers=num_workers,
+                intermediate=intermediate,
+                read_tile_size=read_tile_size or self.tile_size,
+                timeout=timeout,
+            )
+            reader_tile_iterator = self.level_progress(reader_tile_iterator)
+            # Write baseline (level 0)
+            with tifffile.TiffWriter(
+                self.path,
+                bigtiff=True,
+            ) as tif:
+
+                # Construct the pipe separated Aperio description
+                # Example description:
+                # skipcq: PYL-W0105
+                """
+                Aperio Image Library v11.2.1\n
+                46000x32914 [42673,5576 2220x2967] (240x240) JPEG/RGB Q=30;
+                Aperio Image Library v10.0.51\n
+                46920x33014 [0,100 46000x32914] (256x256) JPEG/RGB Q=30|
+                AppMag = 20|
+                StripeWidth = 2040|
+                ScanScope ID = CPAPERIOCS|
+                Filename = CMU-1|
+                Date = 12/29/09|Time = 09:59:15|
+                User = b414003d-95c6-48b0-9369-8010ed517ba7|
+                Parmset = USM Filter|
+                MPP = 0.4990|
+                Left = 25.691574|Top = 23.449873|
+                LineCameraSkew = -0.000424|
+                LineAreaXOffset = 0.019265|LineAreaYOffset = -0.000313|
+                Focus Offset = 0.000000|
+                ImageID = 1004486|
+                OriginalWidth = 46920|Originalheight = 33014|
+                Filtered = 5|
+                OriginalWidth = 46000|
+                OriginalHeight = 32914
+                """
+                aperio_desc_compression = {
+                    Codec.JPEG: f"JPEG/{self.color_space.upper()}",
+                    Codec.JPEG2000: "J2K/YUV16",
+                    "APERIO_JP2000_YCBC": "J2K/YUV16",
+                }
+                software = f"Aperio wsic Library v{wsic_version}"
+                # Using reader shape for now, could be user specified in future
+                original_height = reader.shape[0]
+                original_width = reader.shape[1]
+                # Not sure what these are copying original for now
+                mystery_height = original_height
+                mystery_width = original_width
+                # Get compression in Aperio header format
+                aperio_header_compression = aperio_desc_compression[self.codec.upper()]
+                headers = [
+                    (
+                        f"{software} \n"
+                        f"{original_width}x{original_height} "
+                        f"[0,100 {mystery_width}x{mystery_height}] "
+                        f"({self.tile_size[0]}x{self.tile_size[1]})"
+                        f" {aperio_header_compression} "
+                        f"Q={self.compression_level}"
+                    )
+                ]
+                key_values = {
+                    "AppMag": 20,  # e.g. 20
+                    "StripeWidth": None,
+                    "ScanScopeID": None,  # e.g. CPAPERIOCS
+                    "Filename": None,
+                    "Date": None,  # e.g. 01/01/22
+                    "Time": None,  # e.g. 09:00:00
+                    "User": None,  # e.g. UUID4
+                    "Parmset": None,  # e.g. USM Filter
+                    "MPP": np.mean(self.microns_per_pixel)
+                    if self.microns_per_pixel
+                    else None,
+                    "Left": None,
+                    "Top": None,
+                    "LineCameraSkew": None,  # e.g. -0.003035
+                    "LineAreaXOffset": None,  # e.g. 0.000000
+                    "LineAreaYOffset": None,  # e.g. 0.000000
+                    "Focus Offset": None,  # e.g. -0.001000
+                    "DSR ID": None,  # e.g. homer
+                    "ImageID": None,  # e.g. 1234
+                    "OriginalWidth": original_width,
+                    "OriginalHeight": original_height,
+                    "Filtered": None,  # e.g. 5
+                }
+                description = (
+                    "\n".join(headers)
+                    + ("|" if any(key_values.values()) else "")
+                    + "|".join(
+                        f"{key} = {value}" for key, value in key_values.items() if value
+                    )
+                )
+
+                compression = self.codec.condensed()
+                tif.write(
+                    data=iter(reader_tile_iterator),
+                    tile=self.tile_size,
+                    shape=reader.shape,
+                    dtype=reader.dtype,
+                    photometric=self.color_space,
+                    compression=(compression, self.compression_level),
+                    resolution=resolution,
+                    subifds=len(self.pyramid_downsamples),
+                    description=description,
+                    subfiletype=0,
+                )
+
+                # Write thumbnail
+                # NOTE: Assuming YXC order
+                thumb_scale = max(
+                    scale_to_fit(reader.shape[:2], (1024, 768)),
+                    scale_to_fit(reader.shape[:2], (768, 1024)),
+                )
+                thumb_shape = tuple(floor(s * thumb_scale) for s in reader.shape[:2])
+                thumbnail = reader.thumbnail(thumb_shape, approx_ok=True)
+                tif.write(
+                    data=thumbnail,
+                    rowsperstrip=16,
+                    dtype=np.uint8,
+                    photometric=ColorSpace.RGB,
+                    compression=Codec.JPEG,
+                    description=software,
+                    subfiletype=0,
+                )
+
+                # Write pyramid resolutions
+                with multiprocessing.Pool(num_workers) as pool:
+                    for level, downsample in self.pyramid_progress(
+                        enumerate(self.pyramid_downsamples),
+                        total=len(self.pyramid_downsamples),
+                    ):
+                        level_shape = tuple(
+                            floor(s / downsample) for s in reader.shape[:2]
+                        ) + (reader.shape[-1],)
+
+                        level_tiles_shape = mosaic_shape(
+                            level_shape,
+                            self.tile_size,
+                        )
+
+                        func = partial(
+                            get_level_tile,
+                            tile_size=self.tile_size,
+                            downsample=downsample,
+                            read_intermediate_path=intermediate.path,
+                            downsample_method=downsample_method,
+                        )
+
+                        tile_generator = pool.imap(
+                            func=func,
+                            iterable=np.ndindex(level_tiles_shape),
+                        )
+
+                        tile_generator = self.level_progress(
+                            tile_generator,
+                            total=int(np.product(level_tiles_shape)),
+                            desc=f"Level {level}",
+                            leave=False,
+                        )
+
+                        tif.write(
+                            data=iter(tile_generator),
+                            tile=self.tile_size,
+                            shape=level_shape,
+                            dtype=reader.dtype,
+                            photometric=self.color_space,
+                            compression=(
+                                compression,
+                                self.compression_level,
+                            ),
+                            description=software,  # Optional for OpenSlide
+                            subfiletype=1,  # Subfile type: 1 = reduced resolution
+                        )
+
+
+class ZarrWriter(Writer, Reader):
     """Zarr reader and writer.
 
     Args:
@@ -592,11 +1033,11 @@ class ZarrReaderWriter(Writer, Reader):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             Data type of the output zarr. Defaults to np.uint8.
-        compression (str, optional):
+        codec (str, optional):
             Compression codec to use. Defaults to None. Not all
             writers support compression.
-        photometric (str, optional):
-            Photometric interpretation. Defaults to "rgb".
+        color_space (ColorSpace, optional):
+            Color space. Defaults to RGB.
         compression_level (int, optional):
             Compression level to use. Defaults to 0 (lossless /
             maximum).
@@ -620,11 +1061,11 @@ class ZarrReaderWriter(Writer, Reader):
     def __init__(
         self,
         path: Path,
-        shape: Optional[Tuple[int, int]] = None,
+        shape: Tuple[int, int] = None,
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",  # Currently unused
-        compression: str = "blosc-zstd",
+        color_space: Optional[ColorSpace] = ColorSpace.RGB,  # Currently unused
+        codec: Union[str, Codec] = Codec.BLOSC,
         compression_level: int = 9,
         microns_per_pixel: Tuple[float, float] = None,  # Currently unused
         pyramid_downsamples: Optional[List[int]] = None,  # Currently unused
@@ -633,16 +1074,14 @@ class ZarrReaderWriter(Writer, Reader):
         *,
         ome: bool = False,
     ) -> None:
-        if photometric != "rgb":
-            warn_unused(photometric)
         warn_unused(microns_per_pixel)
         super().__init__(
             path=path,
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -652,106 +1091,26 @@ class ZarrReaderWriter(Writer, Reader):
         self.ome = ome
         self.overwrite = overwrite
         register_codecs()
-        self.compressor = self.get_codec(compression, compression_level)
-        if self.path.exists() and not self.path.is_dir():
-            raise FileExistsError(
-                f"{self.path} exists but is not a directory. Zarrs must be directories."
-            )
+        self.compressor = self.get_codec(codec, compression_level)
+        self.zarr = zarr.open(self.path, mode="a")
+        self.tile_shape = tile_size[::-1]
 
-        self.zarr = None
-        self._init_zarr(create=False)
+    @property
+    def mosaic_shape(self) -> Optional[Tuple[int, int]]:
+        return mosaic_shape(self.shape, self.tile_shape)
 
-    def _init_zarr(self, create: bool = True) -> Optional[zarr.Group]:
-        """Initialize the zarr.
-
-        If the zarr already exists, it will be opened. Otherwise, it will be
-        created if there is a shape.
-
-        Args:
-            create (bool):
-                Create the zarr if it does not exist.
-
-        Returns:
-            zarr.Array or zarr.Group:
-                The zarr.
-        """
-        # Read an existing zarr
-        if self.path.is_dir():
-            self.zarr = zarr.open(
-                self.path,
-                mode="r+" if self.overwrite else "r",
-            )
-        # Create a new zarr group with one array if a shape was given
-        if create:
-            self.zarr = zarr.open_group(
-                zarr.NestedDirectoryStore(self.path),
-                mode="a",
-            )
-            self.zarr[0] = zarr.zeros(
-                shape=self.shape,
-                chunks=self.tile_size,
-                dtype=self.dtype,
-                compressor=self.compressor,
-            )
-        # If it is an array zarr, put it in a group
-        if isinstance(self.zarr, zarr.Array):
-            group = zarr.group()
-            group[0] = self.zarr
-            self.zarr = group
-        # Get the shape and dtype from the zarr if possible
-        if self.zarr is not None:
-            self.shape = self.zarr[0].shape
-            self.dtype = self.zarr[0].dtype
-        # self.zarr may be None if the zarr was not created (no shape given)
-        return self.zarr
-
+    @staticmethod
     def get_codec(
-        self,
-        compression: str,
-        compression_level: int,
+        codec: Union[str, Codec],
+        level: int,
+        **kwargs: Dict[str, Any],
     ) -> Callable[[bytes], bytes]:
         """Get a codec for the given compression method and compression level."""
-        from numcodecs import LZ4, LZMA, Blosc, Zlib, Zstd
+        import numcodecs
 
-        numcodecs_codecs = {
-            "lz4": LZ4,
-            "lzma": LZMA,
-            "blosc": Blosc,  # zarr default
-            "blosc-zstd": partial(Blosc, cname="zstd", shuffle=Blosc.BITSHUFFLE),
-            "zlib": Zlib,
-            "zstd": Zstd,
-        }
-
-        try:
-            import imagecodecs
-
-            imagecodecs_codecs = {
-                "deflate": imagecodecs.numcodecs.Deflate,
-                "webp": imagecodecs.numcodecs.Webp,
-                "jpeg": imagecodecs.numcodecs.Jpeg,
-                "jpegls": imagecodecs.numcodecs.JpegLs,
-                "jpeg2000": imagecodecs.numcodecs.Jpeg2k,
-                "jpegxl": imagecodecs.numcodecs.JpegXl,
-                "png": imagecodecs.numcodecs.Png,
-                "zfp": imagecodecs.numcodecs.Zfp,
-            }
-        except ImportError:
-            if self.verbose:
-                print("imagecodecs not installed")
-            imagecodecs_codecs = {}
-
-        if compression in numcodecs_codecs:
-            return numcodecs_codecs[compression](clevel=compression_level)
-
-        if compression in imagecodecs_codecs:
-            return imagecodecs_codecs[compression](level=compression_level)
-
-        if compression == "qoi":
-            from wsic.codecs import QOI
-
-            return QOI()
-
-        raise ValueError(f"Compression {compression} not supported.")
+        config = Codec.from_string(codec).to_numcodecs_config(level=level)
+        config.update(kwargs)
+        return numcodecs.get_codec(config)
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index."""
@@ -767,6 +1126,7 @@ class ZarrReaderWriter(Writer, Reader):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Write pixel data to by copying from a Reader.
 
@@ -780,26 +1140,28 @@ class ZarrReaderWriter(Writer, Reader):
                 This will use the tile size of the writer if None.
             timeout (float, optional):
                 Timeout for workers. Defaults to 10s.
+            downsample_method (str, optional):
+                Downsample method to use when building pyramid levels.
+                Defaults to None. Valid downsample methods are: "cv2",
+                "scipy", "np", None.
         """
-        super().copy_from_reader(
-            reader=reader,
-            num_workers=num_workers,
-            read_tile_size=read_tile_size,
-            timeout=timeout,
-        )
-
         # Ensure there is a zarr to write to
-        if self.shape is None:
-            self.shape = reader.shape
-        self._init_zarr()
+        self.zarr.create_dataset(
+            name="0",
+            shape=self.shape,
+            dtype=self.dtype,
+            chunks=(*self.tile_shape, reader.shape[-1]),
+            compressor=self.compressor,
+        )
 
         # Validate and normalise inputs
         lossy_codecs = ["jpeg"]
         optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
-        lossy = self.compression in lossy_codecs or (
-            self.compression in optionally_lossy_codecs and self.compression_level > 0
+        lossy = self.codec.condensed().lower() in lossy_codecs or (
+            self.codec in optionally_lossy_codecs and self.compression_level > 0
         )
-        read_tile_size = read_tile_size or self.tile_size
+        read_tile_size = read_tile_size or self.tile_shape[:2][::-1]
+        yield_tile_size = self.tile_shape[:2][::-1]
         write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
         if lossy and not write_multiple_of_read:
             raise ValueError(
@@ -807,27 +1169,32 @@ class ZarrReaderWriter(Writer, Reader):
                 "multiple of the read tile size."
             )
 
-        # Create a reader tile iterator
-        reader_tile_iterator = self.reader_tile_iterator(
-            reader,
-            read_tile_size=read_tile_size,
-            yield_tile_size=read_tile_size,
-            num_workers=num_workers,
-            timeout=timeout,
-        )
-        reader_tile_iterator = self.level_progress(reader_tile_iterator)
+        with ZarrIntermediate(
+            None, shape=reader.shape, zero_after_read=False
+        ) as intermediate:
+            tile_sizes_match = read_tile_size == yield_tile_size
+            # Create a reader tile iterator
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader,
+                read_tile_size=read_tile_size,
+                yield_tile_size=yield_tile_size,
+                num_workers=num_workers,
+                timeout=timeout,
+                intermediate=None if tile_sizes_match else intermediate,
+            )
+            reader_tile_iterator = self.level_progress(reader_tile_iterator)
 
-        # Write the reader tile iterator to the writer
-        tiles_shape = mosaic_shape(
-            reader.shape,
-            read_tile_size[::-1],
-        )
-        tiles_index = np.ndindex(tiles_shape)
-        for ji, tile in zip(tiles_index, reader_tile_iterator):
-            level_0 = self.zarr[0]
-            level_0[tile_slices(ji, read_tile_size)] = tile
+            # Write the reader tile iterator to the writer
+            tiles_shape = mosaic_shape(
+                reader.shape,
+                yield_tile_size[::-1],
+            )
+            tiles_index = np.ndindex(tiles_shape)
+            for ji, tile in zip(tiles_index, reader_tile_iterator):
+                level_0 = self.zarr[0]
+                level_0[tile_slices(ji, yield_tile_size)] = tile
 
-        self._build_pyramid()
+        self._build_pyramid(downsample_method)
         self._write_ome_metadata()
 
     def _write_ome_metadata(self) -> None:
@@ -837,12 +1204,12 @@ class ZarrReaderWriter(Writer, Reader):
         """
         if self.ome:
             multiscales = [
-                ngff.Multiscales(
+                ngff.Multiscale(
                     datasets=[
                         ngff.Dataset(
                             path=str(level),
                             coordinateTransformations=[
-                                ngff.CoordinateTransform(
+                                ngff.CoordinateTransformation(
                                     "scale",
                                     [
                                         1,
@@ -875,10 +1242,14 @@ class ZarrReaderWriter(Writer, Reader):
             for key, value in meta_dict.items():
                 self.zarr.attrs[key] = value
 
-    def _build_pyramid(self):
+    def _build_pyramid(self, downsample_method: Optional[str] = None):
         """Build the pyramid.
 
         Constructs additional levels of the pyramid from the first level.
+
+        Args:
+            downsample_method (str, optional):
+                Downsample method to use. Defaults to None.
 
         """
         previous_level = self.zarr[0]
@@ -887,7 +1258,8 @@ class ZarrReaderWriter(Writer, Reader):
             enumerate(self.pyramid_downsamples, start=1),
         ):
             inter_level_downsample = downsample // previous_downsample
-            level_shape = dowmsample_shape(self.shape, downsample)
+            # NOTE: Assuming length three shape with channels last
+            level_shape = downsample_shape(self.shape, (downsample, downsample, 1))
             level_tiles_shape = mosaic_shape(
                 level_shape,
                 self.tile_size,
@@ -895,7 +1267,7 @@ class ZarrReaderWriter(Writer, Reader):
             level_array = self.zarr.zeros(
                 name=level,
                 shape=level_shape,
-                chunks=(*self.tile_size, self.shape[-1]),
+                chunks=(*self.tile_shape, self.shape[-1]),
                 dtype=self.dtype,
                 compressor=self.compressor,
             )
@@ -907,13 +1279,19 @@ class ZarrReaderWriter(Writer, Reader):
             for ji in self.level_progress(level_tiles_index):
                 read_slices = tile_slices(ji, level_read_tile_size)
                 tile = previous_level[read_slices]
-                down_tile = downsample_tile(tile, inter_level_downsample)
+                down_tile = downsample_tile(
+                    tile, inter_level_downsample, method=downsample_method
+                )
                 write_slices = tile_slices(ji, self.tile_size)
                 level_array[write_slices] = down_tile
             previous_level = level_array
             previous_downsample = downsample
 
-    def transcode_from_reader(self, reader: Union[TIFFReader, DICOMWSIReader]) -> None:
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
         """Losslessly transform into a new format from a supported Reader.
 
         Repackages tiles from the Reader to a zarr. Currently only
@@ -923,6 +1301,7 @@ class ZarrReaderWriter(Writer, Reader):
         - J2K compressed SVS (:class:`wsic.readers.TIFFReader`)
         - JPEG compressed OME-TIFF (:class:`wsic.readers.TIFFReader`)
         - JPEG compressed DICOM WSI (:class:`wsic.readers.DICOMWSIReader`)
+        - JPEG compressed NDPI (Hamamatsu)
 
         Currently only outputs a single resolution level (level 0).
 
@@ -935,24 +1314,17 @@ class ZarrReaderWriter(Writer, Reader):
         Args:
             reader (Reader):
                 Reader object.
+            downsample_method (str, optional):
+                Downsample method to use for new reduced resolutions.
+                Defaults to None.
+                Valid downsample methods are: "cv2", "scipy", "np", None.
         """
-        # Input validation
-        if not hasattr(reader, "get_tile"):
+        transcode_supported = self._can_transcode_from_reader(reader)
+        if not transcode_supported:
             raise ValueError(
-                "Reader must have a get_tile method which can return encoded tiles"
-                " (decoded=False)."
-            )
-        if self.tile_size != reader.tile_shape[:2][::-1]:
-            raise ValueError(
-                "Tile size must match the reader tile size for transcoding."
-            )
-        if self.dtype != reader.dtype:
-            raise ValueError("Dtype must match the reader dtype for transcoding.")
-        if isinstance(reader, TIFFReader) and not any(
-            [reader.tiff.is_svs, reader.tiff.is_ome]
-        ):
-            raise ValueError(
-                "Currently only SVS and OME-TIFF are supported for TIFF transcoding."
+                "Currently only SVS, NDPI, OME-TIFF, and WSI DICOM "
+                "(with JPEG, JPEG2000, or WebP compression) "
+                "are supported for transcoding."
             )
 
         register_codecs()
@@ -965,7 +1337,7 @@ class ZarrReaderWriter(Writer, Reader):
             name="0",
             shape=self.shape,
             dtype=self.dtype,
-            chunks=(*reader.tile_shape, reader.shape[-1]),
+            chunks=(*self.tile_shape, reader.shape[-1]),
             compressor=codec,
         )
 
@@ -980,8 +1352,60 @@ class ZarrReaderWriter(Writer, Reader):
             with open(tile_path, "wb") as file_handle:
                 file_handle.write(tile_bytes)
 
-        self._build_pyramid()
+        self._build_pyramid(downsample_method)
         self._write_ome_metadata()
+
+    def _can_transcode_from_reader(self, reader: Reader) -> bool:
+        """Determine if a reader supports from to the current writer.
+
+        Args:
+            reader (Reader):
+                Reader object.
+
+        Returns:
+            bool:
+                Whether the reader supports being transcoded from.
+        """
+        # 1. A valid get_tile(decode=False)
+        try:
+            reader.get_tile((0, 0), decode=False)
+        except (NotImplementedError, AttributeError):
+            raise ValueError(
+                "Reader must have a get_tile method which can return encoded tiles"
+                " (decoded=False)."
+            )
+        # 2. Compatible tile sizes
+        if self.tile_size != reader.tile_shape[:2][::-1]:
+            raise ValueError(
+                "Tile size must match the reader tile size for transcoding."
+            )
+        # 3. Matching data types
+        if self.dtype != reader.dtype:
+            raise ValueError("Dtype must match the reader dtype for transcoding.")
+        # 4. Compatible compression
+        has_valid_compression = (
+            Codec.from_string(reader.codec) in (Codec.JPEG, Codec.JPEG2000, Codec.WEBP),
+        )
+        # 5. Known supported TIFF formats
+        is_generic_tiff = isinstance(reader, TIFFReader) and (
+            reader.tiff.pages[0].is_tiled and has_valid_compression
+        )
+        is_supported_tiff = isinstance(reader, TIFFReader) and any(
+            [
+                reader.tiff.is_svs,
+                reader.tiff.is_ome,
+                reader.tiff.is_ndpi,
+                is_generic_tiff,
+            ]
+        )
+        # 5. Supported Reader (WSIDICOM or a TIFF with supported format)
+        return all(
+            [
+                isinstance(reader, (TIFFReader, DICOMWSIReader)),
+                has_valid_compression,
+                not isinstance(reader, TIFFReader) or is_supported_tiff,
+            ]
+        )
 
     @staticmethod
     def get_transcode_codec(reader: TIFFReader) -> Any:
@@ -995,16 +1419,29 @@ class ZarrReaderWriter(Writer, Reader):
             numcodecs.Codec:
                 Codec to use for transcoding.
         """
-        from imagecodecs.numcodecs import Jpeg, Jpeg2k
+        from imagecodecs.numcodecs import Jpeg, Jpeg2k, Webp
 
-        if reader.compression == "JPEG":
-            return Jpeg(tables=reader.jpeg_tables, colorspace_jpeg=reader.colour_space)
-        if reader.compression == "Aperio J2K YCbCr":
-            return Jpeg2k(codecformat="J2K", colorspace="YCbCr")
-        if reader.compression == "Aperio J2K RGB":
-            return Jpeg2k(codecformat="J2K", colorspace="RGB")
+        # Try to get the compression level from the reader if known
+        try:
+            level = reader.compression_level
+        except AttributeError:
+            level = None
+
+        # Create the codec object
+        if reader.codec == Codec.JPEG:
+            return Jpeg(
+                tables=reader.jpeg_tables,
+                colorspace_jpeg=reader.color_space,
+                colorspace_data=ColorSpace.RGB,
+                level=reader.compression_level,
+            )
+        if reader.codec == Codec.JPEG2000:
+            return Jpeg2k(codecformat="JP2", colorspace=reader.color_space, level=level)
+        if reader.codec == Codec.WEBP:
+            return Webp(level=level)
+        # Out of options
         raise ValueError(
-            "Currently only JPEG and J2K (JPEG-2000) compression "
+            "Currently only JPEG, J2K (JPEG-2000), and WebP compression "
             " are supported for transcoding."
         )
 
@@ -1029,7 +1466,7 @@ class ZarrIntermediate(Writer, Reader):
             Defaults to (256, 256).
         dtype (np.dtype, optional):
             The data type of the output file. Defaults to np.uint8.
-        photometric (str, optional):
+        color_space (ColorSpace, optional):
             Unused but kept for compatibility with the Writer base
             class.
         compression (str, optional):
@@ -1056,12 +1493,12 @@ class ZarrIntermediate(Writer, Reader):
 
     def __init__(
         self,
-        path: PathLike,
+        path: Optional[PathLike],
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
-        photometric: Optional[str] = "rgb",  # Currently unused
-        compression: Optional[str] = None,  # Currently unused
+        color_space: Optional[ColorSpace] = "rgb",  # Currently unused
+        codec: Optional[Codec] = None,  # Currently unused
         compression_level: int = 0,  # Currently unused
         microns_per_pixel: Tuple[float, float] = None,  # Currently unused
         pyramid_downsamples: Optional[List[int]] = None,  # Currently unused
@@ -1070,9 +1507,9 @@ class ZarrIntermediate(Writer, Reader):
         *,
         zero_after_read: bool = False,
     ) -> None:
-        if photometric != "rgb":
-            warn_unused(photometric)
-        warn_unused(compression)
+        if color_space != "rgb":
+            warn_unused(color_space)
+        warn_unused(codec)
         warn_unused(compression_level, ignore_falsey=True)
         warn_unused(microns_per_pixel)
         warn_unused(pyramid_downsamples, ignore_falsey=True)
@@ -1085,8 +1522,8 @@ class ZarrIntermediate(Writer, Reader):
             shape=shape,
             tile_size=tile_size,
             dtype=dtype,
-            photometric=photometric,
-            compression=compression,
+            color_space=color_space,
+            codec=codec,
             compression_level=compression_level,
             microns_per_pixel=microns_per_pixel,
             pyramid_downsamples=pyramid_downsamples,
@@ -1119,12 +1556,13 @@ class ZarrIntermediate(Writer, Reader):
         return result  # noqa: R504
 
     def __enter__(self) -> "ZarrIntermediate":
-        """Enter the context manager."""
+        """Enter the context."""
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        """Exit the context manager."""
-        shutil.rmtree(self.path)
+        """Exit the context."""
+        if self.path.exists():
+            shutil.rmtree(self.path)
 
     def copy_from_reader(
         self,
@@ -1132,12 +1570,92 @@ class ZarrIntermediate(Writer, Reader):
         num_workers: int = 2,
         read_tile_size: Optional[Tuple[int, int]] = None,
         timeout: float = 10.0,
+        downsample_method: Optional[str] = None,
     ) -> None:
         """Not supported but included for API consistency."""
         raise NotImplementedError()
 
 
-def downsample_tile(image: np.ndarray, factor: int) -> np.array:
+def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using OpenCV.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    import cv2
+
+    return cv2.resize(
+        image,
+        (image.shape[1] // factor, image.shape[0] // factor),
+        interpolation=cv2.INTER_AREA,
+    )
+
+
+def _pil_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using PIL.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    import PIL.Image
+
+    return PIL.Image.fromarray(image).resize(
+        (image.shape[1] // factor, image.shape[0] // factor),
+        resample=PIL.Image.Resampling.Box,
+    )
+
+
+def _scipy_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using SciPy.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    from scipy import ndimage
+
+    return ndimage.zoom(image, (1 / factor, 1 / factor, 1), order=1)
+
+
+def _np_downsample(image: np.ndarray, factor: int) -> np.ndarray:
+    """Resample an image using NumPy.
+
+    Args:
+        image (np.ndarray):
+            The image to resample.
+        factor (int):
+            The downsampling factor.
+
+    Returns:
+        np.ndarray:
+            The resampled image.
+    """
+    return mean_pool(image.astype(np.float), factor).clip(0, 255).astype(np.uint8)
+
+
+def downsample_tile(
+    image: np.ndarray, factor: int, method: Optional[str] = None
+) -> np.array:
     """Downsample an image by a factor.
 
     Args:
@@ -1145,25 +1663,34 @@ def downsample_tile(image: np.ndarray, factor: int) -> np.array:
             The image to downsample.
         factor (int):
             The downsampling factor.
+        method (str):
+            The downsampling method (library) to use.
+            Defaults to None, which tries cv2, then scipy, and falls
+            back to numpy.
+            Valid options are: "cv2", "pillow", "scipy", "np", None.
     """
-    try:
-        import cv2
+    methods = {
+        "cv2": _cv2_downsample,
+        "pillow": _pil_downsample,
+        "scipy": _scipy_downsample,
+        "np": _np_downsample,
+    }
 
-        return cv2.resize(image, (image.shape[1] // factor, image.shape[0] // factor))
-    except ImportError:
-        warnings.warn("OpenCV not installed.")
-    try:
-        from scipy import ndimage
+    if method is not None and method not in methods:
+        raise ValueError(f"Invalid method: {method}")
 
-        return ndimage.zoom(image, 1 / factor, order=0)
-    except ImportError:
-        warnings.warn("Scipy not installed.")
-    warnings.warn(
-        "Falling back to numpy for tile downsampling. "
-        "This may be slow. "
-        "Consider installing OpenCV or Scipy."
-    )
-    return mean_pool(image, factor)
+    if method in methods:
+        return methods[method](image, factor)
+
+    for method_name, func in methods.items():
+        try:
+            return func(image, factor)
+        except ImportError:
+            warnings.warn(
+                f"Failed to import library for {method_name} for downsampling. "
+                "It may not be installed."
+            )
+    raise Exception("Failed to use any downsampling method.")
 
 
 def get_level_tile(
@@ -1171,8 +1698,22 @@ def get_level_tile(
     tile_size: Tuple[int, int],
     downsample: int,
     read_intermediate_path: PathLike,
+    downsample_method: Optional[str] = None,
 ) -> np.ndarray:
-    """Generate tiles for a downsampled level."""
+    """Generate tiles for a downsampled level.
+
+    Args:
+        yx (Tuple[int, int]):
+            The tile coordinates.
+        tile_size (Tuple[int, int]):
+            The tile size.
+        downsample (int):
+            The downsampling factor.
+        read_intermediate_path (PathLike):
+            The path to the intermediate file (zarr).
+        downsample_method (str):
+            The downsampling method (library) to use.
+    """
     y, x = yx
     w, h = tile_size
     tile_index = (
@@ -1181,4 +1722,4 @@ def get_level_tile(
     )
     reader = zarr.open(read_intermediate_path, mode="r")
     tile = reader[tile_index]
-    return downsample_tile(tile, downsample)
+    return downsample_tile(tile, downsample, method=downsample_method)

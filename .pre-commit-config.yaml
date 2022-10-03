@@ -1,16 +1,47 @@
 repos:
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.14
+    hooks:
+    - id: mdformat
+      # Optionally add plugins
+      additional_dependencies:
+      - mdformat-gfm
+      - mdformat-black
+      - mdformat-shfmt
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.3.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=50000']
+      - id: check-ast
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-toml
+      - id: check-xml
+      - id: check-yaml
+      - id: destroyed-symlinks
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: name-tests-test
+        args: ['--django']
+      - id: pretty-format-json
+      - id: requirements-txt-fixer
+      - id: trailing-whitespace
+        exclude: 'setup.cfg'
   - repo: https://github.com/pycqa/isort
-    rev: 5.9.3
+    rev: 5.10.1
     hooks:
       - id: isort
   - repo: https://github.com/psf/black
-    rev: 22.1.0 # Replace with any tag/version: https://github.com/psf/black/tags
+    rev: 22.3.0 # Replace with any tag/version: https://github.com/psf/black/tags
     hooks:
       - id: black
         language_version: python3
         additional_dependencies: ['click==8.0.4']  # Currently >8.0.4 breaks black
-  - repo: https://gitlab.com/pycqa/flake8
-    rev: 3.9.2
+  - repo: https://github.com/PyCQA/flake8
+    rev: 4.0.1
     hooks:
       - id: flake8
         additional_dependencies: [
@@ -19,8 +50,7 @@ repos:
           flake8-bugbear, # Detect potential bugs
           flake8-builtins, # Check for built-ins being used as variables
           flake8-cognitive-complexity, # Check max function complexity
-          flake8-comprehensions, # Suggestions for better list/set/dict comprehensions 
-          flake8-eradicate, # Find dead/commented out code
+          flake8-comprehensions, # Suggestions for better list/set/dict comprehensions
           flake8-expression-complexity, # Check max expression complexity
           flake8-fixme, # Check for FIXME, TODO, and XXX left in comments
           flake8-isort, # Check import ordering

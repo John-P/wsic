@@ -77,7 +77,7 @@ TCZYX = Literal["t", "c", "z", "y", "x"]
 class Creator:
     """Record the creator (wsic) information.
 
-    Attributes:
+    Parameters:
         name (str):
             The name of the creator.
         version (str):
@@ -89,10 +89,10 @@ class Creator:
 
 
 @dataclass
-class CoordinateTransform:
+class CoordinateTransformation:
     """Transformation from the zarr to slide coordinate system.
 
-    Attributes:
+    Parameters:
         type (str):
             The type of coordinate transform. E.g. "scale".
         scale (List[float]):
@@ -101,14 +101,14 @@ class CoordinateTransform:
     """
 
     type: str = "scale"  # noqa: A003
-    scale: List[float] = field(default_factory=[1.0, 0.5, 0.5])
+    scale: List[float] = field(default_factory=lambda: [1.0, 0.5, 0.5])
 
 
 @dataclass
 class Dataset:
     """Description of a single resolution.
 
-    Attributes:
+    Parameters:
         path (str):
             Path to the dataset. This will usually be a string of an
             integer e.g. "0".
@@ -117,8 +117,8 @@ class Dataset:
     """
 
     path: str = "0"
-    coordinateTransformations: List[CoordinateTransform] = field(  # noqa: N815
-        default_factory=lambda: [CoordinateTransform()]
+    coordinateTransformations: List[CoordinateTransformation] = field(  # noqa: N815
+        default_factory=lambda: [CoordinateTransformation()]
     )
 
 
@@ -126,7 +126,7 @@ class Dataset:
 class Axis:
     """Description of an axis including type and units.
 
-    Attributes:
+    Parameters:
         name (str):
             The name of the axis. Must be one of: "t", "c", "z", "y",
             "x".
@@ -143,10 +143,10 @@ class Axis:
 
 
 @dataclass
-class Multiscales:
+class Multiscale:
     """Description of multiple resolutions present.
 
-    Attributes:
+    Parameters:
         axes (List[Axis]):
             The axes of the multiscales.
         datasets (List[Dataset]):
@@ -170,7 +170,7 @@ class Multiscales:
 class Window:
     """The range of values within a channel.
 
-    Attributes:
+    Parameters:
         end (int):
             The end of the window.
         max (int):
@@ -191,7 +191,7 @@ class Window:
 class Channel:
     """Description of a single channel.
 
-    Attributes:
+    Parameters:
         active (bool):
             Whether the channel is active by default.
         color (str):
@@ -218,7 +218,7 @@ class Channel:
 class RDefs:
     """Defaults for axes and colour model.
 
-    Attributes:
+    Parameters:
         defaultT (int):
             Default timepoint.
         defaultZ (int):
@@ -236,7 +236,7 @@ class RDefs:
 class Omero:
     """Display information e.g. colour channel information.
 
-    Attributes:
+    Parameters:
         name (str):
             The display name.
         id (int):
@@ -266,7 +266,7 @@ class Omero:
 class Zattrs:
     """Root metadata.
 
-    Attributes:
+    Parameters:
         _creator (Creator):
             Information about the creator.
         multiscales (Multiscales):
@@ -278,6 +278,6 @@ class Zattrs:
     """
 
     _creator: Creator = field(default_factory=Creator)
-    multiscales: List[Multiscales] = field(default_factory=lambda: [Multiscales()])
+    multiscales: List[Multiscale] = field(default_factory=lambda: [Multiscale()])
     _ARRAY_DIMENSIONS: List[TCZYX] = field(default_factory=lambda: ["y", "x", "c"])
     omero: Omero = field(default_factory=Omero)

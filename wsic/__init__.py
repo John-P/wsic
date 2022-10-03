@@ -2,9 +2,9 @@
 
 __author__ = """John Pocock"""
 __email__ = "j.c.pocock@warwick.ac.uk"
-__version__ = "0.2.0"
+__version__ = "0.5.1"
 
-from . import codecs, magic, metadata, readers, types, writers
+from . import codecs, magic, metadata, multiprocessing, readers, types, writers
 
 __all__ = [
     "codecs",
@@ -13,4 +13,5 @@ __all__ = [
     "types",
     "writers",
     "metadata",
+    "multiprocessing",
 ]
