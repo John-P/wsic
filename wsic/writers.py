@@ -1226,9 +1226,9 @@ class ZarrWriter(Writer, Reader):
                                 ngff.CoordinateTransformation(
                                     "scale",
                                     [
-                                        1,
                                         mpp[0] * downsample,
                                         mpp[1] * downsample,
+                                        1,
                                     ],
                                 )
                             ]
