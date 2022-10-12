@@ -318,6 +318,7 @@ class JP2Writer(Writer):
         pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
+        **kwargs,
     ) -> None:
         if codec != "jpeg2000":
             warn_unused(codec)
