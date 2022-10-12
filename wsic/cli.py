@@ -256,11 +256,25 @@ def transcode(
         raise click.BadParameter(
             f"Input file type {suffixes} could not be transcribed", param_hint="in_path"
         )
-    writer = wsic.writers.ZarrWriter(
-        out_path,
-        tile_size=reader.tile_shape[::-1],
-        dtype=reader.dtype,
-    )
+    if out_path.suffix == ".zarr":
+        writer = wsic.writers.ZarrWriter(
+            out_path,
+            shape=reader.shape,
+            tile_size=reader.tile_shape[::-1],
+            dtype=reader.dtype,
+        )
+    elif out_path.suffix == ".tiff":
+        writer = wsic.writers.TIFFWriter(
+            out_path,
+            shape=reader.shape,
+            tile_size=reader.tile_shape[::-1],
+            dtype=reader.dtype,
+        )
+    else:
+        raise click.BadParameter(
+            f"Output file type {out_path.suffix} not supported",
+            param_hint="out_path",
+        )
     writer.transcode_from_reader(reader)
 
 
