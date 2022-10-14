@@ -645,9 +645,10 @@ class TIFFReader(Reader):
                 If the resolution is not available, this will be None.
         """
         try:
-            y_resolution = self.tiff_page.tags["YResolution"].value[0]
-            x_resolution = self.tiff_page.tags["XResolution"].value[0]
-            resolution_units = self.tiff_page.tags["ResolutionUnit"].value
+            tags = self.tiff_page.tags
+            y_resolution = tags["YResolution"].value[0] / tags["YResolution"].value[1]
+            x_resolution = tags["XResolution"].value[0] / tags["XResolution"].value[1]
+            resolution_units = tags["ResolutionUnit"].value
             return ppu2mpp(x_resolution, resolution_units), ppu2mpp(
                 y_resolution, resolution_units
             )
