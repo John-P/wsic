@@ -488,7 +488,7 @@ class TIFFWriter(Writer):
         overwrite: bool = False,
         verbose: bool = False,
         *,
-        ome: bool = True,
+        ome: bool = False,
     ) -> None:
         if dtype is not np.uint8:
             warn_unused(dtype)
