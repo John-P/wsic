@@ -254,7 +254,7 @@ def transcode(
     else:
         suffixes = "".join(in_path.suffixes)
         raise click.BadParameter(
-            f"Input file type {suffixes} could not be transcribed", param_hint="in_path"
+            f"Input file type {suffixes} could not be transcoded", param_hint="in_path"
         )
     if out_path.suffix == ".zarr":
         writer = wsic.writers.ZarrWriter(
