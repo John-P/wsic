@@ -111,6 +111,20 @@ def test_transcode_svs_to_tiff(samples_path, tmp_path):
     assert result.exit_code == 0
 
 
+def test_transcode_dicom_to_tiff(samples_path, tmp_path):
+    """Test the CLI for transcoding DICOM to (tiled) TIFF."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = str(samples_path / "CMU-1-Small-Region")
+        out_path = str(Path(td) / "CMU-1-Small-Region.tiff")
+        result = runner.invoke(
+            cli.transcode,
+            ["-i", in_path, "-o", out_path],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+
+
 def test_convert_jp2_to_tiff(samples_path, tmp_path):
     """Test the CLI for converting JP2 to tiled TIFF."""
     runner = CliRunner()

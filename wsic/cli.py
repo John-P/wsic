@@ -250,7 +250,7 @@ def transcode(
     if ("tiff",) in file_types:
         reader = wsic.readers.TIFFReader(in_path)
     elif ("dicom",) in file_types or ("dcm",) in file_types:
-        reader = wsic.readers.DICOMReader(in_path)
+        reader = wsic.readers.DICOMWSIReader(in_path)
     else:
         suffixes = "".join(in_path.suffixes)
         raise click.BadParameter(
