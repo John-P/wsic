@@ -151,3 +151,32 @@ def test_convert_jp2_to_zarr(samples_path, tmp_path):
             catch_exceptions=False,
         )
     assert result.exit_code == 0
+
+
+def test_transcode_bad_input_file_ext(samples_path, tmp_path):
+    """Test the CLI for transcoding with a bad input file extension."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        # in_path must exists but not be a valid input
+        in_path = str(samples_path / "XYC.jp2")
+        out_path = str(Path(td) / "XYC.tiff")
+        result = runner.invoke(
+            cli.transcode,
+            ["-i", in_path, "-o", out_path],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 2
+
+
+def test_transcode_bad_output_file_ext(samples_path, tmp_path):
+    """Check that CLI raises click.BadParameter when output file extension is bad."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = samples_path / "XYC-half-mpp.tiff"
+        out_path = Path(td) / "XYC.foo"
+        result = runner.invoke(
+            cli.transcode,
+            ["-i", str(in_path), "-o", str(out_path)],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 2
