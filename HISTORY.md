@@ -1,12 +1,41 @@
 # History
 
-## 0.1.0 (2022-02-22)
+## 0.6.1 (2022-10-21)
 
-- First release on PyPI.
+- Select Writer class based on file extension from CLI.
+- Bug fixes:
+  - Fix writing MPP to NGFF v0.4.
+  - Change coordinate transformation ordering.
+  - Fix reading TIFF resolution tag. Previously only the numerator of
+    the resolution fraction was being read.
+  - Other minor bug fixes.
 
-## 0.2.0 (2022-03-22)
+## 0.6.0 (2022-10-03)
 
-- Add Support To Read DICOM WSI and transform to zarr.
+- Add ability to write resolution metadata to JP2. Thanks to
+  @quintusdias for helping get this implemented in glymur.
+- Remove QOI codec code as this is not included in imagecodes. Thanks to
+  Christoph Gohlke for adding this.
+- Add a "How do I?" documentation page.
+
+## 0.5.1 (2022-06-27)
+
+- Bug fixes:
+  - Fix parsing of OpenSlide MPP to float.
+
+## 0.5.0 (2022-06-25)
+
+- Add ability to transcode/repackage to a TIFF file (from DICOM or SVS).
+- Refactor `ZarrReaderWriter` to seperate `ZarrWriter` and `ZarrReader`.
+- Bug fixes:
+  - Fix thumbnaiul generation for zarr.
+  - Fix NGFF metadata `CoordinateTransformation` field default factor.
+
+## 0.4.0 (2022-06-20)
+
+- Add ability to write JPEG compressed SVS files.
+- Add support for thumbnail generation and a CLI command.
+- Swap from strings to enums for codecs and color spaces.
 
 ## 0.3.0 (2022-05-13)
 
@@ -22,39 +51,10 @@
   - Add a custom Queue class for multiprocessing on macOS.
   - Fix handling of `pyramid_downsamples` argument when `None`.
 
-## 0.4.0 (2022-06-20)
+## 0.2.0 (2022-03-22)
 
-- Add ability to write JPEG compressed SVS files.
-- Add support for thumbnail generation and a CLI command.
-- Swap from strings to enums for codecs and color spaces.
+- Add Support To Read DICOM WSI and transform to zarr.
 
-## 0.5.0 (2022-06-25)
+## 0.1.0 (2022-02-22)
 
-- Add ability to transcode/repackage to a TIFF file (from DICOM or SVS).
-- Refactor `ZarrReaderWriter` to seperate `ZarrWriter` and `ZarrReader`.
-- Bug fixes:
-  - Fix thumbnaiul generation for zarr.
-  - Fix NGFF metadata `CoordinateTransformation` field default factor.
-
-## 0.5.1 (2022-06-27)
-
-- Bug fixes:
-  - Fix parsing of OpenSlide MPP to float.
-
-## 0.6.0 (2022-10-03)
-
-- Add ability to write resolution metadata to JP2. Thanks to
-  @quintusdias for helping get this implemented in glymur.
-- Remove QOI codec code as this is not included in imagecodes. Thanks to
-  Christoph Gohlke for adding this.
-- Add a "How do I?" documentation page.
-
-## 0.6.1 (2022-10-21)
-
-- Select Writer class based on file extension from CLI.
-- Bug fixes:
-  - Fix writing MPP to NGFF v0.4.
-  - Change coordinate transformation ordering.
-  - Fix reading TIFF resolution tag. Previously only the numerator of
-    the resolution fraction was being read.
-  - Other minor bug fixes.
+- First release on PyPI.
