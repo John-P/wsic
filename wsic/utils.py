@@ -483,8 +483,9 @@ def resize_array(
         }
         cv2_interpolation = str_to_cv2_interpolation[interpolation]
 
+        out_size = tuple(int(x) for x in shape[::-1])
         return cv2.resize(
-            array, shape[::-1], interpolation=cv2_interpolation, **(cv2_kwargs or {})
+            array, out_size, interpolation=cv2_interpolation, **(cv2_kwargs or {})
         )
 
     with suppress(ImportError):

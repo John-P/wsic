@@ -318,6 +318,7 @@ class JP2Writer(Writer):
         pyramid_downsamples: Optional[List[int]] = None,
         overwrite: bool = False,
         verbose: bool = False,
+        **kwargs,
     ) -> None:
         if codec != "jpeg2000":
             warn_unused(codec)
@@ -487,7 +488,7 @@ class TIFFWriter(Writer):
         overwrite: bool = False,
         verbose: bool = False,
         *,
-        ome: bool = True,
+        ome: bool = False,
     ) -> None:
         if dtype is not np.uint8:
             warn_unused(dtype)
@@ -1155,19 +1156,9 @@ class ZarrWriter(Writer, Reader):
         )
 
         # Validate and normalise inputs
-        lossy_codecs = ["jpeg"]
-        optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
-        lossy = self.codec.condensed().lower() in lossy_codecs or (
-            self.codec in optionally_lossy_codecs and self.compression_level > 0
-        )
         read_tile_size = read_tile_size or self.tile_shape[:2][::-1]
         yield_tile_size = self.tile_shape[:2][::-1]
-        write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
-        if lossy and not write_multiple_of_read:
-            raise ValueError(
-                "Lossy compression requires that the tile write size is a "
-                "multiple of the read tile size."
-            )
+        self._validate_pre_write(read_tile_size)
 
         with ZarrIntermediate(
             None, shape=reader.shape, zero_after_read=False
@@ -1195,9 +1186,33 @@ class ZarrWriter(Writer, Reader):
                 level_0[tile_slices(ji, yield_tile_size)] = tile
 
         self._build_pyramid(downsample_method)
-        self._write_ome_metadata()
+        self._write_ome_metadata(reader.microns_per_pixel or self.microns_per_pixel)
 
-    def _write_ome_metadata(self) -> None:
+    def _validate_pre_write(self, read_tile_size: Tuple[int, ...]) -> None:
+        """Validate parameters before writing to disk.
+
+        Args:
+            read_tile_size (Tuple[int, ...]):
+                Tile size to read.
+
+        Raises:
+            ValueError:
+                If compression is lossy and the write tile writesize is
+                not a multiple of the read tile size
+        """
+        lossy_codecs = ["jpeg"]
+        optionally_lossy_codecs = ["jpeg2000", "webp", "jpegls", "jpegxl", "jpegxr"]
+        lossy = self.codec.condensed().lower() in lossy_codecs or (
+            self.codec in optionally_lossy_codecs and self.compression_level > 0
+        )
+        write_multiple_of_read = all(np.mod(read_tile_size, self.tile_size) == 0)
+        if lossy and not write_multiple_of_read:
+            raise ValueError(
+                "Lossy compression requires that the tile write size is a "
+                "multiple of the read tile size."
+            )
+
+    def _write_ome_metadata(self, mpp: Tuple[float, ...]) -> None:
         """Write OME-NGFF metadata to the .zattrs file in the root.
 
         This is based on version 0.4: https://ngff.openmicroscopy.org/0.4/.
@@ -1212,19 +1227,19 @@ class ZarrWriter(Writer, Reader):
                                 ngff.CoordinateTransformation(
                                     "scale",
                                     [
+                                        mpp[0] * downsample,
+                                        mpp[1] * downsample,
                                         1,
-                                        self.microns_per_pixel[0] * downsample,
-                                        self.microns_per_pixel[1] * downsample,
                                     ],
                                 )
-                            ],
+                            ]
+                            if mpp is not None
+                            else [ngff.CoordinateTransformation("identity")],
                         )
                         for level, downsample in enumerate(
                             [1] + self.pyramid_downsamples
                         )
-                    ]
-                    if self.microns_per_pixel is not None
-                    else [],
+                    ],
                     axes=[
                         ngff.Axis("y", "space", "micronmeter"),
                         ngff.Axis("x", "space", "micronmeter"),
@@ -1353,7 +1368,7 @@ class ZarrWriter(Writer, Reader):
                 file_handle.write(tile_bytes)
 
         self._build_pyramid(downsample_method)
-        self._write_ome_metadata()
+        self._write_ome_metadata(reader.microns_per_pixel or self.microns_per_pixel)
 
     def _can_transcode_from_reader(self, reader: Reader) -> bool:
         """Determine if a reader supports from to the current writer.
