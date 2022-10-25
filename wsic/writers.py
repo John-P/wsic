@@ -19,7 +19,7 @@ from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
 from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
-from wsic.types import PathLike
+from wsic.typedefs import PathLike
 from wsic.utils import (
     downsample_shape,
     mean_pool,
