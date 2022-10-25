@@ -147,7 +147,7 @@ def varnames(
     # Find the name of the variable in the parent frame
     var_names = tuple(
         var_name
-        for var_name, var_val in reversed(call_frame.f_locals.items())
+        for var_name, var_val in reversed(list(call_frame.f_locals.items()))
         if var_val is var
     )
     if not squeeze or len(var_names) > 1:

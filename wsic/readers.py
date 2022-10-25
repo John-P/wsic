@@ -17,7 +17,7 @@ from wsic.enums import Codec, ColorSpace
 from wsic.magic import summon_file_types
 from wsic.metadata import ngff
 from wsic.multiproc import Queue
-from wsic.types import PathLike
+from wsic.typedefs import PathLike
 from wsic.utils import (
     block_downsample_shape,
     mean_pool,
