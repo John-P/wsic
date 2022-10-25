@@ -403,21 +403,27 @@ class JP2Writer(Writer):
             colorspace=self.color_space,
             capture_resolution=capture_resolution,
         )
-        reader_tile_iterator = self.reader_tile_iterator(
-            reader=reader,
-            num_workers=num_workers,
-            read_tile_size=read_tile_size or self.tile_size,
-            timeout=timeout,
-        )
-        reader_tile_iterator = iter(self.level_progress(reader_tile_iterator))
-        for tile_writer in jp2.get_tilewriters():
-            try:
-                tile_writer[:] = next(reader_tile_iterator)
-            except StopIteration:
-                raise StopIteration(
-                    "Reader tile iterator stopped early. "
-                    "Glymur is expecting more tiles to be written."
-                )
+        with ZarrIntermediate(
+            None,
+            reader.shape,
+            zero_after_read=True,
+        ) as intermediate:
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader=reader,
+                num_workers=num_workers,
+                intermediate=intermediate,
+                read_tile_size=read_tile_size or self.tile_size,
+                timeout=timeout,
+            )
+            reader_tile_iterator = iter(self.level_progress(reader_tile_iterator))
+            for tile_writer in jp2.get_tilewriters():
+                try:
+                    tile_writer[:] = next(reader_tile_iterator)
+                except StopIteration:
+                    raise StopIteration(
+                        "Reader tile iterator stopped early. "
+                        "Glymur is expecting more tiles to be written."
+                    )
 
 
 class TIFFWriter(Writer):
