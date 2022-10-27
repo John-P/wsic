@@ -542,6 +542,9 @@ class JP2Reader(Reader):
         import glymur
 
         boxes = {type(box): box for box in self.jp2.box}
+        if not boxes:
+            warnings.warn("Cannot get MPP. No boxes found, invalid JP2 file.")
+            return None
         header_box = boxes[glymur.jp2box.JP2HeaderBox]
         header_sub_boxes = {type(box): box for box in header_box.box}
         resolution_box = header_sub_boxes.get(glymur.jp2box.ResolutionBox)
