@@ -617,6 +617,11 @@ class TIFFReader(Reader):
         self.dtype = self.array.dtype
         self.axes = self.tiff.series[0].axes
         self.is_tiled = self.tiff_page.is_tiled
+        self.planar_config = (
+            "separate"
+            if self.tiff_page.planarconfig == tifffile.PLANARCONFIG.SEPARATE
+            else "chunked"
+        )
         self.tile_shape = None
         self.mosaic_shape = None
         self.mosaic_byte_offsets = None
@@ -626,6 +631,15 @@ class TIFFReader(Reader):
             self.mosaic_shape = mosaic_shape(
                 array_shape=self.shape, tile_shape=self.tile_shape
             )
+            if self.planar_config == "separate":
+                self.mosaic_byte_offsets = np.dstack(
+                    [
+                        self.tiff_page.dataoffsets[
+                            channel :: self.tiff_page.samplesperpixel
+                        ]
+                        for channel in range(self.tiff_page.samplesperpixel)
+                    ]
+                )
             self.mosaic_byte_offsets = np.array(self.tiff_page.dataoffsets).reshape(
                 self.mosaic_shape
             )
