@@ -95,31 +95,22 @@ class Reader(ABC):
         yx_tile_shape = (
             self.tile_shape[:2] if self.tile_shape else np.minimum(yx_shape, (256, 256))
         )
-        self_mosaic_shape = (
-            self.mosaic_shape
-            if self.mosaic_shape
-            else mosaic_shape(yx_shape, yx_tile_shape)
-        )
-        downsample_shape = yx_shape
-        downsample_tile_shape = yx_tile_shape
-        downsample = 0
-        while True:
-            new_downsample = downsample + 1
-            next_downsample_shape, new_downsample_tile_shape = block_downsample_shape(
-                yx_shape, new_downsample, yx_tile_shape
-            )
-            if not any(x > max(0, y) for x, y in zip(downsample_shape, shape)):
-                break
-            downsample_shape = next_downsample_shape
-            downsample_tile_shape = new_downsample_tile_shape
-            downsample = new_downsample
+        self_mosaic_shape = self.mosaic_shape or mosaic_shape(yx_shape, yx_tile_shape)
+        (
+            downsample_shape,
+            downsample_tile_shape,
+            downsample,
+        ) = self._find_thumbnail_downsample(shape, yx_shape, yx_tile_shape)
         # NOTE: Assuming channels last
         channels = self.shape[-1]
         thumbnail = np.zeros(downsample_shape + (channels,), dtype=np.uint8)
         # Resize tiles to new_downsample_tile_shape and combine
         tile_indexes = list(np.ndindex(self_mosaic_shape))
         for tile_index in self.pbar(tile_indexes, desc="Generating thumbnail"):
-            tile = self.get_tile(tile_index)
+            try:
+                tile = self.get_tile(tile_index)
+            except (ValueError, NotImplementedError):  # e.g. Not tiled
+                tile = self[tile_slices(tile_index, yx_tile_shape)]
             tile = mean_pool(tile.astype(float), downsample).astype(np.uint8)
             # Make sure the tile being written will not exceed the
             # bounds of the thumbnail
@@ -135,6 +126,43 @@ class Reader(ABC):
             sub_tile = tile[:max_y, :max_x]
             thumbnail[tile_slices(tile_index, downsample_tile_shape)] = sub_tile
         return thumbnail if approx_ok else resize_array(thumbnail, shape, "bicubic")
+
+    @staticmethod
+    def _find_thumbnail_downsample(
+        thumbnail_shape: Tuple[int, int],
+        yx_shape: Tuple[int, int],
+        yx_tile_shape: Tuple[int, int],
+    ) -> Tuple[Tuple[int, int], Tuple[int, int], int]:
+        """Find the downsample and tile shape for a thumbnail.
+
+        Args:
+            thumbnail_shape (Tuple[int, int]):
+                Shape of the thumbnail to be generated.
+            yx_shape (Tuple[int, int]):
+                Shape of the image in Y and X.
+            yx_tile_shape (Tuple[int, int]):
+                Shape of the tiles in Y and X which will be used to
+                generate the thumbnail.
+
+        Returns:
+            Tuple[Tuple[int, int], Tuple[int, int], int]:
+                Shape of the downsampled image, shape of the downsampled
+                tiles, and the downsample factor.
+        """
+        downsample_shape = yx_shape
+        downsample_tile_shape = yx_tile_shape
+        downsample = 0
+        while True:
+            new_downsample = downsample + 1
+            next_downsample_shape, new_downsample_tile_shape = block_downsample_shape(
+                yx_shape, new_downsample, yx_tile_shape
+            )
+            if all(x <= max(0, y) for x, y in zip(downsample_shape, thumbnail_shape)):
+                break
+            downsample_shape = next_downsample_shape
+            downsample_tile_shape = new_downsample_tile_shape
+            downsample = new_downsample
+        return downsample_shape, downsample_tile_shape, downsample
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
@@ -678,15 +706,20 @@ class TIFFReader(Reader):
             np.ndarray:
                 The tile at index.
         """
+        if self.tile_shape is None:
+            raise ValueError("Image is not tiled.")
         flat_index = index[0] * self.tile_shape[1] + index[1]
         fh = self.tiff.filehandle
         _ = fh.seek(self.mosaic_byte_offsets[index])
         data = fh.read(self.mosaic_byte_counts[index])
         if not decode:
             return data
-        tile, _, _ = self.tiff_page.decode(
+        tile, _, shape = self.tiff_page.decode(
             data, flat_index, jpegtables=self.tiff_page.jpegtables
         )
+        # tile may be None e.g. with NDPI blank tiles
+        if tile is None:
+            tile = np.zeros(shape, dtype=self.dtype)
         return tile[0]
 
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
