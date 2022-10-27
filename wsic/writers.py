@@ -685,7 +685,8 @@ class TIFFWriter(Writer):
             else None
         )
 
-        reader_mosaic_shape = mosaic_shape(reader.shape[:2], self.tile_size)
+        tile_size = reader.tile_shape[:2][::-1] or self.tile_size
+        reader_mosaic_shape = mosaic_shape(reader.shape[:2], tile_size)
         tile_generator = (
             reader.get_tile(tile_index, decode=False)
             for tile_index in np.ndindex(reader_mosaic_shape)
