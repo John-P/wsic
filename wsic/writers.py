@@ -672,6 +672,12 @@ class TIFFWriter(Writer):
         reader: Union[TIFFReader, DICOMWSIReader],
         downsample_method: Optional[str] = None,
     ) -> None:
+        # Validate input
+        if not reader.tile_shape:
+            raise ValueError(
+                "Reader must have a known tile shape/size and implement get_tile."
+            )
+
         import tifffile
 
         microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
@@ -685,7 +691,7 @@ class TIFFWriter(Writer):
             else None
         )
 
-        tile_size = reader.tile_shape[:2][::-1] or self.tile_size
+        tile_size = reader.tile_shape[:2][::-1]
         reader_mosaic_shape = mosaic_shape(reader.shape[:2], tile_size)
         tile_generator = (
             reader.get_tile(tile_index, decode=False)
