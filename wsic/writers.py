@@ -615,6 +615,7 @@ class TIFFWriter(Writer):
                     photometric=self.color_space,
                     compression=(self.codec.condensed(), self.compression_level),
                     resolution=resolution,
+                    resolutionunit="centimeter",
                     subifds=len(self.pyramid_downsamples),
                     metadata=metadata,
                 )
