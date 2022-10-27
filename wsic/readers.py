@@ -119,12 +119,22 @@ class Reader(ABC):
         # Resize tiles to new_downsample_tile_shape and combine
         tile_indexes = list(np.ndindex(self_mosaic_shape))
         for tile_index in self.pbar(tile_indexes, desc="Generating thumbnail"):
-            tile = self[tile_slices(tile_index, yx_tile_shape)]
+            tile = self.get_tile(tile_index)
             tile = mean_pool(tile.astype(float), downsample).astype(np.uint8)
-            thumbnail[tile_slices(tile_index, downsample_tile_shape)] = tile
-        if approx_ok:
-            return thumbnail
-        return resize_array(thumbnail, shape, "bicubic")
+            # Make sure the tile being written will not exceed the
+            # bounds of the thumbnail
+            yx_position = tuple(
+                i * size for i, size in zip(tile_index, downsample_tile_shape)
+            )
+            max_y, max_x = (
+                min(tile_max, thumb_max - position)
+                for tile_max, thumb_max, position in zip(
+                    tile.shape, thumbnail.shape, yx_position
+                )
+            )
+            sub_tile = tile[:max_y, :max_x]
+            thumbnail[tile_slices(tile_index, downsample_tile_shape)] = sub_tile
+        return thumbnail if approx_ok else resize_array(thumbnail, shape, "bicubic")
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
@@ -677,7 +687,7 @@ class TIFFReader(Reader):
         tile, _, _ = self.tiff_page.decode(
             data, flat_index, jpegtables=self.tiff_page.jpegtables
         )
-        return tile
+        return tile[0]
 
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
         """Get pixel data at index."""
