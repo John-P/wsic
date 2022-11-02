@@ -647,7 +647,7 @@ class TIFFReader(Reader):
         self.tiff = tifffile.TiffFile(str(path))
         self.tiff_page = self.tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
-        self.array = self.tiff_page.asarray()
+        self.array = zarr.open(self.tiff.aszarr(), mode="r")
         self.shape = self.array.shape
         self.dtype = self.array.dtype
         self.axes = self.tiff.series[0].axes
