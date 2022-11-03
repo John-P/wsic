@@ -147,7 +147,7 @@ def varnames(
     # Find the name of the variable in the parent frame
     var_names = tuple(
         var_name
-        for var_name, var_val in reversed(call_frame.f_locals.items())
+        for var_name, var_val in reversed(list(call_frame.f_locals.items()))
         if var_val is var
     )
     if not squeeze or len(var_names) > 1:
@@ -483,8 +483,9 @@ def resize_array(
         }
         cv2_interpolation = str_to_cv2_interpolation[interpolation]
 
+        out_size = tuple(int(x) for x in shape[::-1])
         return cv2.resize(
-            array, shape[::-1], interpolation=cv2_interpolation, **(cv2_kwargs or {})
+            array, out_size, interpolation=cv2_interpolation, **(cv2_kwargs or {})
         )
 
     with suppress(ImportError):
