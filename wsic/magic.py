@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, List, Optional, Sequence, Tuple, Union
 
-from wsic.types import Magic, PathLike
+from wsic.typedefs import Magic, PathLike
 
 
 @dataclass

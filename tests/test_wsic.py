@@ -9,9 +9,8 @@ import numpy as np
 import pytest
 import tifffile
 import zarr
-from click.testing import CliRunner
 
-from wsic import cli, readers, utils, writers
+from wsic import readers, utils, writers
 from wsic.enums import Codec, ColorSpace
 
 
@@ -513,38 +512,10 @@ def test_transcode_j2k_dicom_wsi_to_zarr(samples_path, tmp_path):
     assert np.percentile(np.abs(difference), 95) < 1
 
 
-def test_cli_jp2_to_tiff(samples_path, tmp_path):
-    """Test the CLI for converting JP2 to tiled TIFF."""
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
-        in_path = str(samples_path / "XYC.jp2")
-        out_path = str(Path(td) / "XYC.tiff")
-        result = runner.invoke(
-            cli.convert,
-            ["-i", in_path, "-o", out_path],
-            catch_exceptions=False,
-        )
-    assert result.exit_code == 0
-
-
 def test_tiff_res_tags(samples_path):
     """Test that we can read the resolution tags from a TIFF."""
     reader = readers.Reader.from_file(samples_path / "XYC-half-mpp.tiff")
     assert reader.microns_per_pixel == (0.5, 0.5)
-
-
-def test_cli_transcode_svs_to_zarr(samples_path, tmp_path):
-    """Test the CLI for transcoding."""
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
-        in_path = str(samples_path / "CMU-1-Small-Region.svs")
-        out_path = str(Path(td) / "CMU-1-Small-Region.zarr")
-        result = runner.invoke(
-            cli.transcode,
-            ["-i", in_path, "-o", out_path],
-            catch_exceptions=False,
-        )
-    assert result.exit_code == 0
 
 
 def test_copy_from_reader_timeout(samples_path, tmp_path):
@@ -782,81 +753,6 @@ def test_missing_imagecodecs_codec(samples_path, tmp_path):
             compression_level=70,
             color_space=ColorSpace.RGB,
         )
-
-
-def test_cli_convert_timeout(samples_path, tmp_path):
-    """Check that CLI convert raises IOError when reading times out."""
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
-        in_path = str(samples_path / "XYC.jp2")
-        out_path = str(Path(td) / "XYC.tiff")
-        warnings.simplefilter("ignore")
-        with pytest.raises(IOError, match="timed out"):
-            runner.invoke(
-                cli.convert,
-                ["-i", in_path, "-o", out_path, "--timeout", "0"],
-                catch_exceptions=False,
-            )
-
-
-def test_cli_thumbnail(samples_path, tmp_path):
-    """Check that CLI thumbnail works."""
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
-        in_path = samples_path / "XYC.jp2"
-        out_path = Path(td) / "XYC.jpeg"
-        runner.invoke(
-            cli.thumbnail,
-            ["-i", str(in_path), "-o", str(out_path), "-s", "512", "512"],
-            catch_exceptions=False,
-        )
-        assert out_path.exists()
-        assert out_path.is_file()
-        assert out_path.stat().st_size > 0
-
-
-def test_cli_thumbnail_downsample(samples_path, tmp_path):
-    """Check that CLI thumbnail works with downsample option."""
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
-        in_path = samples_path / "XYC.jp2"
-        out_path = Path(td) / "XYC.jpeg"
-        result = runner.invoke(
-            cli.thumbnail,
-            ["-i", str(in_path), "-o", str(out_path), "-d", "16"],
-            catch_exceptions=False,
-        )
-        assert result.exit_code == 0
-        assert out_path.exists()
-        assert out_path.is_file()
-        assert out_path.stat().st_size > 0
-
-
-def test_cli_thumbnail_no_cv2(samples_path, tmp_path, monkeypatch):
-    """Check that CLI thumbnail works without OpenCV (cv2)."""
-    monkeypatch.setitem(sys.modules, "cv2", None)
-    with pytest.raises(ImportError):
-        import cv2  # noqa # skipcq
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
-        in_path = samples_path / "XYC.jp2"
-        out_path = Path(td) / "XYC.jpeg"
-        runner.invoke(
-            cli.thumbnail,
-            ["-i", str(in_path), "-o", str(out_path), "-s", "512", "512"],
-            catch_exceptions=False,
-        )
-        assert out_path.exists()
-        assert out_path.is_file()
-        assert out_path.stat().st_size > 0
-
-
-def test_help():
-    """Test the help output."""
-    runner = CliRunner()
-    help_result = runner.invoke(cli.main, ["--help"])
-    assert help_result.exit_code == 0
-    assert "Console script for wsic." in help_result.output
 
 
 # Test Scenarios
