@@ -654,8 +654,8 @@ class TIFFReader(Reader):
         if self.tiff_page.axes == "SYX":
             self.array = self.tiff_page.asarray()
             warnings.warn(
-             "SYX order axes are not yet support while reading as zarr."
-             " The whole image will be decoded before converting."
+                "SYX order axes are not yet support while reading as zarr."
+                " The whole image will be decoded before converting."
             )
             # Transpose SYX -> YXS
             self.array = np.transpose(self.array, (0, 1, 2), (1, 2, 0))
