@@ -16,8 +16,8 @@ from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.magic import summon_file_types
 from wsic.metadata import ngff
-from wsic.multiprocessing import Queue
-from wsic.types import PathLike
+from wsic.multiproc import Queue
+from wsic.typedefs import PathLike
 from wsic.utils import (
     block_downsample_shape,
     mean_pool,
@@ -542,6 +542,9 @@ class JP2Reader(Reader):
         import glymur
 
         boxes = {type(box): box for box in self.jp2.box}
+        if not boxes:
+            warnings.warn("Cannot get MPP. No boxes found, invalid JP2 file.")
+            return None
         header_box = boxes[glymur.jp2box.JP2HeaderBox]
         header_sub_boxes = {type(box): box for box in header_box.box}
         resolution_box = header_sub_boxes.get(glymur.jp2box.ResolutionBox)
@@ -610,6 +613,9 @@ class TIFFReader(Reader):
         self.tiff_page = self.tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
         self.array = self.tiff_page.asarray()
+        if self.tiff_page.axes == "SYX":
+            # Transpose SYX -> YXS
+            self.array = np.transpose(self.array, (0, 1, 2), (1, 2, 0))
         self.shape = self.array.shape
         self.dtype = self.array.dtype
         self.axes = self.tiff.series[0].axes
@@ -645,9 +651,10 @@ class TIFFReader(Reader):
                 If the resolution is not available, this will be None.
         """
         try:
-            y_resolution = self.tiff_page.tags["YResolution"].value[0]
-            x_resolution = self.tiff_page.tags["XResolution"].value[0]
-            resolution_units = self.tiff_page.tags["ResolutionUnit"].value
+            tags = self.tiff_page.tags
+            y_resolution = tags["YResolution"].value[0] / tags["YResolution"].value[1]
+            x_resolution = tags["XResolution"].value[0] / tags["XResolution"].value[1]
+            resolution_units = tags["ResolutionUnit"].value
             return ppu2mpp(x_resolution, resolution_units), ppu2mpp(
                 y_resolution, resolution_units
             )
