@@ -250,17 +250,31 @@ def transcode(
     if ("tiff",) in file_types:
         reader = wsic.readers.TIFFReader(in_path)
     elif ("dicom",) in file_types or ("dcm",) in file_types:
-        reader = wsic.readers.DICOMReader(in_path)
+        reader = wsic.readers.DICOMWSIReader(in_path)
     else:
         suffixes = "".join(in_path.suffixes)
         raise click.BadParameter(
-            f"Input file type {suffixes} could not be transcribed", param_hint="in_path"
+            f"Input file type {suffixes} could not be transcoded", param_hint="in_path"
         )
-    writer = wsic.writers.ZarrWriter(
-        out_path,
-        tile_size=reader.tile_shape[::-1],
-        dtype=reader.dtype,
-    )
+    if out_path.suffix == ".zarr":
+        writer = wsic.writers.ZarrWriter(
+            out_path,
+            shape=reader.shape,
+            tile_size=reader.tile_shape[::-1],
+            dtype=reader.dtype,
+        )
+    elif out_path.suffix == ".tiff":
+        writer = wsic.writers.TIFFWriter(
+            out_path,
+            shape=reader.shape,
+            tile_size=reader.tile_shape[::-1],
+            dtype=reader.dtype,
+        )
+    else:
+        raise click.BadParameter(
+            f"Output file type {out_path.suffix} not supported",
+            param_hint="out_path",
+        )
     writer.transcode_from_reader(reader)
 
 
