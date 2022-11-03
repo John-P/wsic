@@ -580,6 +580,9 @@ class JP2Reader(Reader):
         import glymur
 
         boxes = {type(box): box for box in self.jp2.box}
+        if not boxes:
+            warnings.warn("Cannot get MPP. No boxes found, invalid JP2 file.")
+            return None
         header_box = boxes[glymur.jp2box.JP2HeaderBox]
         header_sub_boxes = {type(box): box for box in header_box.box}
         resolution_box = header_sub_boxes.get(glymur.jp2box.ResolutionBox)
@@ -648,6 +651,14 @@ class TIFFReader(Reader):
         self.tiff_page = self.tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
         self.array = zarr.open(self.tiff.aszarr(), mode="r")
+        if self.tiff_page.axes == "SYX":
+            self.array = self.tiff_page.asarray()
+            warnings.warn(
+             "SYX order axes are not yet support while reading as zarr."
+             " The whole image will be decoded before converting."
+            )
+            # Transpose SYX -> YXS
+            self.array = np.transpose(self.array, (0, 1, 2), (1, 2, 0))
         self.shape = self.array.shape
         self.dtype = self.array.dtype
         self.axes = self.tiff.series[0].axes
