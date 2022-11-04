@@ -650,7 +650,11 @@ class TIFFReader(Reader):
         self.tiff = tifffile.TiffFile(str(path))
         self.tiff_page = self.tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
-        self.array = zarr.open(self.tiff.aszarr(), mode="r")
+        self.zarr = zarr.open(self.tiff.aszarr(), mode="r")
+        if isinstance(self.zarr, zarr.hierarchy.Group):
+            self.array = self.zarr[0]
+        else:
+            self.array = self.zarr
         if self.tiff_page.axes == "SYX":
             self.array = self.tiff_page.asarray()
             warnings.warn(
