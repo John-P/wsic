@@ -647,16 +647,16 @@ class TIFFReader(Reader):
         import tifffile
 
         super().__init__(path)
-        self.tiff = tifffile.TiffFile(str(path))
-        self.tiff_page = self.tiff.pages[0]
+        self._tiff = tifffile.TiffFile(str(path))
+        self._tiff_page = self._tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
-        self.zarr = zarr.open(self.tiff.aszarr(), mode="r")
-        if isinstance(self.zarr, zarr.hierarchy.Group):
-            self.array = self.zarr[0]
+        self._zarr = zarr.open(self._tiff.aszarr(), mode="r")
+        if isinstance(self._zarr, zarr.hierarchy.Group):
+            self.array = self._zarr[0]
         else:
-            self.array = self.zarr
-        if self.tiff_page.axes == "SYX":
-            self.array = self.tiff_page.asarray()
+            self.array = self._zarr
+        if self._tiff_page.axes == "SYX":
+            self.array = self._tiff_page.asarray()
             warnings.warn(
                 "SYX order axes are not yet support while reading as zarr."
                 " The whole image will be decoded before converting."
@@ -665,26 +665,26 @@ class TIFFReader(Reader):
             self.array = np.transpose(self.array, (0, 1, 2), (1, 2, 0))
         self.shape = self.array.shape
         self.dtype = self.array.dtype
-        self.axes = self.tiff.series[0].axes
-        self.is_tiled = self.tiff_page.is_tiled
+        self.axes = self._tiff.series[0].axes
+        self.is_tiled = self._tiff_page.is_tiled
         self.tile_shape = None
         self.mosaic_shape = None
         self.mosaic_byte_offsets = None
         self.mosaic_byte_counts = None
         if self.is_tiled:
-            self.tile_shape = (self.tiff_page.tilelength, self.tiff_page.tilewidth)
+            self.tile_shape = (self._tiff_page.tilelength, self._tiff_page.tilewidth)
             self.mosaic_shape = mosaic_shape(
                 array_shape=self.shape, tile_shape=self.tile_shape
             )
-            self.mosaic_byte_offsets = np.array(self.tiff_page.dataoffsets).reshape(
+            self.mosaic_byte_offsets = np.array(self._tiff_page.dataoffsets).reshape(
                 self.mosaic_shape
             )
-            self.mosaic_byte_counts = np.array(self.tiff_page.databytecounts).reshape(
+            self.mosaic_byte_counts = np.array(self._tiff_page.databytecounts).reshape(
                 self.mosaic_shape
             )
-        self.jpeg_tables = self.tiff_page.jpegtables
-        self.color_space: ColorSpace = ColorSpace.from_tiff(self.tiff_page.photometric)
-        self.codec: Codec = Codec.from_tiff(self.tiff_page.compression)
+        self._jpeg_tables = self._tiff_page.jpegtables
+        self.color_space: ColorSpace = ColorSpace.from_tiff(self._tiff_page.photometric)
+        self.codec: Codec = Codec.from_tiff(self._tiff_page.compression)
         self.compression_level = None  # To be filled in if known later
 
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
@@ -698,7 +698,7 @@ class TIFFReader(Reader):
                 If the resolution is not available, this will be None.
         """
         try:
-            tags = self.tiff_page.tags
+            tags = self._tiff_page.tags
             y_resolution = tags["YResolution"].value[0] / tags["YResolution"].value[1]
             x_resolution = tags["XResolution"].value[0] / tags["XResolution"].value[1]
             resolution_units = tags["ResolutionUnit"].value
@@ -724,13 +724,13 @@ class TIFFReader(Reader):
         if self.tile_shape is None:
             raise ValueError("Image is not tiled.")
         flat_index = index[0] * self.tile_shape[1] + index[1]
-        fh = self.tiff.filehandle
+        fh = self._tiff.filehandle
         _ = fh.seek(self.mosaic_byte_offsets[index])
         data = fh.read(self.mosaic_byte_counts[index])
         if not decode:
             return data
-        tile, _, shape = self.tiff_page.decode(
-            data, flat_index, jpegtables=self.tiff_page.jpegtables
+        tile, _, shape = self._tiff_page.decode(
+            data, flat_index, jpegtables=self._tiff_page.jpegtables
         )
         # tile may be None e.g. with NDPI blank tiles
         if tile is None:
