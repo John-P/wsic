@@ -1402,11 +1402,12 @@ class ZarrWriter(Writer, Reader):
         # 1. A valid get_tile(decode=False)
         try:
             reader.get_tile((0, 0), decode=False)
-        except (NotImplementedError, AttributeError):
+        except (NotImplementedError, AttributeError) as error:
             raise ValueError(
                 "Reader must have a get_tile method which can return encoded tiles"
                 " (decoded=False)."
-            )
+            ) from error
+
         # 2. Compatible tile sizes
         if self.tile_size != reader.tile_shape[:2][::-1]:
             raise ValueError(
@@ -1416,27 +1417,14 @@ class ZarrWriter(Writer, Reader):
         if self.dtype != reader.dtype:
             raise ValueError("Dtype must match the reader dtype for transcoding.")
         # 4. Compatible compression
-        has_valid_compression = (
+        supported_compression = (
             Codec.from_string(reader.codec) in (Codec.JPEG, Codec.JPEG2000, Codec.WEBP),
-        )
-        # 5. Known supported TIFF formats
-        is_generic_tiff = isinstance(reader, TIFFReader) and (
-            reader._tiff.pages[0].is_tiled and has_valid_compression
-        )
-        is_supported_tiff = isinstance(reader, TIFFReader) and any(
-            [
-                reader._tiff.is_svs,
-                reader._tiff.is_ome,
-                reader._tiff.is_ndpi,
-                is_generic_tiff,
-            ]
         )
         # 5. Supported Reader (WSIDICOM or a TIFF with supported format)
         return all(
             [
                 isinstance(reader, (TIFFReader, DICOMWSIReader)),
-                has_valid_compression,
-                not isinstance(reader, TIFFReader) or is_supported_tiff,
+                supported_compression,
             ]
         )
 
