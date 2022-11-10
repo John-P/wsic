@@ -685,7 +685,7 @@ class TIFFReader(Reader):
             self.mosaic_byte_counts = np.array(self._tiff_page.databytecounts).reshape(
                 self.mosaic_shape
             )
-        self._jpeg_tables = self._tiff_page.jpegtables
+        self.jpeg_tables = self._tiff_page.jpegtables
         self.color_space: ColorSpace = ColorSpace.from_tiff(self._tiff_page.photometric)
         self.codec: Codec = Codec.from_tiff(self._tiff_page.compression)
         self.compression_level = None  # To be filled in if known later
@@ -809,7 +809,7 @@ class DICOMWSIReader(Reader):
             None  # Set if known: dataset.get(LossyImageCompressionRatio)?
         )
         self.color_space = ColorSpace.from_dicom(dataset.photometric_interpretation)
-        self._jpeg_tables = None
+        self.jpeg_tables = None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.

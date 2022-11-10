@@ -1421,13 +1421,13 @@ class ZarrWriter(Writer, Reader):
         )
         # 5. Known supported TIFF formats
         is_generic_tiff = isinstance(reader, TIFFReader) and (
-            reader.tiff.pages[0].is_tiled and has_valid_compression
+            reader._tiff.pages[0].is_tiled and has_valid_compression
         )
         is_supported_tiff = isinstance(reader, TIFFReader) and any(
             [
-                reader.tiff.is_svs,
-                reader.tiff.is_ome,
-                reader.tiff.is_ndpi,
+                reader._tiff.is_svs,
+                reader._tiff.is_ome,
+                reader._tiff.is_ndpi,
                 is_generic_tiff,
             ]
         )
