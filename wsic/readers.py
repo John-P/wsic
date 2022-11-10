@@ -613,6 +613,9 @@ class TIFFReader(Reader):
         self.tiff_page = self.tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
         self.array = self.tiff_page.asarray()
+        if self.tiff_page.axes == "SYX":
+            # Transpose SYX -> YXS
+            self.array = np.transpose(self.array, (0, 1, 2), (1, 2, 0))
         self.shape = self.array.shape
         self.dtype = self.array.dtype
         self.axes = self.tiff.series[0].axes
