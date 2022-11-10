@@ -644,28 +644,31 @@ class TIFFReader(Reader):
         Args:
             path (Path): Path to file.
         """
+        import dask.array
         import tifffile
 
         super().__init__(path)
         self._tiff = tifffile.TiffFile(str(path))
         self._tiff_page = self._tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
-        self._zarr = zarr.open(self._tiff.aszarr(), mode="r")
-        if isinstance(self._zarr, zarr.hierarchy.Group):
-            self.array = self._zarr[0]
-        else:
-            self.array = self._zarr
-        if self._tiff_page.axes == "SYX":
-            self.array = self._tiff_page.asarray()
-            warnings.warn(
-                "SYX order axes are not yet support while reading as zarr."
-                " The whole image will be decoded before converting."
-            )
-            # Transpose SYX -> YXS
-            self.array = np.transpose(self.array, (0, 1, 2), (1, 2, 0))
-        self.shape = self.array.shape
-        self.dtype = self.array.dtype
-        self.axes = self._tiff.series[0].axes
+
+        # Handle reading as a zarr / dask array with standard axes order
+        # i.e. TCZYX.
+        self._zarr_tiff = zarr.open(self._tiff.aszarr(), mode="r")
+        if isinstance(self._zarr_tiff, zarr.hierarchy.Array):
+            self._zarr = zarr.hierarchy.group()
+            self._zarr[0] = self._zarr_tiff
+
+        # Create a dask array from the zarr array
+        self._dask = dask.array.from_zarr(self._zarr[0])
+        self.axes = self._tiff_page.axes
+        self.default_t = 0
+        self.default_z = 0
+        self._normalize_axes()  # Make axes YXC
+
+        # Set standard Reader attributes
+        self.shape = self._dask.shape
+        self.dtype = self._dask.dtype
         self.is_tiled = self._tiff_page.is_tiled
         self.tile_shape = None
         self.mosaic_shape = None
@@ -686,6 +689,33 @@ class TIFFReader(Reader):
         self.color_space: ColorSpace = ColorSpace.from_tiff(self._tiff_page.photometric)
         self.codec: Codec = Codec.from_tiff(self._tiff_page.compression)
         self.compression_level = None  # To be filled in if known later
+
+    def _normalize_axes(self) -> None:
+        """Transpose the axes and reshape to standard order (YXC)"""
+        import dask.array
+
+        supported_axes = (
+            "YXC",
+            "YXS",
+            "YX",
+            "SYX",
+            "CYX",
+        )
+        if self._tiff_page.axes not in supported_axes:
+            raise ValueError(
+                f"Unsupported axes: {self._tiff_page.axes}. "
+                f"Only {', '.join(supported_axes)} are supported."
+                "Please open an issue on GitHub if you need support for other axes."
+            )
+        if self._tiff_page.axes in ("SYX", "CYX"):
+            # SYX (CYX) -> YXC
+            self._dask = dask.array.moveaxis(self._dask, 0, -1)
+        elif self._tiff_page.axes in ("YXS", "YXC"):
+            pass
+        elif self._tiff_page.axes == "YX":
+            # YX -> YXC
+            self._dask = dask.array.expand_dims(self._dask, axis=-1)
+        self.axes = "YXC"
 
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
@@ -739,7 +769,7 @@ class TIFFReader(Reader):
 
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
         """Get pixel data at index."""
-        return self.array[index]
+        return self._dask[index].compute()
 
 
 class DICOMWSIReader(Reader):
@@ -779,7 +809,7 @@ class DICOMWSIReader(Reader):
             None  # Set if known: dataset.get(LossyImageCompressionRatio)?
         )
         self.color_space = ColorSpace.from_dicom(dataset.photometric_interpretation)
-        self.jpeg_tables = None
+        self._jpeg_tables = None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
