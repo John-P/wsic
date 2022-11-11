@@ -1124,7 +1124,7 @@ class TestConvertScenarios:
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader: Reader = reader_cls(in_path)
         writer: Writer = writer_cls(out_path, shape=reader.shape, codec=codec)
-        writer.copy_from_reader(reader)
+        writer.copy_from_reader(reader, timeout=25)
 
         # Check that the output file exists
         assert out_path.exists()
