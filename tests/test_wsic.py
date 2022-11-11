@@ -12,6 +12,8 @@ import zarr
 
 from wsic import readers, utils, writers
 from wsic.enums import Codec, ColorSpace
+from wsic.readers import Reader
+from wsic.writers import Writer
 
 
 def test_jp2_to_deflate_tiled_tiff(samples_path, tmp_path):
@@ -1120,8 +1122,8 @@ class TestConvertScenarios:
         """Test converting between formats."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
-        reader = reader_cls(in_path)
-        writer = writer_cls(out_path, shape=reader.shape, codec=codec)
+        reader: Reader = reader_cls(in_path)
+        writer: Writer = writer_cls(out_path, shape=reader.shape, codec=codec)
         writer.copy_from_reader(reader)
 
         # Check that the output file exists
