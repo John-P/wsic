@@ -536,7 +536,7 @@ class MultiProcessTileIterator:
         # Join processes in parallel threads
         if self.processes:
             with ThreadPoolExecutor(len(self.processes)) as executor:
-                executor.map(lambda p: p.join(1), self.processes)
+                executor.map(lambda p: p.join(1), self.processes, timeout=2)
             # Terminate any child processes if still alive
             for process in self.processes:
                 if process.is_alive():
@@ -646,18 +646,20 @@ class TIFFReader(Reader):
         """
         import dask.array
         import tifffile
+        from dask.distributed import Client
 
         super().__init__(path)
+        self._dask_client = Client(processes=False)
         self._tiff = tifffile.TiffFile(str(path))
         self._tiff_page = self._tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
 
         # Handle reading as a zarr / dask array with standard axes order
         # i.e. TCZYX.
-        self._zarr_tiff = zarr.open(self._tiff.aszarr(), mode="r")
-        if isinstance(self._zarr_tiff, zarr.hierarchy.Array):
-            self._zarr = zarr.hierarchy.group()
-            self._zarr[0] = self._zarr_tiff
+        self._zarr = zarr.open(self._tiff.aszarr(), mode="r")
+        if isinstance(self._zarr, zarr.hierarchy.Array):
+            group = zarr.hierarchy.group()
+            group[0], self._zarr = self._zarr, group
 
         # Create a dask array from the zarr array
         self._dask = dask.array.from_zarr(self._zarr[0])
@@ -769,7 +771,7 @@ class TIFFReader(Reader):
 
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
         """Get pixel data at index."""
-        return self._dask[index].compute()
+        return self._dask_client.compute(self._dask[index]).result()
 
 
 class DICOMWSIReader(Reader):
