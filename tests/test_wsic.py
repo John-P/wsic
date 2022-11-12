@@ -531,7 +531,7 @@ def test_copy_from_reader_timeout(samples_path, tmp_path):
     )
     warnings.simplefilter("ignore")
     with pytest.raises(IOError, match="timed out"):
-        writer.copy_from_reader(reader=reader, timeout=1e-5)
+        writer.copy_from_reader(reader=reader, timeout=0)
 
 
 def test_block_downsample_shape():
@@ -644,11 +644,13 @@ def test_thumbnail_non_power_two(samples_path):
     Outputs a non power of two sized thumbnail.
     """
     # Compare with cv2 downsampling
-    reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     thumbnail = reader.thumbnail(shape=(59, 59))
     cv2_thumbnail = _cv2.resize(reader[...], (59, 59), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (59, 59, 3)
-    assert np.mean(thumbnail) == pytest.approx(np.mean(cv2_thumbnail), abs=0.5)
+    mse = np.mean((thumbnail - cv2_thumbnail) ** 2)
+    psnr = 10 * np.log10(255**2 / mse)
+    assert psnr > 30
 
 
 def test_write_rgb_jpeg_svs(samples_path, tmp_path):
@@ -864,15 +866,15 @@ class TestTranscodeScenarios:
         """Test transcoding a tiled WSI."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
-        reader = reader_cls(in_path)
+        reader: Reader = reader_cls(in_path)
         writer_cls = WRITER_EXT_MAPPING[out_ext]
-        writer = writer_cls(
+        writer: Writer = writer_cls(
             path=out_path,
             shape=reader.shape,
             tile_size=reader.tile_shape[::-1],
         )
         writer.transcode_from_reader(reader=reader)
-        output_reader = out_reader(out_path)
+        output_reader: Reader = out_reader(out_path)
 
         assert output_reader.shape == reader.shape
         assert output_reader.tile_shape == reader.tile_shape
@@ -1124,7 +1126,7 @@ class TestConvertScenarios:
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader: Reader = reader_cls(in_path)
         writer: Writer = writer_cls(out_path, shape=reader.shape, codec=codec)
-        writer.copy_from_reader(reader, timeout=25)
+        writer.copy_from_reader(reader, num_workers=1, timeout=1e32)
 
         # Check that the output file exists
         assert out_path.exists()
