@@ -774,7 +774,6 @@ class TIFFReader(Reader):
         import tifffile
 
         super().__init__(path)
-        # self._dask_client = Client(processes=False)
         self._tiff = tifffile.TiffFile(str(path))
         self._tiff_page = self._tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
@@ -915,7 +914,6 @@ class TIFFReader(Reader):
 
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
         """Get pixel data at index."""
-        # breakpoint()
         return self._dataset["0"][index].as_numpy().data
 
     def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
