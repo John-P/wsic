@@ -487,6 +487,7 @@ class TileIterator(ABC):
 
     def close(self):
         """Safely end any dependants (threads, processes, and files)."""
+        pass  # noqa
 
     def __del__(self):
         self.close()
@@ -667,7 +668,7 @@ class XarrayTileIterator(TileIterator):
 
     def empty_queue(self) -> None:
         """Remove all tiles from the queue into the reordering dict."""
-        while len(self.queue):
+        while self.queue:
             ji, future = self.queue.pop(0)
             tile = future.result().to_numpy()
             self.reordering_dict[ji] = tile
