@@ -485,7 +485,7 @@ class TileIterator(ABC):
             self.update_read_pbar()
         return None
 
-    def close(self):
+    def close(self):  # noqa: B027
         """Safely end any dependants (threads, processes, and files)."""
         pass  # noqa
 
