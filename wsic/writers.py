@@ -29,7 +29,13 @@ from wsic import __version__ as wsic_version
 from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
-from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
+from wsic.readers import (
+    DICOMWSIReader,
+    MultiProcessTileIterator,
+    Reader,
+    TIFFReader,
+    XarrayTileIterator,
+)
 from wsic.typedefs import PathLike
 from wsic.utils import (
     downsample_shape,
@@ -138,6 +144,17 @@ class Writer(ABC):
         """
         if read_tile_size is None:
             read_tile_size = self.tile_size
+        if hasattr(reader, "_dataset"):
+            return XarrayTileIterator(
+                reader=reader,
+                read_tile_size=read_tile_size,
+                yield_tile_size=yield_tile_size or self.tile_size,
+                intermediate=intermediate,
+                num_workers=num_workers,
+                verbose=self.verbose,
+                timeout=timeout,
+                match_tile_sizes=not isinstance(self, ZarrWriter),
+            )
         return MultiProcessTileIterator(
             reader=reader,
             read_tile_size=read_tile_size,

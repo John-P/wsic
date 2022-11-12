@@ -51,3 +51,7 @@ class Queue(multiprocessing.queues.Queue):
         self.counter, state = state
         super().__setstate__(state)
         self._after_fork()
+
+    def __len__(self) -> int:
+        """Return the number of items in the queue."""
+        return self.qsize()
