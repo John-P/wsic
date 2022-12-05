@@ -29,13 +29,8 @@ from wsic import __version__ as wsic_version
 from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
-from wsic.readers import (
-    DICOMWSIReader,
-    MultiProcessTileIterator,
-    Reader,
-    TIFFReader,
-    XarrayTileIterator,
-)
+from wsic.readers import DICOMWSIReader, Reader, TIFFReader
+from wsic.tile_iterators import DaskTileIterator, MultiProcessTileIterator
 from wsic.typedefs import PathLike
 from wsic.utils import (
     downsample_shape,
@@ -144,8 +139,8 @@ class Writer(ABC):
         """
         if read_tile_size is None:
             read_tile_size = self.tile_size
-        if hasattr(reader, "_dataset"):
-            return XarrayTileIterator(
+        if hasattr(reader, "_tzyxc_dataset"):
+            return DaskTileIterator(
                 reader=reader,
                 read_tile_size=read_tile_size,
                 yield_tile_size=yield_tile_size or self.tile_size,
@@ -709,7 +704,7 @@ class TIFFWriter(Writer):
         )
 
         tile_size = reader.tile_shape[:2][::-1]
-        reader_mosaic_shape = mosaic_shape(reader.shape[:2], tile_size)
+        reader_mosaic_shape = mosaic_shape(reader.original_shape[:2], tile_size)
         tile_generator = (
             reader.get_tile(tile_index, decode=False)
             for tile_index in np.ndindex(reader_mosaic_shape)
@@ -732,8 +727,8 @@ class TIFFWriter(Writer):
         ) as tiff:
             tiff.write(
                 data=iter(tile_iterator),
-                tile=self.tile_size,
-                shape=reader.shape,
+                tile=tile_size,
+                shape=reader.original_shape,
                 dtype=reader.dtype,
                 photometric=reader.color_space.to_tiff(),
                 jpegtables=reader.jpeg_tables,
