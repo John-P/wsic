@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from math import ceil, floor
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Tuple, Union
+from typing import Iterable, Iterator, Optional, Tuple, Union, Dict
 
 import numpy as np
 import zarr
@@ -260,7 +260,7 @@ class MultiProcessTileIterator:
         self.intermediate = intermediate
         self.verbose = verbose
         self.timeout = timeout if timeout >= 0 else float("inf")
-        self.processes = set()
+        self.processes: Dict[Tuple[int, ...], multiprocessing.Process] = {}
         self.queue = Queue()
         self.enqueued = set()
         self.reordering_dict = {}
@@ -425,6 +425,7 @@ class MultiProcessTileIterator:
         while not self.queue.empty():
             ji, tile = self.queue.get()
             self.reordering_dict[ji] = tile
+            self.processes.pop(ji).join()
 
     def fill_queue(self) -> None:
         """Add tile reads to the queue until the max number of workers is reached."""
@@ -441,7 +442,7 @@ class MultiProcessTileIterator:
                 daemon=True,
             )
             process.start()
-            self.processes.add(process)
+            self.processes[next_ji] = process
             self.enqueued.add(next_ji)
 
     def update_read_pbar(self) -> None:
@@ -498,9 +499,9 @@ class MultiProcessTileIterator:
         # Join processes in parallel threads
         if self.processes:
             with ThreadPoolExecutor(len(self.processes)) as executor:
-                executor.map(lambda p: p.join(1), self.processes)
+                executor.map(lambda p: p.join(1), self.processes.values())
             # Terminate any child processes if still alive
-            for process in self.processes:
+            for process in self.processes.values():
                 if process.is_alive():
                     process.terminate()
 
