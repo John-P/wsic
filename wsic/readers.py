@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from math import ceil, floor
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Tuple, Union, Dict
+from typing import Dict, Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import zarr
