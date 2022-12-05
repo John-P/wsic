@@ -393,33 +393,6 @@ class TIFFReader(Reader):
     def original_shape(self) -> Tuple[int, ...]:
         return self._tiff_page.shape
 
-    def _normalize_axes(self) -> None:
-        """Transpose the axes and reshape to standard order (YXC)"""
-        import dask.array
-
-        supported_axes = (
-            "YXC",
-            "YXS",
-            "YX",
-            "SYX",
-            "CYX",
-        )
-        if self._tiff_page.axes not in supported_axes:
-            raise ValueError(
-                f"Unsupported axes: {self._tiff_page.axes}. "
-                f"Only {', '.join(supported_axes)} are supported."
-                "Please open an issue on GitHub if you need support for other axes."
-            )
-        if self._tiff_page.axes in ("SYX", "CYX"):
-            # SYX (CYX) -> YXC
-            self._dask = dask.array.moveaxis(self._dask, 0, -1)
-        elif self._tiff_page.axes in ("YXS", "YXC"):
-            pass
-        elif self._tiff_page.axes == "YX":
-            # YX -> YXC
-            self._dask = dask.array.expand_dims(self._dask, axis=-1)
-        self.axes = "YXC"
-
     def _get_mpp(self) -> Optional[Tuple[float, float]]:
         """Get the microns per pixel for the image.
 
