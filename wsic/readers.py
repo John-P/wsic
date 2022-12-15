@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from math import ceil, floor
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Tuple, Union
+from typing import Dict, Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -17,7 +17,7 @@ from wsic.enums import Codec, ColorSpace
 from wsic.magic import summon_file_types
 from wsic.metadata import ngff
 from wsic.multiproc import Queue
-from wsic.types import PathLike
+from wsic.typedefs import PathLike
 from wsic.utils import (
     block_downsample_shape,
     mean_pool,
@@ -260,7 +260,7 @@ class MultiProcessTileIterator:
         self.intermediate = intermediate
         self.verbose = verbose
         self.timeout = timeout if timeout >= 0 else float("inf")
-        self.processes = set()
+        self.processes: Dict[Tuple[int, ...], multiprocessing.Process] = {}
         self.queue = Queue()
         self.enqueued = set()
         self.reordering_dict = {}
@@ -425,6 +425,7 @@ class MultiProcessTileIterator:
         while not self.queue.empty():
             ji, tile = self.queue.get()
             self.reordering_dict[ji] = tile
+            self.processes.pop(ji).join()
 
     def fill_queue(self) -> None:
         """Add tile reads to the queue until the max number of workers is reached."""
@@ -441,7 +442,7 @@ class MultiProcessTileIterator:
                 daemon=True,
             )
             process.start()
-            self.processes.add(process)
+            self.processes[next_ji] = process
             self.enqueued.add(next_ji)
 
     def update_read_pbar(self) -> None:
@@ -498,9 +499,9 @@ class MultiProcessTileIterator:
         # Join processes in parallel threads
         if self.processes:
             with ThreadPoolExecutor(len(self.processes)) as executor:
-                executor.map(lambda p: p.join(1), self.processes)
+                executor.map(lambda p: p.join(1), self.processes.values())
             # Terminate any child processes if still alive
-            for process in self.processes:
+            for process in self.processes.values():
                 if process.is_alive():
                     process.terminate()
 
@@ -542,6 +543,9 @@ class JP2Reader(Reader):
         import glymur
 
         boxes = {type(box): box for box in self.jp2.box}
+        if not boxes:
+            warnings.warn("Cannot get MPP. No boxes found, invalid JP2 file.")
+            return None
         header_box = boxes[glymur.jp2box.JP2HeaderBox]
         header_sub_boxes = {type(box): box for box in header_box.box}
         resolution_box = header_sub_boxes.get(glymur.jp2box.ResolutionBox)
@@ -553,9 +557,10 @@ class JP2Reader(Reader):
         )
         if capture_resolution_box is None:
             return None
-        y_res = capture_resolution_box.vertical_resolution
-        x_res = capture_resolution_box.horizontal_resolution
-        return ppu2mpp(x_res, "cm"), ppu2mpp(y_res, "cm")
+        # Read the resolution capture box in grid points (pixels) / meter
+        pixels_per_meter_y = capture_resolution_box.vertical_resolution
+        pixels_per_meter_x = capture_resolution_box.horizontal_resolution
+        return ppu2mpp(pixels_per_meter_x, "m"), ppu2mpp(pixels_per_meter_y, "m")
 
     def _get_tile_shape(self) -> Tuple[int, int]:
         """Get the tile shape as a (height, width) tuple.
@@ -610,6 +615,9 @@ class TIFFReader(Reader):
         self.tiff_page = self.tiff.pages[0]
         self.microns_per_pixel = self._get_mpp()
         self.array = self.tiff_page.asarray()
+        if self.tiff_page.axes == "SYX":
+            # Transpose SYX -> YXS
+            self.array = np.transpose(self.array, (0, 1, 2), (1, 2, 0))
         self.shape = self.array.shape
         self.dtype = self.array.dtype
         self.axes = self.tiff.series[0].axes

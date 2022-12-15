@@ -147,7 +147,7 @@ def varnames(
     # Find the name of the variable in the parent frame
     var_names = tuple(
         var_name
-        for var_name, var_val in reversed(call_frame.f_locals.items())
+        for var_name, var_val in reversed(list(call_frame.f_locals.items()))
         if var_val is var
     )
     if not squeeze or len(var_names) > 1:
@@ -210,6 +210,7 @@ def mpp2ppu(mpp: float, units: Union[str, int]) -> float:
         "um": 1,
         "mm": 1e3,
         "cm": 1e4,
+        "m": 1e6,
         "inch": 25400,
         2: 25400,
         3: 1e6,
@@ -234,6 +235,7 @@ def ppu2mpp(ppu: float, units: Union[str, int]) -> float:
         "um": 1,
         "mm": 1e3,
         "cm": 1e4,
+        "m": 1e6,
         "inch": 25400,
         2: 25400,
         3: 1e4,
