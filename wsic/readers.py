@@ -557,7 +557,7 @@ class JP2Reader(Reader):
         )
         if capture_resolution_box is None:
             return None
-        # Read the resolution capture box in gird points (pixels) / meter
+        # Read the resolution capture box in grid points (pixels) / meter
         pixels_per_meter_y = capture_resolution_box.vertical_resolution
         pixels_per_meter_x = capture_resolution_box.horizontal_resolution
         return ppu2mpp(pixels_per_meter_x, "m"), ppu2mpp(pixels_per_meter_y, "m")
