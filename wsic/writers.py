@@ -402,7 +402,7 @@ class JP2Writer(Writer):
             else self.compression_level
         )
         mpp = self.microns_per_pixel or reader.microns_per_pixel
-        capture_resolution = tuple(mpp2ppu(x, "cm") for x in mpp) if mpp else None
+        capture_resolution = tuple(mpp2ppu(x, "m") for x in mpp) if mpp else None
         jp2 = glymur.Jp2k(
             self.path,
             shape=reader.shape,
