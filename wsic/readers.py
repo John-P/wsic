@@ -557,9 +557,10 @@ class JP2Reader(Reader):
         )
         if capture_resolution_box is None:
             return None
-        y_res = capture_resolution_box.vertical_resolution
-        x_res = capture_resolution_box.horizontal_resolution
-        return ppu2mpp(x_res, "cm"), ppu2mpp(y_res, "cm")
+        # Read the resolution capture box in gird points (pixels) / meter
+        pixels_per_meter_y = capture_resolution_box.vertical_resolution
+        pixels_per_meter_x = capture_resolution_box.horizontal_resolution
+        return ppu2mpp(pixels_per_meter_x, "m"), ppu2mpp(pixels_per_meter_y, "m")
 
     def _get_tile_shape(self) -> Tuple[int, int]:
         """Get the tile shape as a (height, width) tuple.
