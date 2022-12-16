@@ -1,5 +1,19 @@
 # History
 
+## 0.7.0 (2022-12-15)
+
+- Normalise TIFF array axes (to YXC order) when reading using tiffile.
+- Bug fixes:
+  - Fix reading/writing JP2 resoluion metadata (vres/hres are in m not
+    cm).
+  - Join child processes when finishing writing / exiting.
+  - Copy the reader tile size for transcode mode.
+  - Return None for MPP when JP2 has no resolution box.
+  - Set resolution units to cm when writing TIFFs.
+  - Use the MPP from the reader when writing JP2.
+  - Add a zarr intermediate for JP2 writing (allows different read and
+    write tile sizes).
+
 ## 0.6.1 (2022-10-21)
 
 - Select Writer class based on file extension from CLI.
