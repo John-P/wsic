@@ -1,3 +1,6 @@
+ci:
+  autofix_commit_msg: ':robot: pre-commit auto fixes [...]'
+  autoupdate_commit_msg: ':robot: pre-commit autoupdate'
 repos:
   - repo: https://github.com/executablebooks/mdformat
     rev: 0.7.14
