@@ -402,7 +402,7 @@ class JP2Writer(Writer):
             else self.compression_level
         )
         mpp = self.microns_per_pixel or reader.microns_per_pixel
-        capture_resolution = tuple(mpp2ppu(x, "cm") for x in mpp) if mpp else None
+        capture_resolution = tuple(mpp2ppu(x, "m") for x in mpp) if mpp else None
         jp2 = glymur.Jp2k(
             self.path,
             shape=reader.shape,
@@ -672,6 +672,12 @@ class TIFFWriter(Writer):
         reader: Union[TIFFReader, DICOMWSIReader],
         downsample_method: Optional[str] = None,
     ) -> None:
+        # Validate input
+        if not reader.tile_shape:
+            raise ValueError(
+                "Reader must have a known tile shape/size and implement get_tile."
+            )
+
         import tifffile
 
         microns_per_pixel = self.microns_per_pixel or reader.microns_per_pixel
@@ -685,7 +691,8 @@ class TIFFWriter(Writer):
             else None
         )
 
-        reader_mosaic_shape = mosaic_shape(reader.shape[:2], self.tile_size)
+        tile_size = reader.tile_shape[:2][::-1]
+        reader_mosaic_shape = mosaic_shape(reader.shape[:2], tile_size)
         tile_generator = (
             reader.get_tile(tile_index, decode=False)
             for tile_index in np.ndindex(reader_mosaic_shape)
@@ -1683,7 +1690,7 @@ def _np_downsample(image: np.ndarray, factor: int) -> np.ndarray:
         np.ndarray:
             The resampled image.
     """
-    return mean_pool(image.astype(np.float), factor).clip(0, 255).astype(np.uint8)
+    return mean_pool(image.astype(float), factor).clip(0, 255).astype(np.uint8)
 
 
 def downsample_tile(
