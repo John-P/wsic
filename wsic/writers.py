@@ -1690,7 +1690,7 @@ def _np_downsample(image: np.ndarray, factor: int) -> np.ndarray:
         np.ndarray:
             The resampled image.
     """
-    return mean_pool(image.astype(np.float), factor).clip(0, 255).astype(np.uint8)
+    return mean_pool(image.astype(float), factor).clip(0, 255).astype(np.uint8)
 
 
 def downsample_tile(
