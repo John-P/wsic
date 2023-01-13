@@ -729,9 +729,23 @@ class TIFFWriter(Writer):
 class SVSWriter(Writer):
     """Aperio SVS writer using tifffile.
 
-    Note that when writing tiled TIFF files, the tiles must all be the
-    same size and must be written in the order left-to-right, then
-    top-to-bottom (row-by-row). Tiles cannot be skipped.
+    Notes:
+        - When writing tiled TIFF files, the tiles must all be the same
+          size and must be written in the order left-to-right, then
+          top-to-bottom (row-by-row). Tiles cannot be skipped.
+        - Microns per pixel (MPP) is taken from microns per pixel of the
+          reader if not provided. If microns per pixel is set to None,
+          microns per pixel will not be written to the file.
+        - The SVS MPP metadata is the mean of `microns_per_pixel` from
+          init or the reader.
+        - Apparent magnification (AppMag) can be specified as a float to
+          the optional "app_mag" kwarg.
+        - If only an MPP resolution is given, the AppMag will be
+          approximated from the MPP (by AppMag = 10 / MPP) and rounded
+          to the nearest common AppMag (10, 20,40, 50, 60, 80, 100, 125,
+          150, 200, 250, 312.5, 375, 500, 600, 750, 1000, 1250). If
+          neither MPP or AppMag are given, no resolution will be written
+          to the file.
 
     Args:
         path (PathLike):
@@ -763,6 +777,8 @@ class SVSWriter(Writer):
             Print more output. Defaults to False.
         ome (bool):
             Write OME-TIFF metadata. Defaults to False.
+        app_mag (float):
+            Apparent magnification. Defaults to None.
     """
 
     def __init__(
@@ -806,6 +822,8 @@ class SVSWriter(Writer):
             overwrite=overwrite,
             verbose=verbose,
         )
+        # Apparent magnification
+        self.app_mag = kwargs.get("app_mag")
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
         """Write pixel data at index. Not supported for TIFFWriter.
@@ -880,6 +898,7 @@ class SVSWriter(Writer):
             with tifffile.TiffWriter(
                 self.path,
                 bigtiff=True,
+                shaped=False,
             ) as tif:
 
                 # Construct the pipe separated Aperio description
@@ -932,8 +951,47 @@ class SVSWriter(Writer):
                         f"Q={self.compression_level}"
                     )
                 ]
+                common_mags = np.array(
+                    list(range(1, 10))
+                    + [
+                        10,
+                        20,
+                        40,
+                        50,
+                        60,
+                        80,
+                        100,
+                        125,
+                        150,
+                        200,
+                        250,
+                        312.5,
+                        375,
+                        500,
+                        600,
+                        750,
+                        1000,
+                        1250,
+                    ],
+                    dtype=int,
+                )
+
+                def mpp2appmag(mpp: Optional[float]) -> Optional[int]:
+                    """Convert microns per pixel to app mag.
+
+                    This is a rough conversion, but it is the best we can do
+                    without knowing more (e.g. the scan scope ID).
+
+                    The formula is: app_map = 10 / mpp.
+                    """
+                    if mpp is None:
+                        return None
+                    return common_mags[np.argmin(np.abs(common_mags - 10 / mpp))]
+
+                mpp = np.mean(microns_per_pixel) if microns_per_pixel else None
+                app_mag = self.app_mag or mpp2appmag(mpp) or None
                 key_values = {
-                    "AppMag": 20,  # e.g. 20
+                    "AppMag": app_mag,  # e.g. 20
                     "StripeWidth": None,
                     "ScanScopeID": None,  # e.g. CPAPERIOCS
                     "Filename": None,
@@ -941,9 +999,7 @@ class SVSWriter(Writer):
                     "Time": None,  # e.g. 09:00:00
                     "User": None,  # e.g. UUID4
                     "Parmset": None,  # e.g. USM Filter
-                    "MPP": np.mean(self.microns_per_pixel)
-                    if self.microns_per_pixel
-                    else None,
+                    "MPP": mpp,  # e.g. 0.5
                     "Left": None,
                     "Top": None,
                     "LineCameraSkew": None,  # e.g. -0.003035
@@ -960,37 +1016,46 @@ class SVSWriter(Writer):
                     "\n".join(headers)
                     + ("|" if any(key_values.values()) else "")
                     + "|".join(
-                        f"{key} = {value}" for key, value in key_values.items() if value
+                        f"{key} = {value}"
+                        for key, value in key_values.items()
+                        if value is not None
                     )
                 )
 
                 compression = self.codec.condensed()
+                # Write baseline (level 0, 1st IFD)
                 tif.write(
                     data=iter(reader_tile_iterator),
                     tile=self.tile_size,
                     shape=reader.shape,
                     dtype=reader.dtype,
                     photometric=self.color_space,
+                    compressionargs={"outcolorspace": self.color_space},
                     compression=(compression, self.compression_level),
                     resolution=resolution,
-                    subifds=len(self.pyramid_downsamples),
                     description=description,
                     subfiletype=0,
                 )
+                reader_tile_iterator.close()
 
-                # Write thumbnail
+                # Write the thumbnail (2nd IFD)
                 # NOTE: Assuming YXC order
+                print("Writing thumbnail")
                 thumb_scale = max(
                     scale_to_fit(reader.shape[:2], (1024, 768)),
                     scale_to_fit(reader.shape[:2], (768, 1024)),
                 )
                 thumb_shape = tuple(floor(s * thumb_scale) for s in reader.shape[:2])
+                # Ignore warnings about `approx_ok` being unused
+                warnings.filterwarnings("ignore", message=".*approx_ok.*")
                 thumbnail = reader.thumbnail(thumb_shape, approx_ok=True)
+                warnings.resetwarnings()
                 tif.write(
                     data=thumbnail,
                     rowsperstrip=16,
                     dtype=np.uint8,
                     photometric=ColorSpace.RGB,
+                    compressionargs={"outcolorspace": self.color_space},
                     compression=Codec.JPEG,
                     description=software,
                     subfiletype=0,
@@ -1037,12 +1102,13 @@ class SVSWriter(Writer):
                             shape=level_shape,
                             dtype=reader.dtype,
                             photometric=self.color_space,
+                            compressionargs={"outcolorspace": self.color_space},
                             compression=(
                                 compression,
                                 self.compression_level,
                             ),
                             description=software,  # Optional for OpenSlide
-                            subfiletype=1,  # Subfile type: 1 = reduced resolution
+                            subfiletype=0,  # Subfile type: 1 = reduced resolution
                         )
 
 
