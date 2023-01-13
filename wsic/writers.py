@@ -730,21 +730,22 @@ class SVSWriter(Writer):
     """Aperio SVS writer using tifffile.
 
     Notes:
-        - When writing tiled TIFF files, the tiles must all be the
-        same size and must be written in the order left-to-right, then
-        top-to-bottom (row-by-row). Tiles cannot be skipped.
+        - When writing tiled TIFF files, the tiles must all be the same
+          size and must be written in the order left-to-right, then
+          top-to-bottom (row-by-row). Tiles cannot be skipped.
         - Microns per pixel (MPP) is taken from microns per pixel of the
-        reader if not provided. If microns per pixel is set to None,
-        microns per pixel will not be written to the file.
+          reader if not provided. If microns per pixel is set to None,
+          microns per pixel will not be written to the file.
         - The SVS MPP metadata is the mean of `microns_per_pixel` from
-        init or the reader.
+          init or the reader.
         - Apparent magnification (AppMag) can be specified as a float to
-        the optional "app_mag" kwarg.
+          the optional "app_mag" kwarg.
         - If only an MPP resolution is given, the AppMag will be
-        approximated from the MPP (by AppMag = 10 / MPP) and rounded to
-        the nearest common AppMag (10, 20,40, 50, 60, 80, 100, 125, 150,
-        200, 250, 312.5, 375, 500, 600, 750, 1000, 1250). If neither MPP
-        or AppMag are given, no resolution will be written to the file.
+          approximated from the MPP (by AppMag = 10 / MPP) and rounded
+          to the nearest common AppMag (10, 20,40, 50, 60, 80, 100, 125,
+          150, 200, 250, 312.5, 375, 500, 600, 750, 1000, 1250). If
+          neither MPP or AppMag are given, no resolution will be written
+          to the file.
 
     Args:
         path (PathLike):
@@ -1015,7 +1016,9 @@ class SVSWriter(Writer):
                     "\n".join(headers)
                     + ("|" if any(key_values.values()) else "")
                     + "|".join(
-                        f"{key} = {value}" for key, value in key_values.items() if value
+                        f"{key} = {value}"
+                        for key, value in key_values.items()
+                        if value is not None
                     )
                 )
 
