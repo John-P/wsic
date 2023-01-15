@@ -190,7 +190,7 @@ def warn_unused(
         return
     if var is not None:
         warnings.warn(
-            f"Argument '{name}' is currently unsued and is being ignored.",
+            f"Argument {name!r} is currently unsued and is being ignored.",
             stacklevel=2,
         )
 
