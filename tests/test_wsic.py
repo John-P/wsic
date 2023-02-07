@@ -145,7 +145,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
 
     # Sanity check the import fails
     with pytest.raises(ImportError):
-
         import cv2  # noqa # skipcq
 
     # Try to make a pyramid TIFF
