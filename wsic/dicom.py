@@ -368,7 +368,7 @@ def ffpe_he_preparation_sequence() -> List[Dataset]:
     ]
 
 
-def birghtfield_optical_path_sequence(
+def brightfield_optical_path_sequence(
     identifier: str = "1",
     icc_profile: Union[bytes, str, Path] = "default",
 ) -> List[Dataset]:
@@ -570,7 +570,7 @@ def create_vl_wsi_dataset(
     ]
 
     # Optical Path
-    ds.OpticalPathSequence = birghtfield_optical_path_sequence()  # Type 1
+    ds.OpticalPathSequence = brightfield_optical_path_sequence()  # Type 1
     ds.NumberOfOpticalPaths = 1  # Type 1C
 
     # SOP Common
