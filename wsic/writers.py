@@ -599,7 +599,6 @@ class TIFFWriter(Writer):
                 bigtiff=True,
                 ome=self.ome,
             ) as tif:
-
                 metadata = {}
                 if self.ome and self.microns_per_pixel:
                     metadata["PhysicalSizeXUnit"] = "µm"
@@ -900,7 +899,6 @@ class SVSWriter(Writer):
                 bigtiff=True,
                 shaped=False,
             ) as tif:
-
                 # Construct the pipe separated Aperio description
                 # Example description:
                 # skipcq: PYL-W0105
