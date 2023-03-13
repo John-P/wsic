@@ -116,13 +116,10 @@ def append_frames(
 
         # Write the extended offset table
         table_bio = BytesIO()
-        # print(offsets)
-        # print(lengths)
         ds.ExtendedOffsetTable = struct.pack(f"<{len(offsets)}Q", *offsets)
         ds.ExtendedOffsetTableLengths = struct.pack(f"<{len(lengths)}Q", *lengths)
         ds.save_as(table_bio, write_like_original=True)
         new_table_bytes = table_bio.getvalue()
-        # print(new_table_bytes)
 
         # Sanity check
         if len(new_table_bytes) != len(table_bytes):
@@ -130,7 +127,6 @@ def append_frames(
                 f"New extended offset table length ({len(new_table_bytes)}) "
                 f"does not match original ({len(table_bytes)})."
             )
-        # print(eot_offset)
         # Write at the eot offset
         file.seek(eot_offset, SEEK_SET)
         file.write(new_table_bytes)
