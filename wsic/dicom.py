@@ -111,7 +111,7 @@ def append_frames(
                 f"do not match frame count ({frame_count})."
             )
         # Check end of file is after the EOT offset
-        if not (file.tell() > eot_offset):
+        if not file.tell() > eot_offset:
             raise ValueError(  # pragma: no cover
                 f"End of file ({file.tell()}) is not after the EOT offset"
                 f" ({eot_offset})."
