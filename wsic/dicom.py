@@ -36,7 +36,6 @@ def append_frames(
     io: FileLike,
     frame_iterable: Iterable[bytes],
     frame_count: int,
-    blanks=False,
 ) -> None:
     """Append frames to an existing dataset."""
     sequence_delimitation_item_tag = (0xFFFE, 0xE0DD)
@@ -83,8 +82,6 @@ def append_frames(
             frame_bytes = next(frame_iterable)
             if len(frame_bytes) % 2:
                 frame_bytes += b"\x00"
-            if blanks:
-                frame_bytes = b"\x00\x00"
             pixel_data_element = (
                 tag_struct.pack(*item_tag)
                 + length_struct.pack(len(frame_bytes))
