@@ -105,7 +105,7 @@ def append_frames(
 
         # Sanity checks
         # Check number of offsets and lengths match frame count
-        if not (len(offsets) == len(lengths) == frame_count):
+        if not len(offsets) == len(lengths) == frame_count:
             raise ValueError(  # pragma: no cover
                 f"Number of offsets ({len(offsets)}) and lengths ({len(lengths)}) "
                 f"do not match frame count ({frame_count})."
