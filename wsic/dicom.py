@@ -78,8 +78,14 @@ def append_frames(
         # Start with an empty basic offset table
         file.write(tag_struct.pack(*item_tag) + length_struct.pack(0))
         pixel_data_length += tag_struct.size + length_struct.size
-        for _ in range(frame_count):
-            frame_bytes = next(frame_iterable)
+        for n in range(frame_count):
+            try:
+                frame_bytes = next(frame_iterable)
+            except StopIteration as error:
+                raise ValueError(
+                    f"Expected {frame_count} frames,"
+                    f" but StopIteration raised after {n+1}."
+                ) from error
             if len(frame_bytes) % 2:
                 frame_bytes += b"\x00"
             pixel_data_element = (
