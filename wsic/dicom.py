@@ -4,7 +4,7 @@ from datetime import datetime
 from io import SEEK_END, SEEK_SET, BytesIO
 from math import ceil
 from pathlib import Path
-from typing import Generator, Iterable, List, Literal, Optional, Tuple, Union
+from typing import Iterable, List, Literal, Optional, Tuple, Union
 
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import JPEGBaseline, VLWholeSlideMicroscopyImageStorage, generate_uid
@@ -140,32 +140,6 @@ def append_frames(
         file.write(
             tag_struct.pack(*sequence_delimitation_item_tag) + length_struct.pack(0)
         )
-
-
-def sample_frames_generator() -> Generator[bytes, None, None]:
-    import imagecodecs
-    from skimage.data import astronaut, immunohistochemistry
-
-    ihc_pixels = immunohistochemistry()
-    astro_pixels = astronaut()
-
-    ihc_frame_bytes = (
-        imagecodecs.jpeg_encode(
-            ihc_pixels,
-            level=90,
-            outcolorspace="YCbCr",
-        )
-        + b"\x00"
-    )
-    astro_frame_bytes = imagecodecs.jpeg_encode(
-        astro_pixels,
-        level=90,
-        outcolorspace="YCbCr",
-    )
-
-    while True:
-        yield ihc_frame_bytes
-        yield astro_frame_bytes
 
 
 class PreparationStep(Dataset):
