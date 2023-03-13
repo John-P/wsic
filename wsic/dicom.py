@@ -491,7 +491,6 @@ def create_vl_wsi_dataset(
 
     # Image Pixel
     ds.SamplesPerPixel = 3  # Type 1
-    # ds.PhotometricInterpretation = "RGB"  # Type 1
     ds.PhotometricInterpretation = photometric_interpretation  # Type 1
     ds.PlanarConfiguration = 0  # Type 1
     ds.Rows = tile_size[1]  # Type 1
