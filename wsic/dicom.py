@@ -372,6 +372,18 @@ def brightfield_optical_path_sequence(
     identifier: str = "1",
     icc_profile: Union[bytes, str, Path] = "default",
 ) -> List[Dataset]:
+    """Create a Brightfield Optical Path Sequence.
+
+    Args:
+        identifier (str, optional):
+            The identifier of the optical path.
+        icc_profile (Union[bytes, str, Path], optional):
+            The ICC profile of the optical path.
+
+    Returns:
+        List[Dataset]:
+            The Brightfield Optical Path Sequence.
+    """
     optial_path = Dataset()
     optial_path.OpticalPathIdentifier = identifier  # Type 1
     illumination_type_code = CodeRef(
