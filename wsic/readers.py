@@ -708,8 +708,8 @@ class DICOMWSIReader(Reader):
             path (Path):
                 Path to file.
         """
+        from pydicom import Dataset
         from wsidicom import WsiDicom
-        from wsidicom.wsidicom import Point
 
         super().__init__(path)
         self.slide = WsiDicom.open(self.path)
@@ -720,9 +720,12 @@ class DICOMWSIReader(Reader):
             self.slide.base_level.mpp.height,
             self.slide.base_level.mpp.width,
         )
-        self.tile_shape = self.slide.base_level.get_tile(Point(0, 0)).size[::-1]
-        self.mosaic_shape = (self.slide.tile_size.height, self.slide.tile_size.width)
-        dataset = self.slide.base_level.datasets[0]
+        dataset: Dataset = self.slide.base_level.datasets[0]
+        self.tile_shape = (dataset.Rows, dataset.Columns)
+        self.mosaic_shape = mosaic_shape(
+            self.shape,
+            self.tile_shape,
+        )
         # Sanity check
         if np.prod(self.mosaic_shape[:2]) != int(dataset.NumberOfFrames):
             raise ValueError(
