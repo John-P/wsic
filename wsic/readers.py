@@ -734,9 +734,7 @@ class DICOMWSIReader(Reader):
             )
         self.codec = Codec.NONE
         if hasattr(dataset, "LossyImageCompressionMethod"):
-            self.codec: Codec = Codec.from_dicom_transfer_syntax(
-                dataset.LossyImageCompressionMethod
-            )
+            self.codec: Codec = Codec.from_string(dataset.LossyImageCompressionMethod)
         self.compression_level = (
             None  # Set if known: dataset.get(LossyImageCompressionRatio)?
         )
