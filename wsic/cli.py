@@ -46,6 +46,7 @@ ext2writer = {
     ".tiff": wsic.writers.TIFFWriter,
     ".zarr": wsic.writers.ZarrWriter,
     ".svs": wsic.writers.SVSWriter,
+    ".dcm": wsic.writers.DICOMWSIWriter,
 }
 
 writers = {
@@ -53,6 +54,7 @@ writers = {
     "tiff": wsic.writers.TIFFWriter,
     "zarr": wsic.writers.ZarrWriter,
     "svs": wsic.writers.SVSWriter,
+    "dcm": wsic.writers.DICOMWSIWriter,
 }
 
 
