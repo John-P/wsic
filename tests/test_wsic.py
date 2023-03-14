@@ -1135,11 +1135,11 @@ class TestConvertScenarios:
             },
         ),
         (
-            "zarr_to_jpeg_tiff",
+            "zarr_to_jpeg_dicom",
             {
-                "sample_name": "CMU-1-Small-Region.zarr",
+                "sample_name": "CMU-1-Small-Region-JPEG.zarr",
                 "reader_cls": readers.ZarrReader,
-                "writer_cls": writers.TIFFWriter,
+                "writer_cls": writers.DICOMWSIWriter,
                 "out_ext": ".tiff",
                 "codec": "jpeg",
             },
