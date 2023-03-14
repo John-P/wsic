@@ -145,7 +145,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
 
     # Sanity check the import fails
     with pytest.raises(ImportError):
-
         import cv2  # noqa # skipcq
 
     # Try to make a pyramid TIFF
@@ -1105,6 +1104,46 @@ class TestConvertScenarios:
                 "codec": "jpegxl",
             },
         ),
+        (
+            "jp2_to_jpeg_dicom",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".dcm",
+                "codec": "jpeg",
+            },
+        ),
+        (
+            "svs_to_jppeg_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region.svs",
+                "reader_cls": readers.OpenSlideReader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".dcm",
+                "codec": "jpeg",
+            },
+        ),
+        (
+            "tiff_to_dicom",
+            {
+                "sample_name": "XYC-half-mpp.tiff",
+                "reader_cls": readers.TIFFReader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".dcm",
+                "codec": "jpeg",
+            },
+        ),
+        (
+            "zarr_to_jpeg_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region-JPEG.zarr",
+                "reader_cls": readers.ZarrReader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".tiff",
+                "codec": "jpeg",
+            },
+        ),
     ]
 
     @staticmethod
@@ -1121,7 +1160,17 @@ class TestConvertScenarios:
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader = reader_cls(in_path)
-        writer = writer_cls(out_path, shape=reader.shape, codec=codec)
+        writer = writer_cls(
+            out_path,
+            shape=reader.shape,
+            codec=codec,
+            compression_level=0
+            if codec
+            in {
+                "blosc",
+            }
+            else 100,
+        )
         writer.copy_from_reader(reader)
 
         # Check that the output file exists

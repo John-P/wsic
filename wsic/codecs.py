@@ -27,5 +27,6 @@ def register_codecs() -> None:
             register_imagecodecs_codecs()
     except ImportError:
         warnings.warn(
-            "imagecodecs is not installed, some codecs will not be available."
+            "imagecodecs is not installed, some codecs will not be available.",
+            stacklevel=2,
         )
