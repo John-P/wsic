@@ -52,7 +52,7 @@ def test_to_numcodecs_config(codec):
     try:
         config = codec.to_numcodecs_config()
     except ValueError:
-        warnings.warn(f"{codec} is not supported.")
+        warnings.warn(f"{codec} is not supported.", stacklevel=2)
         return
 
     # Skip if NONE

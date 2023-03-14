@@ -13,6 +13,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Generator,
     Iterable,
     Iterator,
     List,
@@ -97,7 +98,7 @@ class Writer(ABC):
         self.shape = shape
         self.tile_size = tile_size
         self.dtype = dtype
-        self.color_space = color_space or "rgb"
+        self.color_space = color_space or ColorSpace.RGB
         self.codec = Codec.from_string(codec) if codec else None
         self.compression_level = compression_level or 0
         self.microns_per_pixel = microns_per_pixel
@@ -599,7 +600,6 @@ class TIFFWriter(Writer):
                 bigtiff=True,
                 ome=self.ome,
             ) as tif:
-
                 metadata = {}
                 if self.ome and self.microns_per_pixel:
                     metadata["PhysicalSizeXUnit"] = "µm"
@@ -826,7 +826,7 @@ class SVSWriter(Writer):
         self.app_mag = kwargs.get("app_mag")
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
-        """Write pixel data at index. Not supported for TIFFWriter.
+        """Write pixel data at index. Not supported for SVSWriter.
 
         In theory this is possible but it can be complex. If the new tile
         is larger in bytes, the tile will have to be added to the end of the
@@ -835,7 +835,7 @@ class SVSWriter(Writer):
         original tile.
         """
         raise NotImplementedError(
-            "Compressed tiled TIFF files do not support random access writes."
+            "Compressed tiled TIFF (SVS) files do not support random access writes."
         )
 
     def copy_from_reader(
@@ -900,7 +900,6 @@ class SVSWriter(Writer):
                 bigtiff=True,
                 shaped=False,
             ) as tif:
-
                 # Construct the pipe separated Aperio description
                 # Example description:
                 # skipcq: PYL-W0105
@@ -1682,6 +1681,124 @@ class ZarrIntermediate(Writer, Reader):
         raise NotImplementedError()
 
 
+class DICOMWSIWriter(Writer):
+    """Writer for DICOM WSI images using wsidicom.
+
+    Notes:
+        - Supports JPEG and JPEG2000 compression.
+        - DICOM Whole Slide Imaging:  https://dicom.nema.org/Dicom/DICOMWSI/
+    """
+
+    def __init__(
+        self,
+        path: PathLike,
+        shape: Tuple[int, int],
+        tile_size: Tuple[int, int] = (256, 256),
+        dtype: np.dtype = np.uint8,
+        color_space: Optional[ColorSpace] = None,
+        codec: Optional[Codec] = None,
+        compression_level: int = 0,
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
+        overwrite: bool = False,
+        verbose: bool = False,
+        **kwargs,
+    ) -> None:
+        if color_space != "rgb":
+            warn_unused(color_space)
+        warn_unused(codec)
+        warn_unused(compression_level, ignore_falsey=True)
+        warn_unused(microns_per_pixel)
+        warn_unused(pyramid_downsamples, ignore_falsey=True)
+        for key, value in kwargs.items():
+            warn_unused(key, value)
+        super().__init__(
+            path=path,
+            shape=shape,
+            tile_size=tile_size,
+            dtype=dtype,
+            color_space=color_space,
+            codec=codec,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
+
+    def copy_from_reader(
+        self,
+        reader: Reader,
+        num_workers: int = 2,
+        read_tile_size: Tuple[int, int] = None,
+        timeout: float = 10,
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        from pydicom import FileDataset, dcmwrite
+
+        from wsic.dicom import append_frames, create_vl_wsi_dataset
+
+        warn_unused(downsample_method, ignore_falsey=True)
+
+        width = self.shape[1]
+        height = self.shape[0]
+        photometric_interpretation = (
+            ColorSpace.YCBCR.to_dicom_photometric_interpretation((4, 2, 2))
+        )
+
+        meta, dataset = create_vl_wsi_dataset(
+            size=(width, height),
+            tile_size=self.tile_size,
+            photometric_interpretation=photometric_interpretation,
+        )
+
+        file_dataset = FileDataset(
+            str(self.path),
+            dataset=dataset,
+            preamble=b"\0" * 128,
+            file_meta=meta,
+            is_implicit_VR=False,
+            is_little_endian=True,
+        )
+
+        dcmwrite(
+            dataset=file_dataset,
+            filename=file_dataset.filename,
+            write_like_original=False,
+        )
+
+        with ZarrIntermediate(
+            None, reader.shape, zero_after_read=False
+        ) as intermediate:
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader=reader,
+                num_workers=num_workers,
+                intermediate=intermediate,
+                read_tile_size=read_tile_size or self.tile_size,
+                timeout=timeout,
+            )
+
+            def jpeg_generator(tile_iterator) -> Generator[bytes, None, None]:
+                """Encodes arrays to JPEG bytes."""
+                import imagecodecs
+
+                for tile in tile_iterator:
+                    yield imagecodecs.jpeg_encode(
+                        tile,
+                        level=self.compression_level,
+                        colorspace=self.color_space,
+                        outcolorspace=ColorSpace.YCBCR,
+                    )
+
+            tile_iterator = iter(
+                self.level_progress(
+                    jpeg_generator(reader_tile_iterator),
+                    total=len(reader_tile_iterator),
+                )
+            )
+            append_frames(self.path, tile_iterator, len(reader_tile_iterator))
+
+
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
     """Resample an image using OpenCV.
 
@@ -1794,7 +1911,8 @@ def downsample_tile(
         except ImportError:
             warnings.warn(
                 f"Failed to import library for {method_name} for downsampling. "
-                "It may not be installed."
+                "It may not be installed.",
+                stacklevel=2,
             )
     raise Exception("Failed to use any downsampling method.")
 
