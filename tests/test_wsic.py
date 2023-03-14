@@ -1120,7 +1120,17 @@ class TestConvertScenarios:
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader = reader_cls(in_path)
-        writer = writer_cls(out_path, shape=reader.shape, codec=codec)
+        writer = writer_cls(
+            out_path,
+            shape=reader.shape,
+            codec=codec,
+            compression_level=0
+            if codec
+            in {
+                "blosc",
+            }
+            else 100,
+        )
         writer.copy_from_reader(reader)
 
         # Check that the output file exists
