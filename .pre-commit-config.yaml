@@ -34,11 +34,11 @@ repos:
       - id: trailing-whitespace
         exclude: 'setup.cfg'
   - repo: https://github.com/pycqa/isort
-    rev: 5.11.4
+    rev: 5.12.0
     hooks:
       - id: isort
   - repo: https://github.com/psf/black
-    rev: 22.12.0 # Replace with any tag/version: https://github.com/psf/black/tags
+    rev: 23.1.0 # Replace with any tag/version: https://github.com/psf/black/tags
     hooks:
       - id: black
         language_version: python3
