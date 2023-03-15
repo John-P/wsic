@@ -13,7 +13,7 @@ pytest==7.2.2
 pytest-cov>=3.0.0
 scipy>=1.7.3
 tifffile>=2022.4.28
-tox==3.26.0
+tox==4.4.7
 twine==1.14.0
 watchdog==2.3.1
 wheel==0.38.4
