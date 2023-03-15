@@ -147,7 +147,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
 
     # Sanity check the import fails
     with pytest.raises(ImportError):
-
         import cv2  # noqa # skipcq
 
     # Try to make a pyramid TIFF
@@ -1125,8 +1124,22 @@ class TestConvertScenarios:
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
         reader: Reader = reader_cls(in_path)
-        writer: Writer = writer_cls(out_path, shape=reader.shape, codec=codec)
-        writer.copy_from_reader(reader, num_workers=1, timeout=1e32)
+        writer: Writer = writer_cls(
+            out_path,
+            shape=reader.shape,
+            codec=codec,
+            compression_level=4
+            if codec
+            in {
+                "blosc",
+            }
+            else 100,
+        )
+        writer.copy_from_reader(
+            reader,
+            num_workers=1,
+            timeout=1e32,
+        )
 
         # Check that the output file exists
         assert out_path.exists()
