@@ -251,7 +251,9 @@ class JP2Reader(Reader):
 
         boxes = {type(box): box for box in self.jp2.box}
         if not boxes:
-            warnings.warn("Cannot get MPP. No boxes found, invalid JP2 file.")
+            warnings.warn(
+                "Cannot get MPP. No boxes found, invalid JP2 file.", stacklevel=2
+            )
             return None
         header_box = boxes[glymur.jp2box.JP2HeaderBox]
         header_sub_boxes = {type(box): box for box in header_box.box}
@@ -462,7 +464,11 @@ class TIFFReader(Reader):
                 The thumbnail of the image.
         """
         yxc = self._tzyxc_dataset["0"][self.default_t, self.default_z]
-        (_, _, downsample,) = self._find_thumbnail_downsample(
+        (
+            _,
+            _,
+            downsample,
+        ) = self._find_thumbnail_downsample(
             shape,
             yxc.shape[:2],
             yxc.data.chunksize[:2],
@@ -495,6 +501,7 @@ class DICOMWSIReader(Reader):
             path (Path):
                 Path to file.
         """
+        from pydicom import Dataset
         from wsidicom import WsiDicom
 
         super().__init__(path)
@@ -506,15 +513,21 @@ class DICOMWSIReader(Reader):
             self.slide.base_level.mpp.height,
             self.slide.base_level.mpp.width,
         )
-        self.tile_shape = (self.slide.tile_size.height, self.slide.tile_size.width)
-        self.mosaic_shape = mosaic_shape(self.shape, self.tile_shape)
-        dataset = self.slide.base_level.datasets[0]
+        dataset: Dataset = self.slide.base_level.datasets[0]
+        self.tile_shape = (dataset.Rows, dataset.Columns)
+        self.mosaic_shape = mosaic_shape(
+            self.shape,
+            self.tile_shape,
+        )
         # Sanity check
-        if np.prod(self.mosaic_shape) != int(dataset.NumberOfFrames):
+        if np.prod(self.mosaic_shape[:2]) != int(dataset.NumberOfFrames):
             raise ValueError(
-                "Number of frames in DICOM dataset does not match mosaic shape."
+                f"Number of frames in DICOM dataset {dataset.NumberOfFrames}"
+                f" does not match mosaic shape {self.mosaic_shape}."
             )
-        self.codec: Codec = Codec.from_string(dataset.LossyImageCompressionMethod)
+        self.codec = Codec.NONE
+        if hasattr(dataset, "LossyImageCompressionMethod"):
+            self.codec: Codec = Codec.from_string(dataset.LossyImageCompressionMethod)
         self.compression_level = (
             None  # Set if known: dataset.get(LossyImageCompressionRatio)?
         )
@@ -605,7 +618,7 @@ class OpenSlideReader(Reader):
                 float(self.os_slide.properties["openslide.mpp-y"]),
             )
         except KeyError:
-            warnings.warn("OpenSlide could not find MPP.")
+            warnings.warn("OpenSlide could not find MPP.", stacklevel=2)
         # Fall back to TIFF resolution tags
         try:
             resolution = (
@@ -616,7 +629,7 @@ class OpenSlideReader(Reader):
             self._check_sensible_resolution(resolution, units)
             return tuple(ppu2mpp(x, units) for x in resolution)
         except KeyError:
-            warnings.warn("No resolution metadata found.")
+            warnings.warn("No resolution metadata found.", stacklevel=2)
         return None
 
     @staticmethod
@@ -641,12 +654,14 @@ class OpenSlideReader(Reader):
                 "TIFF resolution tags found."
                 " However, they have a common default value of 72 pixels per inch."
                 " This may from a misconfigured software library or tool"
-                " which is expecting to handle print documents."
+                " which is expecting to handle print documents.",
+                stacklevel=2,
             )
         if 0 in tiff_resolution:
             warnings.warn(
                 "TIFF resolution tags found."
-                " However, one or more of the values is zero."
+                " However, one or more of the values is zero.",
+                stacklevel=2,
             )
 
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:

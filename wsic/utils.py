@@ -535,7 +535,8 @@ def resize_array(
 
     warnings.warn(
         "Neither OpenCV nor scipy are installed for image resizing. "
-        "A slower and lower quality method will be used."
+        "A slower and lower quality method will be used.",
+        stacklevel=2,
     )
     # Nearest neighbour sample the numpy array
     y = np.linspace(0, array.shape[0], shape[0], endpoint=False).round().astype(int)
