@@ -195,7 +195,8 @@ class TileIterator(ABC):
             # Sleep and try again
             time.sleep(0.1)
         warnings.warn(
-            "Failed to get next tile after 100 attempts. Dumping debug information."
+            "Failed to get next tile after 100 attempts. Dumping debug information.",
+            stacklevel=2,
         )
         print(f"Reader Shape {self.reader.shape}")
         print(f"Read Tile Size {self.read_tile_size}")
