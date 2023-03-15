@@ -1,7 +1,7 @@
 black==22.10.0
 bump2version==1.0.1
 Click>=8.0.0
-flake8==5.0.4
+flake8==6.0.0
 glymur>=0.11.3
 imagecodecs>=2022.7.27
 numcodecs>=0.9.1
@@ -15,7 +15,7 @@ scipy>=1.7.3
 tifffile>=2022.4.28
 tox==3.26.0
 twine==1.14.0
-watchdog==2.1.9
+watchdog==2.3.1
 wheel==0.38.4
 wsidicom>=0.2.0
 zarr==2.13.3
