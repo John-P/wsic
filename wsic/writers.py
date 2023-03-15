@@ -30,7 +30,8 @@ from wsic import __version__ as wsic_version
 from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
-from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
+from wsic.readers import DICOMWSIReader, Reader, TIFFReader
+from wsic.tile_iterators import DaskTileIterator, MultiProcessTileIterator
 from wsic.typedefs import PathLike
 from wsic.utils import (
     downsample_shape,
@@ -139,6 +140,17 @@ class Writer(ABC):
         """
         if read_tile_size is None:
             read_tile_size = self.tile_size
+        if hasattr(reader, "_tzyxc_dataset"):
+            return DaskTileIterator(
+                reader=reader,
+                read_tile_size=read_tile_size,
+                yield_tile_size=yield_tile_size or self.tile_size,
+                intermediate=intermediate,
+                num_workers=num_workers,
+                verbose=self.verbose,
+                timeout=timeout,
+                match_tile_sizes=not isinstance(self, ZarrWriter),
+            )
         return MultiProcessTileIterator(
             reader=reader,
             read_tile_size=read_tile_size,
@@ -692,7 +704,7 @@ class TIFFWriter(Writer):
         )
 
         tile_size = reader.tile_shape[:2][::-1]
-        reader_mosaic_shape = mosaic_shape(reader.shape[:2], tile_size)
+        reader_mosaic_shape = mosaic_shape(reader.original_shape[:2], tile_size)
         tile_generator = (
             reader.get_tile(tile_index, decode=False)
             for tile_index in np.ndindex(reader_mosaic_shape)
@@ -715,8 +727,8 @@ class TIFFWriter(Writer):
         ) as tiff:
             tiff.write(
                 data=iter(tile_iterator),
-                tile=self.tile_size,
-                shape=reader.shape,
+                tile=tile_size,
+                shape=reader.original_shape,
                 dtype=reader.dtype,
                 photometric=reader.color_space.to_tiff(),
                 jpegtables=reader.jpeg_tables,
@@ -1474,11 +1486,12 @@ class ZarrWriter(Writer, Reader):
         # 1. A valid get_tile(decode=False)
         try:
             reader.get_tile((0, 0), decode=False)
-        except (NotImplementedError, AttributeError):
+        except (NotImplementedError, AttributeError) as error:
             raise ValueError(
                 "Reader must have a get_tile method which can return encoded tiles"
                 " (decoded=False)."
-            )
+            ) from error
+
         # 2. Compatible tile sizes
         if self.tile_size != reader.tile_shape[:2][::-1]:
             raise ValueError(
@@ -1488,27 +1501,14 @@ class ZarrWriter(Writer, Reader):
         if self.dtype != reader.dtype:
             raise ValueError("Dtype must match the reader dtype for transcoding.")
         # 4. Compatible compression
-        has_valid_compression = (
+        supported_compression = (
             Codec.from_string(reader.codec) in (Codec.JPEG, Codec.JPEG2000, Codec.WEBP),
-        )
-        # 5. Known supported TIFF formats
-        is_generic_tiff = isinstance(reader, TIFFReader) and (
-            reader.tiff.pages[0].is_tiled and has_valid_compression
-        )
-        is_supported_tiff = isinstance(reader, TIFFReader) and any(
-            [
-                reader.tiff.is_svs,
-                reader.tiff.is_ome,
-                reader.tiff.is_ndpi,
-                is_generic_tiff,
-            ]
         )
         # 5. Supported Reader (WSIDICOM or a TIFF with supported format)
         return all(
             [
                 isinstance(reader, (TIFFReader, DICOMWSIReader)),
-                has_valid_compression,
-                not isinstance(reader, TIFFReader) or is_supported_tiff,
+                supported_compression,
             ]
         )
 

@@ -21,7 +21,9 @@ performance_requirements = ["opencv-python"]
 # Extra format support
 format_support = [
     "tifffile",  # For reading, writing and repackaging TIFF files
+    "dask",  # Reading and writing TIFF/Zarr with non-standard axis order
     "glymur",  # For reading and writing JP2 files
+    "xarray",
 ]
 
 # Extra codecs support
