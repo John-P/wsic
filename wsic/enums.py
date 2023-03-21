@@ -151,6 +151,7 @@ class Codec(str, Enum):
             34933: cls.PNG,
             34934: cls.JPEGXR,
             22610: cls.JPEGXR,  # NDPI JPEG XR
+            32946: cls.DEFLATE,
             34927: cls.WEBP,  # Deprecated
             50001: cls.WEBP,
             34926: cls.ZSTD,  # Deprecated
