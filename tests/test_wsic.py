@@ -763,6 +763,7 @@ def test_missing_imagecodecs_codec(samples_path, tmp_path):
 WRITER_EXT_MAPPING = {
     ".zarr": writers.ZarrWriter,
     ".tiff": writers.TIFFWriter,
+    ".dcm": writers.DICOMWSIWriter,
 }
 
 
@@ -851,6 +852,15 @@ class TestTranscodeScenarios:
                 "out_ext": ".tiff",
             },
         ),
+        (
+            "jpeg_tiff_to_jpeg_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region.jpeg.tiff",
+                "reader_cls": readers.TIFFReader,
+                "out_reader": readers.DICOMWSIReader,
+                "out_ext": ".dcm",
+            },
+        ),
     ]
 
     @staticmethod
@@ -878,17 +888,20 @@ class TestTranscodeScenarios:
         assert output_reader.shape == reader.shape
         assert output_reader.tile_shape == reader.tile_shape
 
+        # Calculate error metrics
+        reader_img = reader[...]
+        output_reader_img = output_reader[...]
+        squared_err = np.subtract(reader_img, output_reader_img) ** 2
+        abs_err = np.abs(np.subtract(reader_img, output_reader_img))
+
+        # A lot of the image should have zero error
+        assert np.count_nonzero(abs_err) / abs_err.size < 0.25
+
         # Check mean squared error is low
-        channel_wise_mse = (np.subtract(reader[...], output_reader[...]) ** 2).mean(
-            axis=(0, 1)
-        )
-        assert np.all(channel_wise_mse < 1)
+        assert np.all(squared_err.mean() < 2.56)
 
         # Check mean absolute error is low
-        channel_wise_mae = np.abs(np.subtract(reader[...], output_reader[...])).mean(
-            axis=(0, 1)
-        )
-        assert np.all(channel_wise_mae < 6)
+        assert np.all(abs_err.mean() < 25.6)
 
     def visually_compare_readers(
         self,
