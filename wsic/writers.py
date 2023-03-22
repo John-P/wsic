@@ -1798,6 +1798,62 @@ class DICOMWSIWriter(Writer):
             )
             append_frames(self.path, tile_iterator, len(reader_tile_iterator))
 
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        from pydicom import FileDataset, dcmwrite
+
+        from wsic.dicom import append_frames, create_vl_wsi_dataset
+
+        warn_unused(downsample_method, ignore_falsey=True)
+
+        width = self.shape[1]
+        height = self.shape[0]
+        photometric_interpretation = (
+            reader.color_space.to_dicom_photometric_interpretation(
+                (4, 2, 2) if reader.color_space == ColorSpace.YCBCR else None
+            )
+        )
+
+        if reader.codec != Codec.JPEG:
+            raise ValueError(
+                f"Currenly only JPEG compression is supported. " f"Got {reader.codec}."
+            )
+
+        meta, dataset = create_vl_wsi_dataset(
+            size=(width, height),
+            tile_size=self.tile_size,
+            photometric_interpretation=photometric_interpretation,
+        )
+
+        file_dataset = FileDataset(
+            str(self.path),
+            dataset=dataset,
+            preamble=b"\0" * 128,
+            file_meta=meta,
+            is_implicit_VR=False,
+            is_little_endian=True,
+        )
+
+        dcmwrite(
+            dataset=file_dataset,
+            filename=file_dataset.filename,
+            write_like_original=False,
+        )
+
+        tile_count = np.prod(reader.mosaic_shape)
+
+        def tile_generator() -> Generator[bytes, None, None]:
+            """Yields tiles as bytes from the reader."""
+            for xy in self.transcode_progress(
+                np.ndindex(reader.mosaic_shape), total=tile_count
+            ):
+                yield reader.get_tile(xy, decode=False)
+
+        append_frames(self.path, tile_generator(), tile_count)
+
 
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
     """Resample an image using OpenCV.
