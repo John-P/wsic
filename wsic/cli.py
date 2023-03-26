@@ -272,6 +272,13 @@ def transcode(
             tile_size=reader.tile_shape[::-1],
             dtype=reader.dtype,
         )
+    elif out_path.suffix == ".dcm":
+        writer = wsic.writers.DICOMWSIWriter(
+            out_path,
+            shape=reader.shape,
+            tile_size=reader.tile_shape[::-1],
+            dtype=reader.dtype,
+        )
     else:
         raise click.BadParameter(
             f"Output file type {out_path.suffix} not supported",
