@@ -1,4 +1,4 @@
-black==22.10.0
+black==23.1.0
 bump2version==1.0.1
 Click>=8.0.0
 dask
