@@ -3,7 +3,7 @@ import warnings
 from abc import ABC, abstractmethod
 from contextlib import suppress
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Tuple, Union
+from typing import Dict, Iterable, Iterator, Optional, Tuple, Union
 
 import numpy as np
 import xarray as xr
@@ -402,16 +402,42 @@ class TIFFReader(Reader):
                 The resolution of the image in microns per pixel.
                 If the resolution is not available, this will be None.
         """
+        if self._tiff.is_svs:
+            return self._get_mpp_svs()
         try:
-            tags = self._tiff_page.tags
-            y_resolution = tags["YResolution"].value[0] / tags["YResolution"].value[1]
-            x_resolution = tags["XResolution"].value[0] / tags["XResolution"].value[1]
-            resolution_units = tags["ResolutionUnit"].value
-            return ppu2mpp(x_resolution, resolution_units), ppu2mpp(
-                y_resolution, resolution_units
-            )
+            return self._get_mpp_tiff_res_tag()
         except KeyError:
             return None
+
+    def _get_mpp_tiff_res_tag(self):
+        """Get the microns per pixel for the image from the TIFF tags."""
+        tags = self._tiff_page.tags
+        y_resolution = tags["YResolution"].value[0] / tags["YResolution"].value[1]
+        x_resolution = tags["XResolution"].value[0] / tags["XResolution"].value[1]
+        resolution_units = tags["ResolutionUnit"].value
+        return ppu2mpp(x_resolution, resolution_units), ppu2mpp(
+            y_resolution, resolution_units
+        )
+
+    @staticmethod
+    def _parse_svs_key_values(description: str) -> Dict[str, str]:
+        """Parse the key value pairs from the SVS description."""
+        parts = description.split("\n")
+        # Header in parts[0]
+        key_values_str = parts[-1]
+        # Conver to dict
+        return {
+            kv.split("=")[0].strip(): kv.split("=")[1].strip()
+            for kv in key_values_str.split("|")
+        }
+
+    def _get_mpp_svs(self):
+        """Get the microns per pixel for the image from the SVS description."""
+        if self._tiff_page.description is None:
+            return None
+        svs_key_values = self._parse_svs_key_values(self._tiff_page.description)
+        mpp = svs_key_values.get("MPP")
+        return (float(mpp), float(mpp)) if mpp else None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
@@ -699,6 +725,9 @@ class ZarrReader(Reader):
         super().__init__(path)
         register_codecs()
         self.zarr = zarr.open(str(path), mode="r")
+        # Currently mpp not stored in zarr, could use xarray metadata
+        # for this or custom wsic metadata
+        self.microns_per_pixel = None
 
         # If it is a zarr array, put it in a group
         if isinstance(self.zarr, zarr.Array):

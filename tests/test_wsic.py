@@ -2,7 +2,7 @@
 import sys
 import warnings
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
 import cv2 as _cv2  # Avoid adding "cv2" to sys.modules for fallback tests
 import numpy as np
@@ -1279,10 +1279,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.TIFFReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1290,10 +1286,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.OpenSlideReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1301,10 +1293,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region-J2K",
                 "reader_cls": readers.DICOMWSIReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1312,10 +1300,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1323,22 +1307,32 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region-JPEG.zarr",
                 "reader_cls": readers.ZarrReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
     ]
 
     @staticmethod
-    def test_thumbnail(
+    def test_thumbnail_512_512_approx(
         samples_path: Path,
         sample_name: str,
         reader_cls: readers.Reader,
-        thumbnail_kwargs: Dict[str, Any],
     ):
         """Test creating a thumbnail."""
         in_path = samples_path / sample_name
         reader: readers.Reader = reader_cls(in_path)
-        reader.thumbnail(**thumbnail_kwargs)
+        reader.thumbnail(
+            shape=(512, 512),
+            approx_ok=True,
+        )
+
+    @staticmethod
+    def test_mpp_found(
+        samples_path: Path,
+        sample_name: str,
+        reader_cls: readers.Reader,
+    ):
+        """Check that resolution/mpp is read from the file (not None)."""
+        in_path = samples_path / sample_name
+        reader: readers.Reader = reader_cls(in_path)
+        assert hasattr(reader, "microns_per_pixel")
+        assert reader.microns_per_pixel is not None
