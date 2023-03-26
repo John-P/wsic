@@ -520,7 +520,7 @@ class TIFFWriter(Writer):
         *,
         ome: bool = False,
     ) -> None:
-        if dtype is not np.uint8:
+        if dtype != np.uint8:
             warn_unused(dtype)
         super().__init__(
             path=path,
