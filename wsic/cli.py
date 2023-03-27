@@ -235,6 +235,11 @@ def convert(
     type=click.Path(exists=True),
 )
 @click.option(
+    "--overwrite/--no-overwrite",
+    help="Whether to overwrite the output file.",
+    default=False,
+)
+@click.option(
     "-o",
     "--out-path",
     help="The path to output zarr.",
@@ -243,6 +248,7 @@ def convert(
 def transcode(
     in_path: str,
     out_path: str,
+    overwrite: bool,
 ):
     """Repackage a (TIFF) WSI to a zarr."""
     in_path = Path(in_path)
@@ -250,9 +256,13 @@ def transcode(
 
     file_types = magic.summon_file_types(in_path)
     if ("tiff",) in file_types:
-        reader = wsic.readers.TIFFReader(in_path)
+        reader = wsic.readers.TIFFReader(
+            in_path,
+        )
     elif ("dicom",) in file_types or ("dcm",) in file_types:
-        reader = wsic.readers.DICOMWSIReader(in_path)
+        reader = wsic.readers.DICOMWSIReader(
+            in_path,
+        )
     else:
         suffixes = "".join(in_path.suffixes)
         raise click.BadParameter(
@@ -264,6 +274,7 @@ def transcode(
             shape=reader.shape,
             tile_size=reader.tile_shape[::-1],
             dtype=reader.dtype,
+            overwrite=overwrite,
         )
     elif out_path.suffix == ".tiff":
         writer = wsic.writers.TIFFWriter(
@@ -271,6 +282,7 @@ def transcode(
             shape=reader.shape,
             tile_size=reader.tile_shape[::-1],
             dtype=reader.dtype,
+            overwrite=overwrite,
         )
     elif out_path.suffix == ".dcm":
         writer = wsic.writers.DICOMWSIWriter(
@@ -278,6 +290,7 @@ def transcode(
             shape=reader.shape,
             tile_size=reader.tile_shape[::-1],
             dtype=reader.dtype,
+            overwrite=overwrite,
         )
     else:
         raise click.BadParameter(
