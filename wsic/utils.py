@@ -208,9 +208,15 @@ def mpp2ppu(mpp: float, units: Union[str, int]) -> float:
     """
     mpp_to_upp = {
         "um": 1,
+        "µm": 1,
+        "micron": 1,
+        "micrometer": 1,
         "mm": 1e3,
+        "millimeter": 1e3,
         "cm": 1e4,
+        "centimeter": 1e4,
         "m": 1e6,
+        "meter": 1e6,
         "inch": 25400,
         2: 25400,
         3: 1e6,
@@ -233,9 +239,15 @@ def ppu2mpp(ppu: float, units: Union[str, int]) -> float:
         return 0
     mpp_to_upp = {
         "um": 1,
+        "µm": 1,
+        "micron": 1,
+        "micrometer": 1,
         "mm": 1e3,
+        "millimeter": 1e3,
         "cm": 1e4,
+        "centimeter": 1e4,
         "m": 1e6,
+        "meter": 1e6,
         "inch": 25400,
         2: 25400,
         3: 1e4,
