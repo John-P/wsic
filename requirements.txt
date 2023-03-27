@@ -16,7 +16,7 @@ pytest-cov>=3.0.0
 pytest-timeout
 scipy>=1.7.3
 tifffile>=2022.4.28
-tox==4.4.7
+tox==4.4.8
 twine==1.14.0
 watchdog==2.3.1
 wheel==0.40.0
