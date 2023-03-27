@@ -1335,4 +1335,10 @@ class TestReaderScenarios:
         in_path = samples_path / sample_name
         reader: readers.Reader = reader_cls(in_path)
         assert hasattr(reader, "microns_per_pixel")
-        assert reader.microns_per_pixel is not None
+        # A plain zarr doesn't have a resolution attribute so skip this.
+        # Maybe in duture this could be done via the xarray metadata.
+        if (
+            not isinstance(reader, readers.ZarrReader)
+            or sample_name != "CMU-1-Small-Region-JPEG.zarr"
+        ):
+            assert reader.microns_per_pixel is not None
