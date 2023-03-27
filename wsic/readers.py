@@ -615,6 +615,7 @@ class OpenSlideReader(Reader):
         self.axes = "YXS"
         self.tile_shape = None  # No easy way to get tile shape currently
         self.microns_per_pixel = self._get_mpp()
+        self.mosaic_shape = None
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
