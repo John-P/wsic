@@ -31,7 +31,10 @@ from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
 from wsic.readers import DICOMWSIReader, Reader, TIFFReader
-from wsic.tile_iterators import DaskTileIterator, MultiProcessTileIterator
+from wsic.tile_iterators import DaskTileIterator
+from wsic.tile_iterators import (
+    PersistentMultiProcessTileIterator as MultiProcessTileIterator,
+)
 from wsic.typedefs import PathLike
 from wsic.utils import (
     downsample_shape,
