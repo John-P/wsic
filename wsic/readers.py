@@ -537,10 +537,10 @@ class DICOMWSIReader(Reader):
         self.shape = (self.slide.size.height, self.slide.size.width, channels)
         self.dtype = np.uint8
         self.microns_per_pixel = (
-            self.slide.base_level.mpp.height,
-            self.slide.base_level.mpp.width,
+            self.slide.levels.base_level.mpp.height,
+            self.slide.levels.base_level.mpp.width,
         )
-        dataset: Dataset = self.slide.base_level.datasets[0]
+        dataset: Dataset = self.slide.levels.base_level.datasets[0]
         self.tile_shape = (dataset.Rows, dataset.Columns)
         self.mosaic_shape = mosaic_shape(
             self.shape,
@@ -570,7 +570,7 @@ class DICOMWSIReader(Reader):
         """
         from pydicom import Dataset
 
-        dataset: Dataset = self.slide.base_level.datasets[0]
+        dataset: Dataset = self.slide.levels.base_level.datasets[0]
         if dataset.DimensionOrganizationType != "TILED_FULL":
             warnings.warn(
                 "DICOM file is not TILED_FULL. Performance may be impacted."
@@ -622,7 +622,7 @@ class DICOMWSIReader(Reader):
     def __getitem__(self, index: Tuple[Union[slice, int]]) -> np.ndarray:
         """Get pixel data at index."""
         if index is ...:
-            return np.array(self.slide.base_level.get_default_full())
+            return np.array(self.slide.levels.base_level.get_default_full())
         xs = index[1]
         ys = index[0]
         start_x = xs.start or 0
