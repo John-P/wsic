@@ -527,11 +527,27 @@ class DICOMWSIReader(Reader):
             path (Path):
                 Path to file.
         """
+        import threading
+
         from pydicom import Dataset
         from wsidicom import WsiDicom
 
         super().__init__(path)
+
+        # Set up a time to print a message if the file takes a while to open
+        timer = threading.Timer(
+            5,
+            lambda: print(
+                "Looks like this is taking a while..."
+                "if your DICOM file has a 'DimensionOrganizationType' "
+                "of 'TILED_SPARSE',  this may be causing it to be slow."
+            ),
+        )
+        timer.start()
+        # Open the file, this will take a while if the file is sparse tiled
         self.slide = WsiDicom.open(self.path)
+        # Cancel the timer if it hasn't already fired
+        timer.cancel()
         self.performance_check()
         channels = len(self.slide.read_tile(0, (0, 0)).getbands())
         self.shape = (self.slide.size.height, self.slide.size.width, channels)
