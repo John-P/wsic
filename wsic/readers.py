@@ -22,7 +22,6 @@ from wsic.utils import (
     resize_array,
     scale_to_fit,
     tile_slices,
-    warn_unused,
 )
 
 
@@ -771,10 +770,6 @@ class OpenSlideReader(Reader):
             size=(end_x - start_x, end_y - start_y),
         )
         return np.array(img.convert("RGB"))
-
-    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
-        warn_unused(approx_ok, ignore_falsey=True)
-        return np.array(self.os_slide.get_thumbnail(shape[::-1]))
 
 
 class ZarrReader(Reader):
