@@ -662,7 +662,7 @@ class TIFFWriter(Writer):
                         tile_generator = self.level_progress(
                             tile_generator,
                             total=int(np.product(level_tiles_shape)),
-                            desc=f"Level {level}",
+                            desc=f"Level {level + 1}",
                             leave=False,
                         )
 
