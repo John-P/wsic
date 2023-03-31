@@ -281,11 +281,11 @@ class JP2Reader(Reader):
         import glymur
 
         boxes = {type(box): box for box in self.jp2.box}
-        ccb = boxes.get(glymur.jp2box.ContiguousCodestreamBox, None)
+        ccb = boxes.get(glymur.jp2box.ContiguousCodestreamBox)
         if ccb is None:
             raise ValueError("No codestream box found.")
         segments = {type(segment): segment for segment in ccb.codestream.segment}
-        siz = segments.get(glymur.codestream.SIZsegment, None)
+        siz = segments.get(glymur.codestream.SIZsegment)
         if siz is None:
             raise ValueError("No SIZ segment found.")
         return (siz.ytsiz, siz.xtsiz)
@@ -532,6 +532,7 @@ class DICOMWSIReader(Reader):
 
         super().__init__(path)
         self.slide = WsiDicom.open(self.path)
+        self.performance_check()
         channels = len(self.slide.read_tile(0, (0, 0)).getbands())
         self.shape = (self.slide.size.height, self.slide.size.width, channels)
         self.dtype = np.uint8
@@ -559,6 +560,47 @@ class DICOMWSIReader(Reader):
         )
         self.color_space = ColorSpace.from_dicom(dataset.photometric_interpretation)
         self.jpeg_tables = None
+
+    def performance_check(self) -> None:
+        """Check attributes of the file and warn if they are not optimal.
+
+        A 'DimensionOrganizationType' of `TILED_SPARSE` versus
+        `TILED_FULL` will negatively impact performance.
+
+        """
+        from pydicom import Dataset
+
+        dataset: Dataset = self.slide.base_level.datasets[0]
+        if dataset.DimensionOrganizationType != "TILED_FULL":
+            warnings.warn(
+                "DICOM file is not TILED_FULL. Performance may be impacted."
+                " Consider converting to TILED_FULL like so:\n"
+                "\n>>> from wsidicom import WsiDicom"
+                "\n>>> with WsiDicom.open(path_to_input) as slide:"
+                "\n>>>     slide.save(path_to_ouput)"
+                "\nThis is lossless and fast.",
+                stacklevel=2,
+            )
+            should_convert = input(
+                "Would you like to create a TILED_FULL copy now? [y/n]"
+            )
+            if should_convert.lower().strip() == "y":
+                self._make_full_tiled_copy()
+
+    def _make_full_tiled_copy(self) -> None:
+        """Make a copy of the file with TILED_FULL DimensionOrganizationType."""
+        print("Converting to TILED_FULL...")
+        from wsidicom import WsiDicom
+
+        if self.path.is_dir():
+            new_path = self.path.with_suffix(".tiled_full")
+            new_path.mkdir(parents=True, exist_ok=False)
+        else:
+            new_path = self.path.with_suffix(".tiled_full.dcm")
+        self.slide.save(new_path)
+        self.path = new_path
+        self.slide = WsiDicom.open(self.path)
+        print("Done.")
 
     def get_tile(self, index: Tuple[int, int], decode: bool = True) -> np.ndarray:
         """Get tile at index.
