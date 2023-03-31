@@ -1052,9 +1052,12 @@ class SVSWriter(Writer):
                 # Write the thumbnail (2nd IFD)
                 # NOTE: Assuming YXC order
                 print("Writing thumbnail")
-                thumb_scale = max(
-                    scale_to_fit(reader.shape[:2], (1024, 768)),
-                    scale_to_fit(reader.shape[:2], (768, 1024)),
+                thumb_scale = scale_to_fit(
+                    reader.shape[:2],
+                    np.maximum(
+                        np.floor_divide(reader.shape[:2], self.tile_size[::-1]),
+                        (1024, 1024),
+                    ),
                 )
                 thumb_shape = tuple(floor(s * thumb_scale) for s in reader.shape[:2])
                 # Ignore warnings about `approx_ok` being unused
