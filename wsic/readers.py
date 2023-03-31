@@ -22,7 +22,6 @@ from wsic.utils import (
     resize_array,
     scale_to_fit,
     tile_slices,
-    warn_unused,
 )
 
 
@@ -281,11 +280,11 @@ class JP2Reader(Reader):
         import glymur
 
         boxes = {type(box): box for box in self.jp2.box}
-        ccb = boxes.get(glymur.jp2box.ContiguousCodestreamBox, None)
+        ccb = boxes.get(glymur.jp2box.ContiguousCodestreamBox)
         if ccb is None:
             raise ValueError("No codestream box found.")
         segments = {type(segment): segment for segment in ccb.codestream.segment}
-        siz = segments.get(glymur.codestream.SIZsegment, None)
+        siz = segments.get(glymur.codestream.SIZsegment)
         if siz is None:
             raise ValueError("No SIZ segment found.")
         return (siz.ytsiz, siz.xtsiz)
@@ -713,10 +712,6 @@ class OpenSlideReader(Reader):
             size=(end_x - start_x, end_y - start_y),
         )
         return np.array(img.convert("RGB"))
-
-    def thumbnail(self, shape: Tuple[int, ...], approx_ok: bool = False) -> np.ndarray:
-        warn_unused(approx_ok, ignore_falsey=True)
-        return np.array(self.os_slide.get_thumbnail(shape[::-1]))
 
 
 class ZarrReader(Reader):
