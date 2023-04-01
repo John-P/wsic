@@ -1976,7 +1976,10 @@ def downsample_tile(
                 "It may not be installed.",
                 stacklevel=2,
             )
-    raise Exception("Failed to use any downsampling method.")
+    allowed_methods = {method} if method else set(methods)
+    raise ImportError(
+        f"Failed to use any allowed downsampling method: {allowed_methods}."
+    )
 
 
 def get_level_tile(

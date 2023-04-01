@@ -301,7 +301,7 @@ class TileIterator(ABC):
             # If no intermediate is required, return the tile
             if not self.intermediate:
                 if tile is None:
-                    raise Exception(f"Tile {read_ji} is None")
+                    raise IOError(f"Tile {read_ji} is None")
                 self.read_i += 1
                 self.update_read_pbar()
                 self.yield_i += 1
