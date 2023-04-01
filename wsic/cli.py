@@ -6,11 +6,11 @@ from typing import Optional, Tuple
 
 try:
     import click
-except ImportError:
+except ImportError as error:
     raise ImportError(
         "Click is required to use wsic from the command line. "
         "Install with `pip install click` or `conda install click`."
-    )
+    ) from error
 
 import wsic
 from wsic import magic
