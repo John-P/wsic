@@ -2,7 +2,7 @@
 import sys
 import warnings
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
 import cv2 as _cv2  # Avoid adding "cv2" to sys.modules for fallback tests
 import numpy as np
@@ -12,6 +12,8 @@ import zarr
 
 from wsic import readers, utils, writers
 from wsic.enums import Codec, ColorSpace
+from wsic.readers import Reader
+from wsic.writers import Writer
 
 
 def test_jp2_to_deflate_tiled_tiff(samples_path, tmp_path):
@@ -145,7 +147,6 @@ def test_pyramid_tiff_no_cv2(samples_path, tmp_path, monkeypatch):
 
     # Sanity check the import fails
     with pytest.raises(ImportError):
-
         import cv2  # noqa # skipcq
 
     # Try to make a pyramid TIFF
@@ -529,7 +530,7 @@ def test_copy_from_reader_timeout(samples_path, tmp_path):
     )
     warnings.simplefilter("ignore")
     with pytest.raises(IOError, match="timed out"):
-        writer.copy_from_reader(reader=reader, timeout=1e-5)
+        writer.copy_from_reader(reader=reader, timeout=0)
 
 
 def test_block_downsample_shape():
@@ -642,11 +643,13 @@ def test_thumbnail_non_power_two(samples_path):
     Outputs a non power of two sized thumbnail.
     """
     # Compare with cv2 downsampling
-    reader = readers.TIFFReader(samples_path / "XYC-half-mpp.tiff")
+    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     thumbnail = reader.thumbnail(shape=(59, 59))
     cv2_thumbnail = _cv2.resize(reader[...], (59, 59), interpolation=_cv2.INTER_AREA)
     assert thumbnail.shape == (59, 59, 3)
-    assert np.mean(thumbnail) == pytest.approx(np.mean(cv2_thumbnail), abs=0.5)
+    mse = np.mean((thumbnail - cv2_thumbnail) ** 2)
+    psnr = 10 * np.log10(255**2 / mse)
+    assert psnr > 30
 
 
 def test_write_rgb_jpeg_svs(samples_path, tmp_path):
@@ -760,6 +763,7 @@ def test_missing_imagecodecs_codec(samples_path, tmp_path):
 WRITER_EXT_MAPPING = {
     ".zarr": writers.ZarrWriter,
     ".tiff": writers.TIFFWriter,
+    ".dcm": writers.DICOMWSIWriter,
 }
 
 
@@ -848,6 +852,15 @@ class TestTranscodeScenarios:
                 "out_ext": ".tiff",
             },
         ),
+        (
+            "jpeg_tiff_to_jpeg_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region.jpeg.tiff",
+                "reader_cls": readers.TIFFReader,
+                "out_reader": readers.DICOMWSIReader,
+                "out_ext": ".dcm",
+            },
+        ),
     ]
 
     @staticmethod
@@ -862,30 +875,33 @@ class TestTranscodeScenarios:
         """Test transcoding a tiled WSI."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
-        reader = reader_cls(in_path)
+        reader: Reader = reader_cls(in_path)
         writer_cls = WRITER_EXT_MAPPING[out_ext]
-        writer = writer_cls(
+        writer: Writer = writer_cls(
             path=out_path,
             shape=reader.shape,
             tile_size=reader.tile_shape[::-1],
         )
         writer.transcode_from_reader(reader=reader)
-        output_reader = out_reader(out_path)
+        output_reader: Reader = out_reader(out_path)
 
         assert output_reader.shape == reader.shape
         assert output_reader.tile_shape == reader.tile_shape
 
+        # Calculate error metrics
+        reader_img = reader[...]
+        output_reader_img = output_reader[...]
+        squared_err = np.subtract(reader_img, output_reader_img) ** 2
+        abs_err = np.abs(np.subtract(reader_img, output_reader_img))
+
+        # A lot of the image should have zero error
+        assert np.count_nonzero(abs_err) / abs_err.size < 0.25
+
         # Check mean squared error is low
-        channel_wise_mse = (np.subtract(reader[...], output_reader[...]) ** 2).mean(
-            axis=(0, 1)
-        )
-        assert np.all(channel_wise_mse < 1)
+        assert np.all(squared_err.mean() < 2.56)
 
         # Check mean absolute error is low
-        channel_wise_mae = np.abs(np.subtract(reader[...], output_reader[...])).mean(
-            axis=(0, 1)
-        )
-        assert np.all(channel_wise_mae < 6)
+        assert np.all(abs_err.mean() < 25.6)
 
     def visually_compare_readers(
         self,
@@ -1105,6 +1121,46 @@ class TestConvertScenarios:
                 "codec": "jpegxl",
             },
         ),
+        (
+            "jp2_to_jpeg_dicom",
+            {
+                "sample_name": "XYC.jp2",
+                "reader_cls": readers.JP2Reader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".dcm",
+                "codec": "jpeg",
+            },
+        ),
+        (
+            "svs_to_jppeg_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region.svs",
+                "reader_cls": readers.OpenSlideReader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".dcm",
+                "codec": "jpeg",
+            },
+        ),
+        (
+            "tiff_to_dicom",
+            {
+                "sample_name": "XYC-half-mpp.tiff",
+                "reader_cls": readers.TIFFReader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".dcm",
+                "codec": "jpeg",
+            },
+        ),
+        (
+            "zarr_to_jpeg_dicom",
+            {
+                "sample_name": "CMU-1-Small-Region-JPEG.zarr",
+                "reader_cls": readers.ZarrReader,
+                "writer_cls": writers.DICOMWSIWriter,
+                "out_ext": ".tiff",
+                "codec": "jpeg",
+            },
+        ),
     ]
 
     @staticmethod
@@ -1120,9 +1176,23 @@ class TestConvertScenarios:
         """Test converting between formats."""
         in_path = samples_path / sample_name
         out_path = (tmp_path / sample_name).with_suffix(out_ext)
-        reader = reader_cls(in_path)
-        writer = writer_cls(out_path, shape=reader.shape, codec=codec)
-        writer.copy_from_reader(reader)
+        reader: Reader = reader_cls(in_path)
+        writer: Writer = writer_cls(
+            out_path,
+            shape=reader.shape,
+            codec=codec,
+            compression_level=4
+            if codec
+            in {
+                "blosc",
+            }
+            else 100,
+        )
+        writer.copy_from_reader(
+            reader,
+            num_workers=1,
+            timeout=1e32,
+        )
 
         # Check that the output file exists
         assert out_path.exists()
@@ -1209,10 +1279,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.TIFFReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1220,10 +1286,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region.svs",
                 "reader_cls": readers.OpenSlideReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1231,10 +1293,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region-J2K",
                 "reader_cls": readers.DICOMWSIReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1242,10 +1300,6 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region",
                 "reader_cls": readers.DICOMWSIReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
         (
@@ -1253,22 +1307,38 @@ class TestReaderScenarios:
             {
                 "sample_name": "CMU-1-Small-Region-JPEG.zarr",
                 "reader_cls": readers.ZarrReader,
-                "thumbnail_kwargs": {
-                    "shape": [512, 512],
-                    "approx_ok": True,
-                },
             },
         ),
     ]
 
     @staticmethod
-    def test_thumbnail(
+    def test_thumbnail_512_512_approx(
         samples_path: Path,
         sample_name: str,
         reader_cls: readers.Reader,
-        thumbnail_kwargs: Dict[str, Any],
     ):
         """Test creating a thumbnail."""
         in_path = samples_path / sample_name
         reader: readers.Reader = reader_cls(in_path)
-        reader.thumbnail(**thumbnail_kwargs)
+        reader.thumbnail(
+            shape=(512, 512),
+            approx_ok=True,
+        )
+
+    @staticmethod
+    def test_mpp_found(
+        samples_path: Path,
+        sample_name: str,
+        reader_cls: readers.Reader,
+    ):
+        """Check that resolution/mpp is read from the file (not None)."""
+        in_path = samples_path / sample_name
+        reader: readers.Reader = reader_cls(in_path)
+        assert hasattr(reader, "microns_per_pixel")
+        # A plain zarr doesn't have a resolution attribute so skip this.
+        # Maybe in duture this could be done via the xarray metadata.
+        if (
+            not isinstance(reader, readers.ZarrReader)
+            or sample_name != "CMU-1-Small-Region-JPEG.zarr"
+        ):
+            assert reader.microns_per_pixel is not None

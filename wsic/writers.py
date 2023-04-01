@@ -13,6 +13,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Generator,
     Iterable,
     Iterator,
     List,
@@ -29,7 +30,11 @@ from wsic import __version__ as wsic_version
 from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
-from wsic.readers import DICOMWSIReader, MultiProcessTileIterator, Reader, TIFFReader
+from wsic.readers import DICOMWSIReader, Reader, TIFFReader
+from wsic.tile_iterators import DaskTileIterator
+from wsic.tile_iterators import (
+    PersistentMultiProcessTileIterator as MultiProcessTileIterator,
+)
 from wsic.typedefs import PathLike
 from wsic.utils import (
     downsample_shape,
@@ -97,7 +102,7 @@ class Writer(ABC):
         self.shape = shape
         self.tile_size = tile_size
         self.dtype = dtype
-        self.color_space = color_space or "rgb"
+        self.color_space = color_space or ColorSpace.RGB
         self.codec = Codec.from_string(codec) if codec else None
         self.compression_level = compression_level or 0
         self.microns_per_pixel = microns_per_pixel
@@ -138,6 +143,17 @@ class Writer(ABC):
         """
         if read_tile_size is None:
             read_tile_size = self.tile_size
+        if hasattr(reader, "_tzyxc_dataset"):
+            return DaskTileIterator(
+                reader=reader,
+                read_tile_size=read_tile_size,
+                yield_tile_size=yield_tile_size or self.tile_size,
+                intermediate=intermediate,
+                num_workers=num_workers,
+                verbose=self.verbose,
+                timeout=timeout,
+                match_tile_sizes=not isinstance(self, ZarrWriter),
+            )
         return MultiProcessTileIterator(
             reader=reader,
             read_tile_size=read_tile_size,
@@ -507,7 +523,7 @@ class TIFFWriter(Writer):
         *,
         ome: bool = False,
     ) -> None:
-        if dtype is not np.uint8:
+        if dtype != np.uint8:
             warn_unused(dtype)
         super().__init__(
             path=path,
@@ -599,7 +615,6 @@ class TIFFWriter(Writer):
                 bigtiff=True,
                 ome=self.ome,
             ) as tif:
-
                 metadata = {}
                 if self.ome and self.microns_per_pixel:
                     metadata["PhysicalSizeXUnit"] = "µm"
@@ -650,7 +665,7 @@ class TIFFWriter(Writer):
                         tile_generator = self.level_progress(
                             tile_generator,
                             total=int(np.product(level_tiles_shape)),
-                            desc=f"Level {level}",
+                            desc=f"Level {level + 1}",
                             leave=False,
                         )
 
@@ -692,7 +707,7 @@ class TIFFWriter(Writer):
         )
 
         tile_size = reader.tile_shape[:2][::-1]
-        reader_mosaic_shape = mosaic_shape(reader.shape[:2], tile_size)
+        reader_mosaic_shape = mosaic_shape(reader.original_shape[:2], tile_size)
         tile_generator = (
             reader.get_tile(tile_index, decode=False)
             for tile_index in np.ndindex(reader_mosaic_shape)
@@ -715,8 +730,8 @@ class TIFFWriter(Writer):
         ) as tiff:
             tiff.write(
                 data=iter(tile_iterator),
-                tile=self.tile_size,
-                shape=reader.shape,
+                tile=tile_size,
+                shape=reader.original_shape,
                 dtype=reader.dtype,
                 photometric=reader.color_space.to_tiff(),
                 jpegtables=reader.jpeg_tables,
@@ -729,9 +744,23 @@ class TIFFWriter(Writer):
 class SVSWriter(Writer):
     """Aperio SVS writer using tifffile.
 
-    Note that when writing tiled TIFF files, the tiles must all be the
-    same size and must be written in the order left-to-right, then
-    top-to-bottom (row-by-row). Tiles cannot be skipped.
+    Notes:
+        - When writing tiled TIFF files, the tiles must all be the same
+          size and must be written in the order left-to-right, then
+          top-to-bottom (row-by-row). Tiles cannot be skipped.
+        - Microns per pixel (MPP) is taken from microns per pixel of the
+          reader if not provided. If microns per pixel is set to None,
+          microns per pixel will not be written to the file.
+        - The SVS MPP metadata is the mean of `microns_per_pixel` from
+          init or the reader.
+        - Apparent magnification (AppMag) can be specified as a float to
+          the optional "app_mag" kwarg.
+        - If only an MPP resolution is given, the AppMag will be
+          approximated from the MPP (by AppMag = 10 / MPP) and rounded
+          to the nearest common AppMag (10, 20,40, 50, 60, 80, 100, 125,
+          150, 200, 250, 312.5, 375, 500, 600, 750, 1000, 1250). If
+          neither MPP or AppMag are given, no resolution will be written
+          to the file.
 
     Args:
         path (PathLike):
@@ -763,6 +792,8 @@ class SVSWriter(Writer):
             Print more output. Defaults to False.
         ome (bool):
             Write OME-TIFF metadata. Defaults to False.
+        app_mag (float):
+            Apparent magnification. Defaults to None.
     """
 
     def __init__(
@@ -806,9 +837,11 @@ class SVSWriter(Writer):
             overwrite=overwrite,
             verbose=verbose,
         )
+        # Apparent magnification
+        self.app_mag = kwargs.get("app_mag")
 
     def __setitem__(self, index: Tuple[int, ...], value: np.ndarray) -> None:
-        """Write pixel data at index. Not supported for TIFFWriter.
+        """Write pixel data at index. Not supported for SVSWriter.
 
         In theory this is possible but it can be complex. If the new tile
         is larger in bytes, the tile will have to be added to the end of the
@@ -817,7 +850,7 @@ class SVSWriter(Writer):
         original tile.
         """
         raise NotImplementedError(
-            "Compressed tiled TIFF files do not support random access writes."
+            "Compressed tiled TIFF (SVS) files do not support random access writes."
         )
 
     def copy_from_reader(
@@ -880,8 +913,8 @@ class SVSWriter(Writer):
             with tifffile.TiffWriter(
                 self.path,
                 bigtiff=True,
+                shaped=False,
             ) as tif:
-
                 # Construct the pipe separated Aperio description
                 # Example description:
                 # skipcq: PYL-W0105
@@ -932,8 +965,47 @@ class SVSWriter(Writer):
                         f"Q={self.compression_level}"
                     )
                 ]
+                common_mags = np.array(
+                    list(range(1, 10))
+                    + [
+                        10,
+                        20,
+                        40,
+                        50,
+                        60,
+                        80,
+                        100,
+                        125,
+                        150,
+                        200,
+                        250,
+                        312.5,
+                        375,
+                        500,
+                        600,
+                        750,
+                        1000,
+                        1250,
+                    ],
+                    dtype=int,
+                )
+
+                def mpp2appmag(mpp: Optional[float]) -> Optional[int]:
+                    """Convert microns per pixel to app mag.
+
+                    This is a rough conversion, but it is the best we can do
+                    without knowing more (e.g. the scan scope ID).
+
+                    The formula is: app_map = 10 / mpp.
+                    """
+                    if mpp is None:
+                        return None
+                    return common_mags[np.argmin(np.abs(common_mags - 10 / mpp))]
+
+                mpp = np.mean(microns_per_pixel) if microns_per_pixel else None
+                app_mag = self.app_mag or mpp2appmag(mpp) or None
                 key_values = {
-                    "AppMag": 20,  # e.g. 20
+                    "AppMag": app_mag,  # e.g. 20
                     "StripeWidth": None,
                     "ScanScopeID": None,  # e.g. CPAPERIOCS
                     "Filename": None,
@@ -941,9 +1013,7 @@ class SVSWriter(Writer):
                     "Time": None,  # e.g. 09:00:00
                     "User": None,  # e.g. UUID4
                     "Parmset": None,  # e.g. USM Filter
-                    "MPP": np.mean(self.microns_per_pixel)
-                    if self.microns_per_pixel
-                    else None,
+                    "MPP": mpp,  # e.g. 0.5
                     "Left": None,
                     "Top": None,
                     "LineCameraSkew": None,  # e.g. -0.003035
@@ -960,37 +1030,49 @@ class SVSWriter(Writer):
                     "\n".join(headers)
                     + ("|" if any(key_values.values()) else "")
                     + "|".join(
-                        f"{key} = {value}" for key, value in key_values.items() if value
+                        f"{key} = {value}"
+                        for key, value in key_values.items()
+                        if value is not None
                     )
                 )
 
                 compression = self.codec.condensed()
+                # Write baseline (level 0, 1st IFD)
                 tif.write(
                     data=iter(reader_tile_iterator),
                     tile=self.tile_size,
                     shape=reader.shape,
                     dtype=reader.dtype,
                     photometric=self.color_space,
+                    compressionargs={"outcolorspace": self.color_space},
                     compression=(compression, self.compression_level),
                     resolution=resolution,
-                    subifds=len(self.pyramid_downsamples),
                     description=description,
                     subfiletype=0,
                 )
+                reader_tile_iterator.close()
 
-                # Write thumbnail
+                # Write the thumbnail (2nd IFD)
                 # NOTE: Assuming YXC order
-                thumb_scale = max(
-                    scale_to_fit(reader.shape[:2], (1024, 768)),
-                    scale_to_fit(reader.shape[:2], (768, 1024)),
+                print("Writing thumbnail")
+                thumb_scale = scale_to_fit(
+                    reader.shape[:2],
+                    np.maximum(
+                        np.floor_divide(reader.shape[:2], self.tile_size[::-1]),
+                        (1024, 1024),
+                    ),
                 )
                 thumb_shape = tuple(floor(s * thumb_scale) for s in reader.shape[:2])
+                # Ignore warnings about `approx_ok` being unused
+                warnings.filterwarnings("ignore", message=".*approx_ok.*")
                 thumbnail = reader.thumbnail(thumb_shape, approx_ok=True)
+                warnings.resetwarnings()
                 tif.write(
                     data=thumbnail,
                     rowsperstrip=16,
                     dtype=np.uint8,
                     photometric=ColorSpace.RGB,
+                    compressionargs={"outcolorspace": self.color_space},
                     compression=Codec.JPEG,
                     description=software,
                     subfiletype=0,
@@ -1037,12 +1119,13 @@ class SVSWriter(Writer):
                             shape=level_shape,
                             dtype=reader.dtype,
                             photometric=self.color_space,
+                            compressionargs={"outcolorspace": self.color_space},
                             compression=(
                                 compression,
                                 self.compression_level,
                             ),
                             description=software,  # Optional for OpenSlide
-                            subfiletype=1,  # Subfile type: 1 = reduced resolution
+                            subfiletype=0,  # Subfile type: 1 = reduced resolution
                         )
 
 
@@ -1409,11 +1492,12 @@ class ZarrWriter(Writer, Reader):
         # 1. A valid get_tile(decode=False)
         try:
             reader.get_tile((0, 0), decode=False)
-        except (NotImplementedError, AttributeError):
+        except (NotImplementedError, AttributeError) as error:
             raise ValueError(
                 "Reader must have a get_tile method which can return encoded tiles"
                 " (decoded=False)."
-            )
+            ) from error
+
         # 2. Compatible tile sizes
         if self.tile_size != reader.tile_shape[:2][::-1]:
             raise ValueError(
@@ -1423,27 +1507,14 @@ class ZarrWriter(Writer, Reader):
         if self.dtype != reader.dtype:
             raise ValueError("Dtype must match the reader dtype for transcoding.")
         # 4. Compatible compression
-        has_valid_compression = (
+        supported_compression = (
             Codec.from_string(reader.codec) in (Codec.JPEG, Codec.JPEG2000, Codec.WEBP),
-        )
-        # 5. Known supported TIFF formats
-        is_generic_tiff = isinstance(reader, TIFFReader) and (
-            reader.tiff.pages[0].is_tiled and has_valid_compression
-        )
-        is_supported_tiff = isinstance(reader, TIFFReader) and any(
-            [
-                reader.tiff.is_svs,
-                reader.tiff.is_ome,
-                reader.tiff.is_ndpi,
-                is_generic_tiff,
-            ]
         )
         # 5. Supported Reader (WSIDICOM or a TIFF with supported format)
         return all(
             [
                 isinstance(reader, (TIFFReader, DICOMWSIReader)),
-                has_valid_compression,
-                not isinstance(reader, TIFFReader) or is_supported_tiff,
+                supported_compression,
             ]
         )
 
@@ -1616,6 +1687,180 @@ class ZarrIntermediate(Writer, Reader):
         raise NotImplementedError()
 
 
+class DICOMWSIWriter(Writer):
+    """Writer for DICOM WSI images using wsidicom.
+
+    Notes:
+        - Supports JPEG and JPEG2000 compression.
+        - DICOM Whole Slide Imaging:  https://dicom.nema.org/Dicom/DICOMWSI/
+    """
+
+    def __init__(
+        self,
+        path: PathLike,
+        shape: Tuple[int, int],
+        tile_size: Tuple[int, int] = (256, 256),
+        dtype: np.dtype = np.uint8,
+        color_space: Optional[ColorSpace] = None,
+        codec: Optional[Codec] = None,
+        compression_level: int = 0,
+        microns_per_pixel: Tuple[float, float] = None,
+        pyramid_downsamples: Optional[List[int]] = None,
+        overwrite: bool = False,
+        verbose: bool = False,
+        **kwargs,
+    ) -> None:
+        if color_space != "rgb":
+            warn_unused(color_space)
+        warn_unused(codec)
+        warn_unused(compression_level, ignore_falsey=True)
+        warn_unused(microns_per_pixel)
+        warn_unused(pyramid_downsamples, ignore_falsey=True)
+        for key, value in kwargs.items():
+            warn_unused(key, value)
+        super().__init__(
+            path=path,
+            shape=shape,
+            tile_size=tile_size,
+            dtype=dtype,
+            color_space=color_space,
+            codec=codec,
+            compression_level=compression_level,
+            microns_per_pixel=microns_per_pixel,
+            pyramid_downsamples=pyramid_downsamples,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
+
+    def copy_from_reader(
+        self,
+        reader: Reader,
+        num_workers: int = 2,
+        read_tile_size: Tuple[int, int] = None,
+        timeout: float = 10,
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        from pydicom import FileDataset, dcmwrite
+
+        from wsic.dicom import append_frames, create_vl_wsi_dataset
+
+        warn_unused(downsample_method, ignore_falsey=True)
+
+        width = self.shape[1]
+        height = self.shape[0]
+        photometric_interpretation = (
+            ColorSpace.YCBCR.to_dicom_photometric_interpretation((4, 2, 2))
+        )
+
+        meta, dataset = create_vl_wsi_dataset(
+            size=(width, height),
+            tile_size=self.tile_size,
+            photometric_interpretation=photometric_interpretation,
+        )
+
+        file_dataset = FileDataset(
+            str(self.path),
+            dataset=dataset,
+            preamble=b"\0" * 128,
+            file_meta=meta,
+            is_implicit_VR=False,
+            is_little_endian=True,
+        )
+
+        dcmwrite(
+            dataset=file_dataset,
+            filename=file_dataset.filename,
+            write_like_original=False,
+        )
+
+        with ZarrIntermediate(
+            None, reader.shape, zero_after_read=False
+        ) as intermediate:
+            reader_tile_iterator = self.reader_tile_iterator(
+                reader=reader,
+                num_workers=num_workers,
+                intermediate=intermediate,
+                read_tile_size=read_tile_size or self.tile_size,
+                timeout=timeout,
+            )
+
+            def jpeg_generator(tile_iterator) -> Generator[bytes, None, None]:
+                """Encodes arrays to JPEG bytes."""
+                import imagecodecs
+
+                for tile in tile_iterator:
+                    yield imagecodecs.jpeg_encode(
+                        tile,
+                        level=self.compression_level,
+                        colorspace=self.color_space,
+                        outcolorspace=ColorSpace.YCBCR,
+                    )
+
+            tile_iterator = iter(
+                self.level_progress(
+                    jpeg_generator(reader_tile_iterator),
+                    total=len(reader_tile_iterator),
+                )
+            )
+            append_frames(self.path, tile_iterator, len(reader_tile_iterator))
+
+    def transcode_from_reader(
+        self,
+        reader: Union[TIFFReader, DICOMWSIReader],
+        downsample_method: Optional[str] = None,
+    ) -> None:
+        from pydicom import FileDataset, dcmwrite
+
+        from wsic.dicom import append_frames, create_vl_wsi_dataset
+
+        warn_unused(downsample_method, ignore_falsey=True)
+
+        width = self.shape[1]
+        height = self.shape[0]
+        photometric_interpretation = (
+            reader.color_space.to_dicom_photometric_interpretation(
+                (4, 2, 2) if reader.color_space == ColorSpace.YCBCR else None
+            )
+        )
+
+        if reader.codec != Codec.JPEG:
+            raise ValueError(
+                f"Currenly only JPEG compression is supported. " f"Got {reader.codec}."
+            )
+
+        meta, dataset = create_vl_wsi_dataset(
+            size=(width, height),
+            tile_size=self.tile_size,
+            photometric_interpretation=photometric_interpretation,
+        )
+
+        file_dataset = FileDataset(
+            str(self.path),
+            dataset=dataset,
+            preamble=b"\0" * 128,
+            file_meta=meta,
+            is_implicit_VR=False,
+            is_little_endian=True,
+        )
+
+        dcmwrite(
+            dataset=file_dataset,
+            filename=file_dataset.filename,
+            write_like_original=False,
+        )
+
+        tile_count = np.prod(reader.mosaic_shape)
+
+        def tile_generator() -> Generator[bytes, None, None]:
+            """Yields tiles as bytes from the reader."""
+            for xy in self.transcode_progress(
+                np.ndindex(reader.mosaic_shape), total=tile_count
+            ):
+                yield reader.get_tile(xy, decode=False)
+
+        append_frames(self.path, tile_generator(), tile_count)
+
+
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
     """Resample an image using OpenCV.
 
@@ -1690,7 +1935,7 @@ def _np_downsample(image: np.ndarray, factor: int) -> np.ndarray:
         np.ndarray:
             The resampled image.
     """
-    return mean_pool(image.astype(np.float), factor).clip(0, 255).astype(np.uint8)
+    return mean_pool(image.astype(float), factor).clip(0, 255).astype(np.uint8)
 
 
 def downsample_tile(
@@ -1728,9 +1973,13 @@ def downsample_tile(
         except ImportError:
             warnings.warn(
                 f"Failed to import library for {method_name} for downsampling. "
-                "It may not be installed."
+                "It may not be installed.",
+                stacklevel=2,
             )
-    raise Exception("Failed to use any downsampling method.")
+    allowed_methods = {method} if method else set(methods)
+    raise ImportError(
+        f"Failed to use any allowed downsampling method: {allowed_methods}."
+    )
 
 
 def get_level_tile(

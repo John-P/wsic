@@ -21,7 +21,9 @@ performance_requirements = ["opencv-python"]
 # Extra format support
 format_support = [
     "tifffile",  # For reading, writing and repackaging TIFF files
+    "dask",  # Reading and writing TIFF/Zarr with non-standard axis order
     "glymur",  # For reading and writing JP2 files
+    "xarray",
 ]
 
 # Extra codecs support
@@ -106,6 +108,6 @@ setup(
     tests_require=test_requirements,
     extras_require=extra_requirements,
     url="https://github.com/john-p/wsic",
-    version="0.7.0",
+    version="0.8.0",
     zip_safe=False,
 )

@@ -6,11 +6,11 @@ from typing import Optional, Tuple
 
 try:
     import click
-except ImportError:
+except ImportError as error:
     raise ImportError(
         "Click is required to use wsic from the command line. "
         "Install with `pip install click` or `conda install click`."
-    )
+    ) from error
 
 import wsic
 from wsic import magic
@@ -21,8 +21,8 @@ class MutuallyExclusiveOption(click.Option):
 
     def __init__(self, *args, **kwargs):
         self.mutually_exclusive = set(kwargs.pop("mutually_exclusive", []))
-        mutually_exclusive_str = ", ".join(self.mutually_exclusive)
         if self.mutually_exclusive:
+            mutually_exclusive_str = ", ".join(self.mutually_exclusive)
             kwargs["help"] = kwargs.get("help", "") + (
                 " Note: This argument is mutually exclusive with "
                 f" arguments: [{mutually_exclusive_str}]."
@@ -46,6 +46,7 @@ ext2writer = {
     ".tiff": wsic.writers.TIFFWriter,
     ".zarr": wsic.writers.ZarrWriter,
     ".svs": wsic.writers.SVSWriter,
+    ".dcm": wsic.writers.DICOMWSIWriter,
 }
 
 writers = {
@@ -53,6 +54,7 @@ writers = {
     "tiff": wsic.writers.TIFFWriter,
     "zarr": wsic.writers.ZarrWriter,
     "svs": wsic.writers.SVSWriter,
+    "dcm": wsic.writers.DICOMWSIWriter,
 }
 
 
@@ -69,9 +71,7 @@ def get_writer_class(out_path: Path, writer: str) -> wsic.writers.Writer:
         wsic.writers.Writer:
             Writer class.
     """
-    if writer == "auto":
-        return ext2writer[out_path.suffix]
-    return writers[writer]
+    return ext2writer[out_path.suffix] if writer == "auto" else writers[writer]
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -233,6 +233,11 @@ def convert(
     type=click.Path(exists=True),
 )
 @click.option(
+    "--overwrite/--no-overwrite",
+    help="Whether to overwrite the output file.",
+    default=False,
+)
+@click.option(
     "-o",
     "--out-path",
     help="The path to output zarr.",
@@ -241,6 +246,7 @@ def convert(
 def transcode(
     in_path: str,
     out_path: str,
+    overwrite: bool,
 ):
     """Repackage a (TIFF) WSI to a zarr."""
     in_path = Path(in_path)
@@ -248,9 +254,13 @@ def transcode(
 
     file_types = magic.summon_file_types(in_path)
     if ("tiff",) in file_types:
-        reader = wsic.readers.TIFFReader(in_path)
+        reader = wsic.readers.TIFFReader(
+            in_path,
+        )
     elif ("dicom",) in file_types or ("dcm",) in file_types:
-        reader = wsic.readers.DICOMWSIReader(in_path)
+        reader = wsic.readers.DICOMWSIReader(
+            in_path,
+        )
     else:
         suffixes = "".join(in_path.suffixes)
         raise click.BadParameter(
@@ -262,6 +272,7 @@ def transcode(
             shape=reader.shape,
             tile_size=reader.tile_shape[::-1],
             dtype=reader.dtype,
+            overwrite=overwrite,
         )
     elif out_path.suffix == ".tiff":
         writer = wsic.writers.TIFFWriter(
@@ -269,6 +280,15 @@ def transcode(
             shape=reader.shape,
             tile_size=reader.tile_shape[::-1],
             dtype=reader.dtype,
+            overwrite=overwrite,
+        )
+    elif out_path.suffix == ".dcm":
+        writer = wsic.writers.DICOMWSIWriter(
+            out_path,
+            shape=reader.shape,
+            tile_size=reader.tile_shape[::-1],
+            dtype=reader.dtype,
+            overwrite=overwrite,
         )
     else:
         raise click.BadParameter(
@@ -333,11 +353,9 @@ def thumbnail(
     reader = wsic.readers.Reader.from_file(in_path)
     if downsample is not None:
         out_shape = tuple(x / downsample for x in reader.shape[:2])
-        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
     else:
         out_shape = size[::-1]
-        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
-
+    thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
     with suppress(ImportError):
         import cv2
 
@@ -350,7 +368,7 @@ def thumbnail(
         PIL.Image.fromarray(thumbnail_image).save(out_path)
         return
 
-    raise Exception(
+    raise ImportError(
         "Failed to save thumbnail with any of: cv2, PIL. "
         "Please check your installation."
     )

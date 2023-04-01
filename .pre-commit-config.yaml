@@ -3,7 +3,7 @@ ci:
   autoupdate_commit_msg: ':robot: pre-commit autoupdate'
 repos:
   - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.14
+    rev: 0.7.16
     hooks:
     - id: mdformat
       # Optionally add plugins
@@ -12,7 +12,7 @@ repos:
       - mdformat-black
       - mdformat-shfmt
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.3.0
+    rev: v4.4.0
     hooks:
       - id: check-added-large-files
         args: ['--maxkb=50000']
@@ -34,21 +34,21 @@ repos:
       - id: trailing-whitespace
         exclude: 'setup.cfg'
   - repo: https://github.com/pycqa/isort
-    rev: 5.10.1
+    rev: 5.12.0
     hooks:
       - id: isort
   - repo: https://github.com/psf/black
-    rev: 22.3.0 # Replace with any tag/version: https://github.com/psf/black/tags
+    rev: 23.3.0 # Replace with any tag/version: https://github.com/psf/black/tags
     hooks:
       - id: black
         language_version: python3
         additional_dependencies: ['click==8.0.4']  # Currently >8.0.4 breaks black
   - repo: https://github.com/PyCQA/flake8
-    rev: 4.0.1
+    rev: 6.0.0
     hooks:
       - id: flake8
         additional_dependencies: [
-          bandit==1.7.2, # Dependency for flake8-bandit
+          bandit, # Dependency for flake8-bandit
           flake8-bandit, # Security checks (currently breaks with bandit > 1.7.2)
           flake8-bugbear, # Detect potential bugs
           flake8-builtins, # Check for built-ins being used as variables

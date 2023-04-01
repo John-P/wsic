@@ -1,7 +1,7 @@
 """Enumerated types used by wsic."""
 from enum import Enum
 from numbers import Number
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 
 class Codec(str, Enum):
@@ -95,6 +95,16 @@ class Codec(str, Enum):
             config["dtype"] = dtype
         return config
 
+    def to_dicom_transfer_syntax(self, lossless: bool = True) -> str:
+        """Convert to a DICOM UID (str) for transfer syntax."""
+        if self == Codec.JPEG:
+            return "1.2.840.10008.1.2.4.50"
+        if self == Codec.JPEGLS:
+            return "1.2.840.10008.1.2.4.80" if lossless else "1.2.840.10008.1.2.4.81"
+        if self == Codec.JPEG2000:
+            return "1.2.840.10008.1.2.4.90" if lossless else "1.2.840.10008.1.2.4.91"
+        raise ValueError(f"{self} is not a supported DICOM transfer syntax")
+
     @classmethod
     def from_string(cls, string: str) -> "Codec":
         """Convert string to Compression enum."""
@@ -110,6 +120,18 @@ class Codec(str, Enum):
             return getattr(cls, condensed_upper)
         except AttributeError as e:
             raise ValueError(f"Unknown codec: {string}") from e
+
+    @classmethod
+    def from_dicom_transfer_syntax(cls, uid: str) -> "Codec":
+        """Convert DICOM UID to Compression enum."""
+        dicom_uid_map = {
+            "1.2.840.10008.1.2.4.50": cls.JPEG,
+            "1.2.840.10008.1.2.4.80": cls.JPEGLS,
+            "1.2.840.10008.1.2.4.81": cls.JPEGLS,
+            "1.2.840.10008.1.2.4.90": cls.JPEG2000,
+            "1.2.840.10008.1.2.4.91": cls.JPEG2000,
+        }
+        return dicom_uid_map[uid]
 
     @classmethod
     def from_tiff(cls, compression: int) -> "Codec":
@@ -129,6 +151,7 @@ class Codec(str, Enum):
             34933: cls.PNG,
             34934: cls.JPEGXR,
             22610: cls.JPEGXR,  # NDPI JPEG XR
+            32946: cls.DEFLATE,
             34927: cls.WEBP,  # Deprecated
             50001: cls.WEBP,
             34926: cls.ZSTD,  # Deprecated
@@ -302,3 +325,18 @@ class ColorSpace(str, Enum):
         if self == ColorSpace.YCBCR:
             return 18
         raise ValueError(f"Color space `{self}` has no known JP2 equivalent.")
+
+    def to_dicom_photometric_interpretation(
+        self, subsampling: Tuple[int, int] = (4, 2, 2)
+    ) -> str:
+        """Convert to DICOM photometric interpretation."""
+        if self == ColorSpace.RGB:
+            return "RGB"
+        if self == ColorSpace.YCBCR:
+            if subsampling in (None, (4, 4, 4)):
+                return "YBR_FULL"
+            if subsampling == (4, 2, 2):
+                return "YBR_FULL_422"
+        raise ValueError(
+            f"Color space `{self}` has no known DICOM photometric interpretation."
+        )
