@@ -1,4 +1,5 @@
 import inspect
+import threading
 import warnings
 from contextlib import suppress
 from math import ceil, floor
@@ -628,3 +629,40 @@ def scipy_resize(
         order=order,
         **(zoom_kwargs or {}),
     )
+
+
+class TimeoutWarning:
+    """Context manager that warns if the context takes too long to execute.
+
+    Args:
+        message (str):
+            The warning message to display.
+        timeout (float):
+            The timeout in seconds.
+        stacklevel (int):
+            The stacklevel to pass to `warnings.warn`.
+    """
+
+    def __init__(self, message: str, timeout: float = 0.1, stacklevel: int = 5):
+        self.timeout = timeout
+
+        def warning_callback():
+            """Deferred warning message."""
+            warnings.warn(message, RuntimeWarning, stacklevel=stacklevel)
+
+        self.timer = threading.Timer(self.timeout, warning_callback)
+
+    def __enter__(self):
+        """Start the timer."""
+        self.timer.start()
+
+    def __exit__(self, *args):
+        """Cancel the timer if the function finishes before the timeout."""
+        self.timer.cancel()
+
+
+def main_process() -> bool:
+    """Return whether the current process is the main process."""
+    import multiprocessing
+
+    return multiprocessing.current_process().name == "MainProcess"
