@@ -13,20 +13,18 @@ def downsample_shape(
     downsample: int,
     rounding_func: Callable[[Number], int] = floor,
 ) -> Tuple[int, ...]:
-    r"""Calculate the shape of an array after downsampling by a factor.
-
+    """Calculate the shape of an array after downsampling by a factor.
     The shape is calculated by dividing the shape of the baseline array
     by the downsample factor. The output is rounded to the nearest
     integer using the provided rounding function. E.g. for a founding
     function of `floor`, the following opertion is performed
     :math:`\lfloor \frac{shape}{downsample} \rfloor`. If a channel
     dimension is specified, the dimension is left unchanged.
-
     Args:
         baseline_shape (Tuple[int, ...]):
             The shape of the array to downsample.
         downsample (int):
-            The downsample factor.
+            The downsample factor. Must be greater than 0.
         rounding_func (Callable[[int], int]):
             The rounding function to use. Defaults to floor. Any
             function which takes a single Number and returns an int such
@@ -34,25 +32,12 @@ def downsample_shape(
             behaviour of floor differs for negative numbers, e.g.
             floor(-1) = -2. The `int` function is sigificantly faster
             than floor.
-
     Returns:
         Tuple[int, ...]:
             The shape of the downsampled array.
-
-    Examples:
-        >>> dowmsample_shape((13, 13), 2)
-        (6, 6)
-
-        >>> dowmsample_shape((13, 13, 3), 2)
-        (6, 6, 3)
-
-        >>> dowmsample_shape((13, 13, 3), 2, channel_dim=2)
-        (6, 6, 3)
-
-        >>> downsample_shape((13, 13, 3), 2, -1, ceil)
-        (7, 7, 3)
-
     """
+    if downsample <= 0:
+        raise ValueError("Downsample factor must be greater than 0.")
     if isinstance(downsample, Number):
         downsample = [downsample] * len(baseline_shape)
     if len(downsample) != len(baseline_shape):
@@ -61,6 +46,7 @@ def downsample_shape(
             f"does not match the number of dimensions ({len(baseline_shape)})."
         )
     return tuple(rounding_func(x / s) for x, s in zip(baseline_shape, downsample))
+
 
 
 def block_downsample_shape(
@@ -312,7 +298,6 @@ def wrap_index(
     reverse: bool = True,
 ) -> Tuple[Tuple[int, ...], int]:
     """Wrap an index to the shape of an array.
-
     Args:
         index (Tuple[int, ...]):
             The index to wrap.
@@ -320,21 +305,16 @@ def wrap_index(
             The shape of the array.
         reverse (bool):
             If True, wrap the index to the opposite end of the array.
-
     Returns:
         Tuple[Tuple[int, ...], int]:
             The wrapped index and any overflow.
-
     Examples:
         >>> wrap_index((0, 3), (3, 3))
         ((1, 0), 0)
-
         >>> wrap_index((1, 4), (3, 3))
         ((2, 1), 0)
-
         >>> wrap_index((3, 1), (3, 3), reverse=False)
         ((0, 2), 0)
-
     """
     if len(index) != len(shape):
         raise ValueError("Index and shape must have the same number of dimensions.")
@@ -344,30 +324,37 @@ def wrap_index(
     shape = reversed(shape) if reverse else shape
     for i, s in enumerate(shape):
         wrapped[i] += overflow
-        overflow = wrapped[i] // s
-        wrapped[i] = wrapped[i] % s
-    wrapped = reversed(wrapped) if reverse else wrapped
+        if wrapped[i] < 0:
+            wrapped[i] = s + wrapped[i] % s
+            overflow = 0
+        elif wrapped[i] >= s:
+            wrapped[i] = wrapped[i] % s
+            overflow = 1
+        else:
+            overflow = 0
+    if reverse:
+        wrapped = reversed(wrapped)
     return tuple(wrapped), overflow
 
 
 def view_as_blocks(array: np.ndarray, block_shape: Tuple[int, ...]) -> np.ndarray:
     """View an array as a grid of non-overlapping blocks.
-
     The same method as in scikit-image and several other libraries,
     using the `numpy.lib.stride_tricks.as_strided` function to produce a
     view.
-
     Args:
         array (np.ndarray):
             The array to view.
         block_shape (Tuple[int, ...]):
             The shape of the blocks.
-
     Returns:
         np.ndarray:
             The array view as a grid of non-overlapping blocks.
     """
     from numpy.lib.stride_tricks import as_strided
+
+    if not all(s % bs == 0 for s, bs in zip(array.shape, block_shape)):
+        raise ValueError("block_shape must be a divisor of array shape")
 
     block_shape = np.array(block_shape)
     new_shape = tuple(np.array(array.shape) // block_shape) + tuple(block_shape)
