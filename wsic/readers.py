@@ -1,7 +1,7 @@
 import multiprocessing
 import warnings
 from abc import ABC, abstractmethod
-from contextlib import suppress
+from contextlib import nullcontext, suppress
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Tuple, Union
 
@@ -15,7 +15,9 @@ from wsic.magic import summon_file_types
 from wsic.metadata import ngff
 from wsic.typedefs import PathLike
 from wsic.utils import (
+    TimeoutWarning,
     block_downsample_shape,
+    main_process,
     mean_pool,
     mosaic_shape,
     ppu2mpp,
@@ -526,27 +528,24 @@ class DICOMWSIReader(Reader):
             path (Path):
                 Path to file.
         """
-        import threading
-
         from pydicom import Dataset
         from wsidicom import WsiDicom
 
         super().__init__(path)
 
-        # Set up a time to print a message if the file takes a while to open
-        timer = threading.Timer(
-            5,
-            lambda: print(
-                "Looks like this is taking a while..."
-                "if your DICOM file has a 'DimensionOrganizationType' "
-                "of 'TILED_SPARSE',  this may be causing it to be slow."
-            ),
+        # Set up a timeout warning for slow sparse tiled files
+        sparse_tiled_warning = TimeoutWarning(
+            "Looks like this is taking a while..."
+            "if your DICOM file has a 'DimensionOrganizationType' "
+            "of 'TILED_SPARSE',  this may be causing it to be slow.",
+            timeout=1,
         )
-        timer.start()
-        # Open the file, this will take a while if the file is sparse tiled
-        self.slide = WsiDicom.open(self.path)
-        # Cancel the timer if it hasn't already fired
-        timer.cancel()
+        context = sparse_tiled_warning if main_process() else nullcontext()
+
+        with context:
+            # Open the file, this will take a while if the file is sparse tiled
+            self.slide = WsiDicom.open(self.path)
+
         channels = len(self.slide.read_tile(0, (0, 0)).getbands())
         self.shape = (self.slide.size.height, self.slide.size.width, channels)
         self.dtype = np.uint8
