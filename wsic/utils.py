@@ -48,7 +48,6 @@ def downsample_shape(
     return tuple(rounding_func(x / s) for x, s in zip(baseline_shape, downsample))
 
 
-
 def block_downsample_shape(
     shape: Tuple[int, ...], downsample: float, block_shape: Tuple[int, ...]
 ) -> Tuple[int, ...]:
