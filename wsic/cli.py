@@ -208,6 +208,11 @@ def convert(
     in_path = Path(in_path)
     out_path = Path(out_path)
     reader = wsic.readers.Reader.from_file(in_path)
+
+    # Special case for DICOMWSIReader
+    if isinstance(reader, wsic.readers.DICOMWSIReader):
+        reader.performance_check()
+
     writer_cls = get_writer_class(out_path, writer)
     writer = writer_cls(
         out_path,
@@ -261,6 +266,7 @@ def transcode(
         reader = wsic.readers.DICOMWSIReader(
             in_path,
         )
+        reader.performance_check()
     else:
         suffixes = "".join(in_path.suffixes)
         raise click.BadParameter(
