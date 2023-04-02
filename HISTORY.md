@@ -1,5 +1,12 @@
 # History
 
+## 0.8.2 (2023-04-02)
+
+- Bug fixes:
+    - Fix issue where `DICOMWSIReader` required user input at init.
+    - Fix level offset when printing the level number during `TIFFWriter` pyramid building.
+    - Refactor slow `DICOMWSIReader` init warning and only warn from the main process.
+
 ## 0.8.0 (2023-04-01)
 
 - Add DICOM writer.
