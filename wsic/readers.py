@@ -547,7 +547,6 @@ class DICOMWSIReader(Reader):
         self.slide = WsiDicom.open(self.path)
         # Cancel the timer if it hasn't already fired
         timer.cancel()
-        self.performance_check()
         channels = len(self.slide.read_tile(0, (0, 0)).getbands())
         self.shape = (self.slide.size.height, self.slide.size.width, channels)
         self.dtype = np.uint8
