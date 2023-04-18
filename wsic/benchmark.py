@@ -856,6 +856,8 @@ def write_csv_header():
             "height",
             "gigapixels",
             "time",
+            "in_mpp",
+            "out_mpp",
             "error",
         ]
         with RESULTS_CSV_PATH.open("w") as fh:
@@ -881,6 +883,8 @@ def append_result(
     height: int,
     gigapixels: float,
     time: float,
+    in_mpp: Tuple[float, float],
+    out_mpp: Tuple[float, float],
     error: Optional[str] = None,
 ) -> None:
     """Append a result to the CSV file."""
@@ -900,6 +904,8 @@ def append_result(
                     str(height),
                     str(gigapixels),
                     str(time),
+                    str(in_mpp),
+                    str(out_mpp),
                     error or "",
                 ]
             )
@@ -980,10 +986,17 @@ def run():  # noqa: CCR001
                     partial(fn, errors, convert_fn, in_path, out_path, codec)
                 )
                 times = timer.repeat(repeat=REPEATS, number=1)
+
+                # Check that resolution was transferred
+                in_mpp, out_mpp = get_mpp(in_path), get_mpp(out_path)
+
                 print("Took:      ", min(times), "seconds")
                 gp_per_second = gigapixels / min(times)
                 print("GP/s:      ", gp_per_second)
                 print("Errors:    ", errors)
+                print("In MPP:", in_mpp)
+                print("Out MPP:", out_mpp)
+
                 append_result(
                     tool=tool_key,
                     version=tool.version,
@@ -997,6 +1010,8 @@ def run():  # noqa: CCR001
                     height=size[1],
                     gigapixels=gigapixels,
                     time=min(times),
+                    in_mpp=in_mpp,
+                    out_mpp=out_mpp,
                     error=errors.pop() if errors else None,
                 )
 
@@ -1059,23 +1074,20 @@ def get_size(path: Path) -> Tuple[int, int]:
     raise ValueError(f"Unsupported file type: {path}")
 
 
-def check_resolution(
-    in_path: Path | str,
-    out_path: Path | str,
-) -> bool:
-    """Check the resolution of the input and output files match.
+def get_mpp(
+    path: Path | str,
+) -> Tuple[float, float]:
+    """Check the resolution of a file.
 
     Args:
-        in_path: The path to the input file.
-        out_path: The path to the output file.
+        path: The path to the file.
 
     Returns:
-        True if the resolutions match, False otherwise.
+        Tuple of (x, y) resolution in microns per pixel.
     """
     import numpy as np
 
-    in_path = Path(in_path)
-    out_path = Path(out_path)
+    path = Path(path)
 
     def get_reader(path: Path) -> Reader:
         """Get the reader for a given file path."""
@@ -1091,9 +1103,8 @@ def check_resolution(
             return ZarrReader(path)
         raise ValueError(f"Unknown input file type {path}")
 
-    in_reader = get_reader(in_path)
-    out_reader = get_reader(out_path)
-    return np.array_equal(in_reader.microns_per_pixel, out_reader.microns_per_pixel)
+    reader = get_reader(path)
+    return tuple(np.array(reader.microns_per_pixel).round(2))
 
 
 def main():
