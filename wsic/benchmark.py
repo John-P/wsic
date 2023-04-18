@@ -1063,7 +1063,7 @@ def check_resolution(
     in_path: Path | str,
     out_path: Path | str,
 ) -> bool:
-    """Check the resolution of the input and output files.
+    """Check the resolution of the input and output files match.
 
     Args:
         in_path: The path to the input file.
