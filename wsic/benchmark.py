@@ -904,8 +904,8 @@ def append_result(
                     str(height),
                     str(gigapixels),
                     str(time),
-                    str(in_mpp),
-                    str(out_mpp),
+                    f'"{in_mpp}"',
+                    f'"{out_mpp}"',
                     error or "",
                 ]
             )
@@ -1074,9 +1074,24 @@ def get_size(path: Path) -> Tuple[int, int]:
     raise ValueError(f"Unsupported file type: {path}")
 
 
+def get_reader(path: Path) -> Reader:
+    """Get the reader for a given file path."""
+    if ".tiff" in path.suffixes:
+        return TIFFReader(path)
+    if ".svs" in path.suffixes:
+        return OpenSlideReader(path)
+    if ".jp2" in path.suffixes:
+        return JP2Reader(path)
+    if ".dcm" in path.suffixes:
+        return DICOMWSIReader(path)
+    if ".zarr" in path.suffixes:
+        return ZarrReader(path)
+    raise ValueError(f"Unknown input file type {path}")
+
+
 def get_mpp(
     path: Path | str,
-) -> Tuple[float, float]:
+) -> Optional[Tuple[float, float]]:
     """Check the resolution of a file.
 
     Args:
@@ -1088,23 +1103,9 @@ def get_mpp(
     import numpy as np
 
     path = Path(path)
-
-    def get_reader(path: Path) -> Reader:
-        """Get the reader for a given file path."""
-        if ".tiff" in path.suffixes:
-            return TIFFReader(path)
-        if ".svs" in path.suffixes:
-            return OpenSlideReader(path)
-        if ".jp2" in path.suffixes:
-            return JP2Reader(path)
-        if ".dcm" in path.suffixes:
-            return DICOMWSIReader(path)
-        if ".zarr" in path.suffixes:
-            return ZarrReader(path)
-        raise ValueError(f"Unknown input file type {path}")
-
     reader = get_reader(path)
-    return tuple(np.array(reader.microns_per_pixel).round(2))
+    mpp = reader.microns_per_pixel
+    return tuple(np.array(mpp).round(2)) if mpp else None
 
 
 def main():
