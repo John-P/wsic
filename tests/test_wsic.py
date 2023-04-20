@@ -253,6 +253,7 @@ def test_jp2_to_webp_tiled_tiff(samples_path, tmp_path):
             tile_size=(256, 256),
             codec="WebP",
             compression_level=-1,  # <0 for lossless
+            microns_per_pixel=(0.5, 0.5),  # input has no resolution box
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
 
