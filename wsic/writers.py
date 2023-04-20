@@ -1751,11 +1751,14 @@ class DICOMWSIWriter(Writer):
         photometric_interpretation = (
             ColorSpace.YCBCR.to_dicom_photometric_interpretation((4, 2, 2))
         )
+        mpp = self.microns_per_pixel or reader.microns_per_pixel
+        self.validate_write_args(microns_per_pixel=mpp)
+        mpp: Tuple[float, float] = mpp or (1.0, 1.0)
 
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
-            microns_per_pixel=self.microns_per_pixel or reader.microns_per_pixel,
+            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1823,6 +1826,9 @@ class DICOMWSIWriter(Writer):
                 (4, 2, 2) if reader.color_space == ColorSpace.YCBCR else None
             )
         )
+        mpp = self.microns_per_pixel or reader.microns_per_pixel
+        self.validate_write_args(microns_per_pixel=mpp)
+        mpp: Tuple[float, float] = mpp or (1.0, 1.0)
 
         if reader.codec != Codec.JPEG:
             raise ValueError(
@@ -1832,7 +1838,7 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
-            microns_per_pixel=self.microns_per_pixel or reader.microns_per_pixel,
+            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1861,6 +1867,19 @@ class DICOMWSIWriter(Writer):
                 yield reader.get_tile(xy, decode=False)
 
         append_frames(self.path, tile_generator(), tile_count)
+
+
+@staticmethod
+def validate_write_args(
+    microns_per_pixel: Optional[Tuple[float, float]],
+):
+    if microns_per_pixel is None:
+        warnings.warn(
+            "Resolution (PixelSpacing) is None but it is a required "
+            "(Type 1) attribute for DICOM VL Whole Slide Image files. "
+            "A default of (1.0, 1.0) microns-per-pixel will be used.",
+            stacklevel=3,
+        )
 
 
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
