@@ -1755,6 +1755,7 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
+            microns_per_pixel=self.microns_per_pixel or reader.microns_per_pixel,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1831,6 +1832,7 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
+            microns_per_pixel=self.microns_per_pixel or reader.micoins_per_pixel,
             photometric_interpretation=photometric_interpretation,
         )
 
