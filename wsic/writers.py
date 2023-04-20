@@ -1868,18 +1868,17 @@ class DICOMWSIWriter(Writer):
 
         append_frames(self.path, tile_generator(), tile_count)
 
-
-@staticmethod
-def validate_write_args(
-    microns_per_pixel: Optional[Tuple[float, float]],
-):
-    if microns_per_pixel is None:
-        warnings.warn(
-            "Resolution (PixelSpacing) is None but it is a required "
-            "(Type 1) attribute for DICOM VL Whole Slide Image files. "
-            "A default of (1.0, 1.0) microns-per-pixel will be used.",
-            stacklevel=3,
-        )
+    @staticmethod
+    def validate_write_args(
+        microns_per_pixel: Optional[Tuple[float, float]],
+    ):
+        if microns_per_pixel is None:
+            warnings.warn(
+                "Resolution (PixelSpacing) is None but it is a required "
+                "(Type 1) attribute for DICOM VL Whole Slide Image files. "
+                "A default of (1.0, 1.0) microns-per-pixel will be used.",
+                stacklevel=3,
+            )
 
 
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
