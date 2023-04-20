@@ -21,7 +21,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 
 import numpy as np
@@ -751,8 +750,8 @@ class TIFFWriter(Writer):
                 resolutionunit="centimeter" if resolution else None,
             )
 
+    @staticmethod
     def validate_write_args(
-        self,
         tile_size: Tuple[int, int],
         resolution: Optional[Tuple[float, float]] = None,
     ) -> None:
@@ -1817,7 +1816,6 @@ class DICOMWSIWriter(Writer):
 
         warn_unused(downsample_method, ignore_falsey=True)
 
-        mpp = self._mpp2ppmm(self.microns_per_pixel or reader.microns_per_pixel)
         width = self.shape[1]
         height = self.shape[0]
         photometric_interpretation = (
@@ -1827,7 +1825,6 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
-            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1888,7 +1885,6 @@ class DICOMWSIWriter(Writer):
 
         warn_unused(downsample_method, ignore_falsey=True)
 
-        mpp = self._mpp2ppmm(self.microns_per_pixel or reader.microns_per_pixel)
         width = self.shape[1]
         height = self.shape[0]
         photometric_interpretation = (
@@ -1905,7 +1901,6 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
-            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1934,30 +1929,6 @@ class DICOMWSIWriter(Writer):
                 yield reader.get_tile(xy, decode=False)
 
         append_frames(self.path, tile_generator(), tile_count)
-
-    def _mpp2ppmm(self, mpp: Optional[Tuple[float, float]]) -> Tuple[float, float]:
-        """Convert microns per pixel to pixels per millimeter.
-
-        Args:
-            mpp:
-                An (x, y) tuple of microns per pixel.
-
-        Returns:
-            An (x, y) tuple of pixels per millimeter.
-
-        Raises:
-            A `UserWarning` if None mpp was given as input, in which
-            case a default value of 0.5 microns per pixel is used.
-        """
-        if mpp is None:
-            warnings.warn(
-                "No resolution metadata found for input or given. "
-                "This is a required attribute for writing DICOM images. "
-                "Using default microns per pixel value of 0.5.",
-                stacklevel=2,
-            )
-            mpp = (0.5, 0.5)
-        return cast(Tuple[float, float], mpp)
 
 
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
