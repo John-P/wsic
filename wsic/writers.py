@@ -21,6 +21,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    cast,
 )
 
 import numpy as np
@@ -592,7 +593,6 @@ class TIFFWriter(Writer):
             (
                 round(mpp2ppu(microns_per_pixel[0], "cm")),
                 round(mpp2ppu(microns_per_pixel[1], "cm")),
-                "CENTIMETER",
             )
             if microns_per_pixel
             else None
@@ -629,8 +629,10 @@ class TIFFWriter(Writer):
                     dtype=reader.dtype,
                     photometric=self.color_space,
                     compression=(self.codec.condensed(), self.compression_level),
-                    resolution=resolution,
-                    resolutionunit="centimeter",
+                    # tifffile uses 1.0 by default but we also set it explicitly
+                    resolution=resolution or (1.0, 1.0),
+                    # Default unit is inches if resolution is not None
+                    resolutionunit="centimeter" if resolution else None,
                     subifds=len(self.pyramid_downsamples),
                     metadata=metadata,
                 )
@@ -668,10 +670,14 @@ class TIFFWriter(Writer):
                             desc=f"Level {level + 1}",
                             leave=False,
                         )
+                        tile_size = self.tile_size
 
+                        self.validate_write_args(
+                            tile_size=tile_size,
+                        )
                         tif.write(
                             data=iter(tile_generator),
-                            tile=self.tile_size,
+                            tile=tile_size,
                             shape=level_shape,
                             dtype=reader.dtype,
                             photometric=self.color_space,
@@ -700,7 +706,6 @@ class TIFFWriter(Writer):
             (
                 round(mpp2ppu(microns_per_pixel[0], "cm")),
                 round(mpp2ppu(microns_per_pixel[1], "cm")),
-                "CENTIMETER",
             )
             if microns_per_pixel
             else None
@@ -722,7 +727,10 @@ class TIFFWriter(Writer):
             metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
             metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
-        # Copy baseline tiles
+        self.validate_write_args(
+            tile_size=tile_size,
+            resolution=resolution,
+        )
         with tifffile.TiffWriter(
             self.path,
             bigtiff=True,
@@ -737,7 +745,69 @@ class TIFFWriter(Writer):
                 jpegtables=reader.jpeg_tables,
                 compression=reader.codec.condensed(),
                 metadata=metadata,
-                resolution=resolution,
+                # tifffile uses 1.0 by default but we also set it explicitly
+                resolution=resolution or (1.0, 1.0),
+                # Default unit is inches if resolution is not None
+                resolutionunit="centimeter" if resolution else None,
+            )
+
+    def validate_write_args(
+        self,
+        tile_size: Tuple[int, int],
+        resolution: Optional[Tuple[float, float]] = None,
+    ) -> None:
+        """Validate write arguments."""
+        # Check that tile size is a multiple of 16
+        if any(s % 16 for s in tile_size):
+            raise ValueError(
+                "Tile size must be a multiple of 16 pixels for a TIFF file."
+            )
+        # Check that resolution is sensible.
+        # TIFF resolution specified pixels per cm (PPCM) here,
+        # although it can also be written as pixels per inch (PPI).
+        # Senseible values for a WSI will be large, such as:
+        #  10_000, 20_000, 40_000
+        # which correspond to the microns-per-pixel (MPP) values:
+        #   1, 0.5, 0.25
+        # Common values for documents in PPI are:
+        #   72, 150, 300, 600, 1_200, 2_400
+        # In PPCM these are:
+        #   28.35, 59.06, 118.1, 236.2, 472.4, 944.9
+        if resolution is None:
+            warnings.warn(
+                "No resolution specified for output. "
+                "Resolution is a required field for a TIFF file. "
+                # This default is set by tifffile but we also set it to
+                # be sure.
+                "A default value of (1.0, 1.0) will be used.",
+                stacklevel=3,
+            )
+        elif 1 in resolution:
+            warnings.warn(
+                "Resolution contains the value 1."
+                "This may not be a sensible value for a WSI. "
+                "It may be a default set by other software. ",
+                stacklevel=3,
+            )
+        elif any(r in (72, 150, 300, 1_200, 2_400) for r in resolution):
+            warnings.warn(
+                "Resolution contains a common pixels-per-inch (PPI) value for "
+                "print documents. "
+                "This may not be a sensible value for a WSI. "
+                "It may be a default set by other software.",
+                stacklevel=3,
+            )
+        elif any(round(r) in (28, 59, 118, 236, 472, 945) for r in resolution):
+            warnings.warn(
+                "Resolution contains a common pixels-per-cm value for print documents. "
+                "This may not be a sensible value for a WSI. "
+                "It may be a default set by other software.",
+                stacklevel=3,
+            )
+        elif any(r < 5_000 for r in resolution):
+            warnings.warn(
+                "Resolution is unusually low for a WSI. ",
+                stacklevel=3,
             )
 
 
@@ -1552,6 +1622,7 @@ class ZarrWriter(Writer, Reader):
             return Webp(level=level)
         # Out of options
         raise ValueError(
+            f"Codec {reader.codec} is not supported for transcoding. "
             "Currently only JPEG, J2K (JPEG-2000), and WebP compression "
             " are supported for transcoding."
         )
@@ -1746,6 +1817,7 @@ class DICOMWSIWriter(Writer):
 
         warn_unused(downsample_method, ignore_falsey=True)
 
+        mpp = self._mpp2ppmm(self.microns_per_pixel or reader.microns_per_pixel)
         width = self.shape[1]
         height = self.shape[0]
         photometric_interpretation = (
@@ -1755,6 +1827,7 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
+            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1815,6 +1888,7 @@ class DICOMWSIWriter(Writer):
 
         warn_unused(downsample_method, ignore_falsey=True)
 
+        mpp = self._mpp2ppmm(self.microns_per_pixel or reader.microns_per_pixel)
         width = self.shape[1]
         height = self.shape[0]
         photometric_interpretation = (
@@ -1831,6 +1905,7 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
+            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1859,6 +1934,30 @@ class DICOMWSIWriter(Writer):
                 yield reader.get_tile(xy, decode=False)
 
         append_frames(self.path, tile_generator(), tile_count)
+
+    def _mpp2ppmm(self, mpp: Optional[Tuple[float, float]]) -> Tuple[float, float]:
+        """Convert microns per pixel to pixels per millimeter.
+
+        Args:
+            mpp:
+                An (x, y) tuple of microns per pixel.
+
+        Returns:
+            An (x, y) tuple of pixels per millimeter.
+
+        Raises:
+            A `UserWarning` if None mpp was given as input, in which
+            case a default value of 0.5 microns per pixel is used.
+        """
+        if mpp is None:
+            warnings.warn(
+                "No resolution metadata found for input or given. "
+                "This is a required attribute for writing DICOM images. "
+                "Using default microns per pixel value of 0.5.",
+                stacklevel=2,
+            )
+            mpp = (0.5, 0.5)
+        return cast(Tuple[float, float], mpp)
 
 
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
