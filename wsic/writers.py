@@ -596,6 +596,7 @@ class TIFFWriter(Writer):
             if microns_per_pixel
             else None
         )
+        tile_size = self.tile_size
 
         with ZarrIntermediate(
             None, reader.shape, zero_after_read=False
@@ -621,6 +622,10 @@ class TIFFWriter(Writer):
                     metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
                     metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
+                self.validate_write_args(
+                    tile_size=tile_size,
+                    resolution=resolution,
+                )
                 tif.write(
                     data=iter(reader_tile_iterator),
                     tile=self.tile_size,
@@ -669,11 +674,7 @@ class TIFFWriter(Writer):
                             desc=f"Level {level + 1}",
                             leave=False,
                         )
-                        tile_size = self.tile_size
 
-                        self.validate_write_args(
-                            tile_size=tile_size,
-                        )
                         tif.write(
                             data=iter(tile_generator),
                             tile=tile_size,
