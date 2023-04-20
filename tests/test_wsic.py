@@ -28,6 +28,7 @@ def test_jp2_to_deflate_tiled_tiff(samples_path, tmp_path):
             overwrite=False,
             tile_size=(256, 256),
             codec="deflate",
+            microns_per_pixel=(0.5, 0.5),  # the input .jp2 has no resolution box
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
 
@@ -54,6 +55,7 @@ def test_jp2_to_deflate_pyramid_tiff(samples_path, tmp_path):
             tile_size=(256, 256),
             codec="deflate",
             pyramid_downsamples=pyramid_downsamples,
+            microns_per_pixel=(0.5, 0.5),  # the input .jp2 has no resolution box
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
 
@@ -94,6 +96,7 @@ def test_no_tqdm(samples_path, tmp_path, monkeypatch):
             tile_size=(256, 256),
             codec="deflate",
             pyramid_downsamples=pyramid_downsamples,
+            microns_per_pixel=(0.5, 0.5),  # the input .jp2 has no resolution box
         )
         writer.copy_from_reader(reader=reader, num_workers=3, read_tile_size=(512, 512))
 
