@@ -751,8 +751,8 @@ class TIFFWriter(Writer):
                 resolutionunit="centimeter" if resolution else None,
             )
 
+    @staticmethod
     def validate_write_args(
-        self,
         tile_size: Tuple[int, int],
         resolution: Optional[Tuple[float, float]] = None,
     ) -> None:
