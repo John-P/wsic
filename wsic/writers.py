@@ -757,58 +757,16 @@ class TIFFWriter(Writer):
         resolution: Optional[Tuple[float, float]] = None,
     ) -> None:
         """Validate write arguments."""
+        from utils import ppu2mpp
+        from validation import check_mpp
+
         # Check that tile size is a multiple of 16
         if any(s % 16 for s in tile_size):
             raise ValueError(
                 "Tile size must be a multiple of 16 pixels for a TIFF file."
             )
-        # Check that resolution is sensible.
-        # TIFF resolution specified pixels per cm (PPCM) here,
-        # although it can also be written as pixels per inch (PPI).
-        # Senseible values for a WSI will be large, such as:
-        #  10_000, 20_000, 40_000
-        # which correspond to the microns-per-pixel (MPP) values:
-        #   1, 0.5, 0.25
-        # Common values for documents in PPI are:
-        #   72, 150, 300, 600, 1_200, 2_400
-        # In PPCM these are:
-        #   28.35, 59.06, 118.1, 236.2, 472.4, 944.9
-        if resolution is None:
-            warnings.warn(
-                "No resolution specified for output. "
-                "Resolution is a required field for a TIFF file. "
-                # This default is set by tifffile but we also set it to
-                # be sure.
-                "A default value of (1.0, 1.0) will be used.",
-                stacklevel=3,
-            )
-        elif 1 in resolution:
-            warnings.warn(
-                "Resolution contains the value 1."
-                "This may not be a sensible value for a WSI. "
-                "It may be a default set by other software. ",
-                stacklevel=3,
-            )
-        elif any(r in (72, 150, 300, 1_200, 2_400) for r in resolution):
-            warnings.warn(
-                "Resolution contains a common pixels-per-inch (PPI) value for "
-                "print documents. "
-                "This may not be a sensible value for a WSI. "
-                "It may be a default set by other software.",
-                stacklevel=3,
-            )
-        elif any(round(r) in (28, 59, 118, 236, 472, 945) for r in resolution):
-            warnings.warn(
-                "Resolution contains a common pixels-per-cm value for print documents. "
-                "This may not be a sensible value for a WSI. "
-                "It may be a default set by other software.",
-                stacklevel=3,
-            )
-        elif any(r < 5_000 for r in resolution):
-            warnings.warn(
-                "Resolution is unusually low for a WSI. ",
-                stacklevel=3,
-            )
+        for r in resolution:
+            check_mpp(mpp=ppu2mpp(r, "cm"))
 
 
 class SVSWriter(Writer):
@@ -1943,13 +1901,19 @@ class DICOMWSIWriter(Writer):
     def validate_write_args(
         microns_per_pixel: Optional[Tuple[float, float]],
     ):
+        from validation import check_mpp
+
         if microns_per_pixel is None:
             warnings.warn(
                 "Resolution (PixelSpacing) is None but it is a required "
                 "(Type 1) attribute for DICOM VL Whole Slide Image files. "
-                "A default of (1.0, 1.0) microns-per-pixel will be used.",
+                "A default of (1.0, 1.0) microns-per-mm or "
+                "(1000, 1000) microns-per-pixel will be used.",
                 stacklevel=3,
             )
+        else:
+            for r in microns_per_pixel:
+                check_mpp(r)
 
 
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
