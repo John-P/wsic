@@ -272,6 +272,13 @@ def wsic_convert(
         "--overwrite",
     ]
 
+    if out_path.suffix == ".zarr":
+        args.extend(
+            [
+                "--ome",
+            ]
+        )
+
     if resolutions > 1:
         for n in range(1, resolutions):
             args.extend(["-d", 2**n])
@@ -986,16 +993,30 @@ def run():  # noqa: CCR001
                     """Run the function."""
                     errors.add(convert_fn(in_path, out_path, codec=codec))
 
-                timer = timeit.Timer(
-                    partial(fn, errors, convert_fn, in_path, out_path, codec)
-                )
-                times = timer.repeat(repeat=REPEATS, number=1)
+                try:
+                    timer = timeit.Timer(
+                        partial(fn, errors, convert_fn, in_path, out_path, codec)
+                    )
+                    times = timer.repeat(repeat=REPEATS, number=1)
 
-                # Check that resolution was transferred
-                in_mpp, out_mpp = get_mpp(in_path), get_mpp(out_path)
+                    # Check that resolution was transferred
+                    in_mpp, out_mpp = get_mpp(in_path), get_mpp(out_path)
+                except Exception as error:  # noqa
+                    # Print error to stderr but continue
+                    stderr_path = out_dir / "mpp_stderr.log"
+                    stderr_path.write_text(str(error))
+                    # Get last line of the error message
+                    error_line = (
+                        str(error).splitlines()[-1]
+                        if str(error).splitlines()
+                        else str(error)
+                    )
+                    errors.add(f"{error_line} (see mpp err log)")
+                    in_mpp, out_mpp = None, None
+                    times = [0]
 
                 print("Took:      ", min(times), "seconds")
-                gp_per_second = gigapixels / min(times)
+                gp_per_second = gigapixels / min(times) if min(times) > 0 else 0
                 print("GP/s:      ", gp_per_second)
                 print("Errors:    ", errors)
                 print("In MPP:", in_mpp)
