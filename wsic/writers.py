@@ -1901,7 +1901,7 @@ class DICOMWSIWriter(Writer):
     def validate_write_args(
         microns_per_pixel: Optional[Tuple[float, float]],
     ):
-        from validation import check_mpp
+        from wsic.validation import check_mpp
 
         if microns_per_pixel is None:
             warnings.warn(
