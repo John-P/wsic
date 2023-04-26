@@ -856,8 +856,10 @@ def write_csv_header():
             "height",
             "gigapixels",
             "time",
-            "in_mpp",
-            "out_mpp",
+            "in_mpp_x",
+            "in_mpp_y",
+            "out_mpp_x",
+            "out_mpp_y",
             "error",
         ]
         with RESULTS_CSV_PATH.open("w") as fh:
@@ -904,8 +906,10 @@ def append_result(
                     str(height),
                     str(gigapixels),
                     str(time),
-                    f'"{in_mpp}"',
-                    f'"{out_mpp}"',
+                    str(in_mpp[0]) if in_mpp else "",
+                    str(in_mpp[1]) if in_mpp else "",
+                    str(out_mpp[0]) if out_mpp else "",
+                    str(out_mpp[1]) if out_mpp else "",
                     error or "",
                 ]
             )
