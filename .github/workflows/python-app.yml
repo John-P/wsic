@@ -35,7 +35,7 @@ jobs:
         pip install -r requirements.txt
 
     - name: Echo OpenSlide Version
-      run: openslide-quickhash1sum --version
+      run: dpkg -s libopenslide-dev | grep Version
 
     - name: Echo OpenJPEG Version
       run: opj_compress -h | head
