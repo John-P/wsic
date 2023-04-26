@@ -1,7 +1,7 @@
 """Functions used for data validation."""
 import warnings
 
-from utils import mpp2ppu
+from wsic.utils import mpp2ppu
 
 
 def check_mpp(mpp: float, warn: bool = True) -> bool:  # noqa: CCR001
