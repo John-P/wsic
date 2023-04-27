@@ -757,8 +757,8 @@ class TIFFWriter(Writer):
         resolution: Optional[Tuple[float, float]] = None,
     ) -> None:
         """Validate write arguments."""
-        from utils import ppu2mpp
-        from validation import check_mpp
+        from wsic.utils import ppu2mpp
+        from wsic.validation import check_mpp
 
         # Check that tile size is a multiple of 16
         if any(s % 16 for s in tile_size):
