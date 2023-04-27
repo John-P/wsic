@@ -812,6 +812,7 @@ class ZarrReader(Reader):
             self.axes = "".join(  # noqa: ECE001
                 axis.name for axis in self.zattrs.multiscales[0].axes
             ).upper()
+            self.microns_per_pixel = self._get_mpp_ngff()
         # Use the given axes if not None
         self.axes = axes or self.axes
 
@@ -864,3 +865,22 @@ class ZarrReader(Reader):
                 ],
             ),
         )
+
+    def _get_mpp_ngff(self) -> Optional[Tuple[float, float]]:
+        multiscale = self.zattrs.multiscales[0]
+        axes = multiscale.axes
+        units = [axis.unit for axis in axes]
+        space_axes = [axis.type == "space" for axis in axes]
+        dataset = multiscale.datasets[0]
+        transforms = dataset.coordinateTransformations
+        for transform in transforms:
+            if transform.type == "scale":
+                mpp = [
+                    ppu2mpp(float(value), units)
+                    for value, units, is_space in zip(
+                        transform.scale, units, space_axes
+                    )
+                    if is_space
+                ]
+                return tuple(mpp)
+        return None
