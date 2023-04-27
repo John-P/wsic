@@ -432,7 +432,8 @@ def create_vl_wsi_dataset(
         tile_size:
             The size of tiles in pixels as a tuple of (width, height).
         microns_per_pixel:
-            The microns per pixel as a tuple of (x, y).
+            The microns per pixel as a tuple of (x, y). Defaults to
+            (1, 1) pixels per mm (1000 microns per pixel).
         photometric_interpretation:
             The photometric interpretation of the image.
 
@@ -442,11 +443,15 @@ def create_vl_wsi_dataset(
         raise ValueError("size must be a tuple of (width, height)")
     if len(tile_size) != 2:
         raise ValueError("tile_size must be a tuple of (width, height)")
-    if len(microns_per_pixel) != 2:
+    if microns_per_pixel and len(microns_per_pixel) != 2:
         raise ValueError("microns_per_pixel must be a tuple of (x, y)")
 
     # Convert MPP to mm spacing
-    pixels_per_mm = [1 / mpp2ppu(x, "mm") for x in microns_per_pixel]
+    pixels_per_mm = (
+        [1 / mpp2ppu(x, "mm") for x in microns_per_pixel]
+        if microns_per_pixel
+        else (1, 1)
+    )
 
     # Calculate mosaic size
     mosaic_size = (
