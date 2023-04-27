@@ -1386,8 +1386,8 @@ class ZarrWriter(Writer, Reader):
                         )
                     ],
                     axes=[
-                        ngff.Axis("y", "space", "micronmeter"),
-                        ngff.Axis("x", "space", "micronmeter"),
+                        ngff.Axis("y", "space", "micrometer"),
+                        ngff.Axis("x", "space", "micrometer"),
                         ngff.Axis("c", "channel", None),
                     ],
                 )
