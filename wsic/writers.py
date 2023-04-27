@@ -765,6 +765,15 @@ class TIFFWriter(Writer):
             raise ValueError(
                 "Tile size must be a multiple of 16 pixels for a TIFF file."
             )
+        # Check if resolution is present
+        if not resolution:
+            warnings.warn(
+                "No resolution data. Output file will not have any "
+                "resolution metadata.",
+                stacklevel=2,
+            )
+            return
+        # Check that resolution is a sensible value
         for r in resolution:
             check_mpp(mpp=ppu2mpp(r, "cm"))
 
