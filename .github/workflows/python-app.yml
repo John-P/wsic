@@ -34,6 +34,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Echo OpenSlide Version
+      run: dpkg -s libopenslide-dev | grep Version
+
+    - name: Echo OpenJPEG Version
+      run: opj_compress -h | head
+
+    - name: List PIP Package Versions
+      run: |
+        pip list
+
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
