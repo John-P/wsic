@@ -809,8 +809,8 @@ class ZarrReader(Reader):
         self.zattrs = None
         if self.is_ngff:
             self.zattrs = self._load_zattrs()
-            self.axes = "".join(
-                multiscale.axis.name for multiscale in self.zattrs.multiscales
+            self.axes = "".join(  # noqa: ECE001
+                axis.name for axis in self.zattrs.multiscales[0].axes
             ).upper()
         # Use the given axes if not None
         self.axes = axes or self.axes
@@ -824,8 +824,9 @@ class ZarrReader(Reader):
 
     def _load_zattrs(self) -> ngff.Zattrs:
         """Load the zarr attrs dictionary into dataclasses."""
+        zattrs = self.zarr.attrs
         return ngff.Zattrs(
-            _creator=ngff.Creator(**self.zattrs.get("_creator")),
+            _creator=ngff.Creator(**zattrs.get("_creator")),
             multiscales=[
                 ngff.Multiscale(
                     axes=[ngff.Axis(**axis) for axis in multiscale.get("axes", [])],
@@ -852,7 +853,6 @@ class ZarrReader(Reader):
                 name=self.zarr.attrs.get("omero", {}).get("name"),
                 channels=[
                     ngff.Channel(
-                        name=channel.get("name"),
                         coefficient=channel.get("coefficient"),
                         color=channel.get("color"),
                         family=channel.get("family"),
@@ -860,7 +860,7 @@ class ZarrReader(Reader):
                         label=channel.get("label"),
                         window=ngff.Window(**channel.get("window", {})),
                     )
-                    for channel in self.zattrs.get("omero", {}).get("channels", [])
+                    for channel in zattrs.get("omero", {}).get("channels", [])
                 ],
             ),
         )
