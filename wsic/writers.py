@@ -622,6 +622,8 @@ class TIFFWriter(Writer):
                     metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
                     metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
+                resolution = resolution or (1.0, 1.0)
+
                 self.validate_write_args(
                     tile_size=tile_size,
                     resolution=resolution,
@@ -634,7 +636,7 @@ class TIFFWriter(Writer):
                     photometric=self.color_space,
                     compression=(self.codec.condensed(), self.compression_level),
                     # tifffile uses 1.0 by default but we also set it explicitly
-                    resolution=resolution or (1.0, 1.0),
+                    resolution=resolution,
                     # Default unit is inches if resolution is not None
                     resolutionunit="centimeter" if resolution else None,
                     subifds=len(self.pyramid_downsamples),
@@ -727,6 +729,10 @@ class TIFFWriter(Writer):
             metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
             metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
+        # Fall back to (1.0, 1.0) as a resolution is required.
+        # tifffile uses 1.0 by default but we also set it explicitly
+        resolution = resolution or (1.0, 1.0)
+
         self.validate_write_args(
             tile_size=tile_size,
             resolution=resolution,
@@ -745,8 +751,7 @@ class TIFFWriter(Writer):
                 jpegtables=reader.jpeg_tables,
                 compression=reader.codec.condensed(),
                 metadata=metadata,
-                # tifffile uses 1.0 by default but we also set it explicitly
-                resolution=resolution or (1.0, 1.0),
+                resolution=resolution,
                 # Default unit is inches if resolution is not None
                 resolutionunit="centimeter" if resolution else None,
             )
@@ -1789,9 +1794,10 @@ class DICOMWSIWriter(Writer):
         photometric_interpretation = (
             ColorSpace.YCBCR.to_dicom_photometric_interpretation((4, 2, 2))
         )
-        mpp = self.microns_per_pixel or reader.microns_per_pixel
+        mpp: Tuple[float, float] = (
+            self.microns_per_pixel or reader.microns_per_pixel or (1.0, 1.0)
+        )
         self.validate_write_args(microns_per_pixel=mpp)
-        mpp: Tuple[float, float] = mpp or (1.0, 1.0)
 
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
@@ -1864,9 +1870,10 @@ class DICOMWSIWriter(Writer):
                 (4, 2, 2) if reader.color_space == ColorSpace.YCBCR else None
             )
         )
-        mpp = self.microns_per_pixel or reader.microns_per_pixel
+        mpp: Tuple[float, float] = (
+            self.microns_per_pixel or reader.microns_per_pixel or (1.0, 1.0)
+        )
         self.validate_write_args(microns_per_pixel=mpp)
-        mpp: Tuple[float, float] = mpp or (1.0, 1.0)
 
         if reader.codec != Codec.JPEG:
             raise ValueError(
