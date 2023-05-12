@@ -991,7 +991,9 @@ def run():  # noqa: CCR001
                     codec: str,
                 ) -> None:
                     """Run the function."""
-                    errors.add(convert_fn(in_path, out_path, codec=codec))
+                    error = convert_fn(in_path, out_path, codec=codec)
+                    if error:
+                        errors.add(error)
 
                 try:
                     timer = timeit.Timer(
@@ -1037,7 +1039,7 @@ def run():  # noqa: CCR001
                     time=min(times),
                     in_mpp=in_mpp,
                     out_mpp=out_mpp,
-                    error=errors.pop() if errors else None,
+                    error=str(errors) if errors else "",
                 )
 
 
