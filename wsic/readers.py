@@ -774,7 +774,7 @@ class ZarrReader(Reader):
     """Reader for zarr files."""
 
     def __init__(
-        self, path: PathLike | zarr.storage.StoreLike, axes: Optional[str] = None
+        self, path: Union[PathLike, zarr.storage.StoreLike], axes: Optional[str] = None
     ) -> None:
         super().__init__(path)
         register_codecs()
