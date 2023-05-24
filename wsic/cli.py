@@ -77,7 +77,6 @@ def get_writer_class(out_path: Path, writer: str) -> wsic.writers.Writer:
 
 
 def get_store(
-    self,
     store: str,
     path: Union[str, Path],
     **store_kwargs,
@@ -85,7 +84,7 @@ def get_store(
     if store == "dir":
         return zarr.DirectoryStore(path, **store_kwargs)
     if store == "ndir":
-        return zarr.NestedDirectoryStore(self.path, **store_kwargs)
+        return zarr.NestedDirectoryStore(path, **store_kwargs)
     if store == "zip":
         return zarr.ZipStore(path, **store_kwargs)
     if store == "sqlite":
