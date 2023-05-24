@@ -1252,9 +1252,12 @@ class ZarrWriter(Writer, Reader):
         self.overwrite = overwrite
         register_codecs()
         self.compressor = self.get_codec(codec, compression_level)
+        # If only path is given, pass this to zarr.open
         if store is None:
             store = path
-        elif path is not None and path != store.path:
+        # Else check that if path is not None, it matches store.path (if
+        # store has a path attr).
+        elif path is not None and (not hasattr(store, "path") or path != store.path):
             raise ValueError(
                 "ZarrWriter path {path} not None and does not match "
                 f"store path {store.path}"
