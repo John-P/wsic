@@ -94,8 +94,10 @@ TIFF.](https://github.com/John-P/wsic/raw/main/docs/_static/wsic_convert_demo.gi
 
 ### Write Container Formats
 
-- Generic Tiled / Pyramid TIFF
-- OME-TIFF
+- TIFF
+  - Generic Tiled / Pyramid TIFF
+  - OME-TIFF
+  - SVS
 - JP2
 - Zarr (NGFF v0.4)
 - DICOM (.dcm)
