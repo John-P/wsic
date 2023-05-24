@@ -2,7 +2,9 @@
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
+
+import zarr
 
 try:
     import click
@@ -72,6 +74,23 @@ def get_writer_class(out_path: Path, writer: str) -> wsic.writers.Writer:
             Writer class.
     """
     return ext2writer[out_path.suffix] if writer == "auto" else writers[writer]
+
+
+def get_store(
+    self,
+    store: str,
+    path: Union[str, Path],
+    **store_kwargs,
+) -> zarr.storage.StoreLike:
+    if store == "dir":
+        return zarr.DirectoryStore(path, **store_kwargs)
+    if store == "ndir":
+        return zarr.NestedDirectoryStore(self.path, **store_kwargs)
+    if store == "zip":
+        return zarr.ZipStore(path, **store_kwargs)
+    if store == "sqlite":
+        return zarr.SQLiteStore(path, **store_kwargs)
+    raise ValueError(f"Unknown store {store}")
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -189,6 +208,20 @@ def main(ctx):
     ),
     default="auto",
 )
+@click.option(
+    "-s",
+    "--store",
+    help="The store to use (zarr/NGFF only). Defaults to ndir (nested directory).",
+    type=click.Choice(
+        [
+            "dir",
+            "ndir",
+            "zip",
+            "sqlite",
+        ]
+    ),
+    default="ndir",
+)
 def convert(
     in_path: str,
     out_path: str,
@@ -203,6 +236,7 @@ def convert(
     overwrite: bool,
     timeout: float,
     writer: str,
+    store: str,
 ):
     """Convert a WSI."""
     in_path = Path(in_path)
@@ -214,6 +248,11 @@ def convert(
         reader.performance_check()
 
     writer_cls = get_writer_class(out_path, writer)
+
+    extra_kwargs = {}
+    if isinstance(writer_cls, wsic.writers.ZarrWriter):
+        extra_kwargs["store"] = get_store(store)
+
     writer = writer_cls(
         out_path,
         shape=reader.shape,
@@ -224,6 +263,7 @@ def convert(
         overwrite=overwrite,
         microns_per_pixel=microns_per_pixel,
         ome=ome,
+        **extra_kwargs,
     )
     writer.copy_from_reader(
         reader, read_tile_size=read_tile_size, num_workers=workers, timeout=timeout
@@ -378,6 +418,21 @@ def thumbnail(
         "Failed to save thumbnail with any of: cv2, PIL. "
         "Please check your installation."
     )
+
+
+@main.command(no_args_is_help=True)
+@click.argument("in_path", type=click.Path(exists=True))
+def identify(in_path: click.Path) -> None:
+    """Identify the file type using magic."""
+    in_path = Path(in_path)
+    file_types = magic.summon_file_types(in_path)
+    if not file_types:
+        raise click.BadParameter(
+            f"File type of {in_path} could not be identified",
+            param_hint="in_path",
+        )
+    for file_type in file_types:
+        click.echo("/".join(file_type))
 
 
 if __name__ == "__main__":
