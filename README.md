@@ -54,71 +54,51 @@ TIFF.](https://github.com/John-P/wsic/raw/main/docs/_static/wsic_convert_demo.gi
 
 ## Features
 
-- Read image data from:
-  - [OpenSlide](https://openslide.org/) Formats:
-    - Aperio SVS (.svs)
-    - Hamamatsu (.vms, .vmu, .ndpi)
-    - Leica (.scn)
-    - Mirax MRXS (.mrxs)
-    - Sakura (.svslide)
-    - Trestle (.tif)
-    - Ventana (.bif, .tif)
-    - Generic tiled TIFF (.tif; DEFLATE, JPEG, and Webp
-      compressed)
-  - Other Tiled TIFFs
-    ([tifffile](https://github.com/cgohlke/tifffile) supported
-    formats)
-    - E.g. JPEG XL compressed
-  - [OME-TIFF](https://docs.openmicroscopy.org/ome-model/5.6.3/ome-tiff/)
-    (via ([tifffile](https://github.com/cgohlke/tifffile))
-  - [JP2](https://jpeg.org/jpeg2000/) (via
-    [glymur](https://glymur.readthedocs.io/en/latest/) and
-    [OpenJPEG](https://www.openjpeg.org/))
-  - [Zarr](https://zarr.readthedocs.io/en/stable/) / NGFF (single
-    array or pyramid group of arrays)
-  - [DICOM WSI](https://dicom.nema.org/dicom/dicomwsi/) (via
-    [wsidicom](https://github.com/imi-bigpicture/wsidicom))
-- Write image data to:
-  - Tiled / Pyramid Generic TIFF
-  - OME-TIFF
-  - JP2
-  - Pyramid Zarr (NGFF)
+- Reading and writing several container formats.
+- Support for a wide range of compression codecs.
 - Custom tile size
-- Compression codecs
-- Lossless repackaging / transcoding (to zarr/NGFF) from:
+- Lossless repackaging / transcoding (to zarr/NGFF or TIFF) from:
   - SVS (JPEG compressed)
   - OME-TIFF (single image, JPEG and JPEG2000 (J2K) compressed)
   - Generic Tiled TIFF (JPEG, JPEG2000, and WebP compressed)
   - DICOM WSI (JPEG and JPEG2000 (J2K) compressed)
 
-## Dependencies
+### Read Container Formats
 
-- numpy
-- zarr
-- click (CLI)
+- [OpenSlide](https://openslide.org/) Formats:
+  - Aperio SVS (.svs)
+  - Hamamatsu (.vms, .vmu, .ndpi)
+  - Leica (.scn)
+  - Mirax MRXS (.mrxs)
+  - Sakura (.svslide)
+  - Trestle (.tif)
+  - Ventana (.bif, .tif)
+  - Generic tiled TIFF (.tif; DEFLATE, JPEG, and Webp
+    compressed)
+- Other Tiled TIFFs
+  ([tifffile](https://github.com/cgohlke/tifffile) supported
+  formats)
+  - Tiled with various codecs: e.g. JPEG XL, JPEG 2000, WebP, and zstd.
+  - RGB/brightfield [OME-TIFF](https://docs.openmicroscopy.org/ome-model/5.6.3/ome-tiff/).
+- [JP2](https://jpeg.org/jpeg2000/) (via
+  [glymur](https://glymur.readthedocs.io/en/latest/) and
+  [OpenJPEG](https://www.openjpeg.org/))
+  - Including Omnyx JP2 files.
+- [Zarr](https://zarr.readthedocs.io/en/stable/)
+  - Single array.
+  - Group of (multiresolution) arrays.
+  - [NGFF v0.4](https://ngff.openmicroscopy.org/0.4/index.html).
+- [DICOM WSI](https://dicom.nema.org/dicom/dicomwsi/) (via
+  [wsidicom](https://github.com/imi-bigpicture/wsidicom))
+  - [DICOM VL Whole Slide Image IODs](https://dicom.innolitics.com/ciods/vl-whole-slide-microscopy-image).
 
-### Optional Dependencies
+### Write Container Formats
 
-- [OpenSlide](https://openslide.org/) and
-  [openslide-python](https://pypi.org/project/openslide-python/)
-  (reading OpenSlide Formats)
-- [tifffile](https://github.com/cgohlke/tifffile) (reading tiled
-  TIFFs)
-- [wsidicom](https://github.com/imi-bigpicture/wsidicom) (reading
-  DICOM WSI)
-- [glymur](https://glymur.readthedocs.io/en/latest/) and
-  [OpenJPEG](https://www.openjpeg.org/) (reading JP2)
-- [tqdm](https://github.com/tqdm/tqdm) (progress bars)
-- [scipy](https://www.scipy.org/) (faster pyramid downsampling)
-- [opencv-python](https://pypi.org/project/opencv-python/) (even
-  faster pyramid downsampling)
-- [imagecodecs](https://github.com/cgohlke/imagecodecs) (additional
-  codecs and transcoding)
-
-## To-Dos
-
-For a list of To-Dos see [the project
-board](https://github.com/users/John-P/projects/1/views/1).
+- Generic Tiled / Pyramid TIFF
+- OME-TIFF
+- JP2
+- Zarr (NGFF v0.4)
+- DICOM (.dcm)
 
 ## Other Tools
 
