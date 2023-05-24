@@ -769,9 +769,8 @@ def test_write_read_sqlite_store_zarr(samples_path, tmp_path):
     """Test writing and reading a Zarr with an SQLite store."""
     reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     writer = writers.ZarrWriter(
-        path=tmp_path / "test.zarr.sqlite",
         shape=reader.shape,
-        store=zarr.SQLiteStore,
+        store=zarr.SQLiteStore(tmp_path / "test.zarr.sqlite"),
     )
     writer.copy_from_reader(reader=reader)
     writer.close()
@@ -800,24 +799,12 @@ def test_write_read_temp_store_zarr(samples_path):
     """Test writing and reading a Zarr with a Temp store."""
     reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
     writer = writers.ZarrWriter(
-        path="test.zarr",
         shape=reader.shape,
-        store=zarr.TempStore,
+        store=zarr.TempStore("test.zarr"),
     )
     writer.copy_from_reader(reader=reader)
 
     readers.ZarrReader(writer.zarr.store)
-
-
-def test_write_read_temp_store_zarr_absolute_path(samples_path):
-    """Test writing and reading a Zarr with a Temp store."""
-    reader = readers.TIFFReader(samples_path / "CMU-1-Small-Region.svs")
-    with pytest.raises(ValueError, match="absolute"):
-        writers.ZarrWriter(
-            path="/other/test.zarr",
-            shape=reader.shape,
-            store=zarr.TempStore,
-        )
 
 
 # Test Scenarios
