@@ -9,6 +9,8 @@ from typing import Iterable, List, Literal, Optional, Tuple, Union
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import JPEGBaseline, VLWholeSlideMicroscopyImageStorage, generate_uid
 
+from wsic.utils import mpp2ppu
+
 PathLike = Union[Path, str]
 FileLike = Union[PathLike, BytesIO]
 
@@ -415,6 +417,7 @@ def brightfield_optical_path_sequence(
 def create_vl_wsi_dataset(
     size: Tuple[int, int],
     tile_size: Tuple[int, int],
+    microns_per_pixel: Tuple[float, float],
     photometric_interpretation: Literal["RGB", "YBR_FULL_422"] = "YBR_FULL_422",
 ) -> Tuple[FileMetaDataset, Dataset]:
     """Create a VL Whole Slide Microscopy Image Storage dataset.
@@ -428,10 +431,29 @@ def create_vl_wsi_dataset(
             height).
         tile_size:
             The size of tiles in pixels as a tuple of (width, height).
+        microns_per_pixel:
+            The microns per pixel as a tuple of (x, y). Defaults to
+            (1, 1) pixels per mm (1000 microns per pixel).
         photometric_interpretation:
             The photometric interpretation of the image.
 
     """
+    # Input validation and conversion
+    if len(size) != 2:
+        raise ValueError("size must be a tuple of (width, height)")
+    if len(tile_size) != 2:
+        raise ValueError("tile_size must be a tuple of (width, height)")
+    if microns_per_pixel and len(microns_per_pixel) != 2:
+        raise ValueError("microns_per_pixel must be a tuple of (x, y)")
+
+    # Convert MPP to mm spacing
+    pixels_per_mm = (
+        [1 / mpp2ppu(x, "mm") for x in microns_per_pixel]
+        if microns_per_pixel
+        else (1, 1)
+    )
+
+    # Calculate mosaic size
     mosaic_size = (
         ceil(size[0] / tile_size[0]),
         ceil(size[1] / tile_size[1]),
@@ -528,7 +550,7 @@ def create_vl_wsi_dataset(
     shared_functional_groups.ReferencedImageSequence = []
     pixel_measures = Dataset()
     pixel_measures.SliceThickness = 1.0  # Type 1
-    pixel_measures.PixelSpacing = [0.0016, 0.0016]  # in mm, Type 1
+    pixel_measures.PixelSpacing = pixels_per_mm  # in mm, Type 1
     shared_functional_groups.PixelMeasuresSequence = [pixel_measures]
     wsi_image_frame_type = Dataset()
     wsi_image_frame_type.FrameType = ["ORIGINAL", "PRIMARY", "VOLUME", "NONE"]  # Type 1

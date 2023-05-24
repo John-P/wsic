@@ -592,11 +592,11 @@ class TIFFWriter(Writer):
             (
                 round(mpp2ppu(microns_per_pixel[0], "cm")),
                 round(mpp2ppu(microns_per_pixel[1], "cm")),
-                "CENTIMETER",
             )
             if microns_per_pixel
             else None
         )
+        tile_size = self.tile_size
 
         with ZarrIntermediate(
             None, reader.shape, zero_after_read=False
@@ -622,6 +622,12 @@ class TIFFWriter(Writer):
                     metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
                     metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
+                resolution = resolution or (1.0, 1.0)
+
+                self.validate_write_args(
+                    tile_size=tile_size,
+                    resolution=resolution,
+                )
                 tif.write(
                     data=iter(reader_tile_iterator),
                     tile=self.tile_size,
@@ -629,8 +635,10 @@ class TIFFWriter(Writer):
                     dtype=reader.dtype,
                     photometric=self.color_space,
                     compression=(self.codec.condensed(), self.compression_level),
+                    # tifffile uses 1.0 by default but we also set it explicitly
                     resolution=resolution,
-                    resolutionunit="centimeter",
+                    # Default unit is inches if resolution is not None
+                    resolutionunit="centimeter" if resolution else None,
                     subifds=len(self.pyramid_downsamples),
                     metadata=metadata,
                 )
@@ -671,7 +679,7 @@ class TIFFWriter(Writer):
 
                         tif.write(
                             data=iter(tile_generator),
-                            tile=self.tile_size,
+                            tile=tile_size,
                             shape=level_shape,
                             dtype=reader.dtype,
                             photometric=self.color_space,
@@ -700,7 +708,6 @@ class TIFFWriter(Writer):
             (
                 round(mpp2ppu(microns_per_pixel[0], "cm")),
                 round(mpp2ppu(microns_per_pixel[1], "cm")),
-                "CENTIMETER",
             )
             if microns_per_pixel
             else None
@@ -722,7 +729,14 @@ class TIFFWriter(Writer):
             metadata["PhysicalSizeX"] = self.microns_per_pixel[0]
             metadata["PhysicalSizeY"] = self.microns_per_pixel[1]
 
-        # Copy baseline tiles
+        # Fall back to (1.0, 1.0) as a resolution is required.
+        # tifffile uses 1.0 by default but we also set it explicitly
+        resolution = resolution or (1.0, 1.0)
+
+        self.validate_write_args(
+            tile_size=tile_size,
+            resolution=resolution,
+        )
         with tifffile.TiffWriter(
             self.path,
             bigtiff=True,
@@ -738,7 +752,35 @@ class TIFFWriter(Writer):
                 compression=reader.codec.condensed(),
                 metadata=metadata,
                 resolution=resolution,
+                # Default unit is inches if resolution is not None
+                resolutionunit="centimeter" if resolution else None,
             )
+
+    @staticmethod
+    def validate_write_args(
+        tile_size: Tuple[int, int],
+        resolution: Optional[Tuple[float, float]] = None,
+    ) -> None:
+        """Validate write arguments."""
+        from wsic.utils import ppu2mpp
+        from wsic.validation import check_mpp
+
+        # Check that tile size is a multiple of 16
+        if any(s % 16 for s in tile_size):
+            raise ValueError(
+                "Tile size must be a multiple of 16 pixels for a TIFF file."
+            )
+        # Check if resolution is present
+        if not resolution:
+            warnings.warn(
+                "No resolution data. Output file will not have any "
+                "resolution metadata.",
+                stacklevel=2,
+            )
+            return
+        # Check that resolution is a sensible value
+        for r in resolution:
+            check_mpp(mpp=ppu2mpp(r, "cm"))
 
 
 class SVSWriter(Writer):
@@ -1349,8 +1391,8 @@ class ZarrWriter(Writer, Reader):
                         )
                     ],
                     axes=[
-                        ngff.Axis("y", "space", "micronmeter"),
-                        ngff.Axis("x", "space", "micronmeter"),
+                        ngff.Axis("y", "space", "micrometer"),
+                        ngff.Axis("x", "space", "micrometer"),
                         ngff.Axis("c", "channel", None),
                     ],
                 )
@@ -1552,6 +1594,7 @@ class ZarrWriter(Writer, Reader):
             return Webp(level=level)
         # Out of options
         raise ValueError(
+            f"Codec {reader.codec} is not supported for transcoding. "
             "Currently only JPEG, J2K (JPEG-2000), and WebP compression "
             " are supported for transcoding."
         )
@@ -1751,10 +1794,15 @@ class DICOMWSIWriter(Writer):
         photometric_interpretation = (
             ColorSpace.YCBCR.to_dicom_photometric_interpretation((4, 2, 2))
         )
+        mpp: Tuple[float, float] = (
+            self.microns_per_pixel or reader.microns_per_pixel or (1.0, 1.0)
+        )
+        self.validate_write_args(microns_per_pixel=mpp)
 
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
+            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1822,6 +1870,10 @@ class DICOMWSIWriter(Writer):
                 (4, 2, 2) if reader.color_space == ColorSpace.YCBCR else None
             )
         )
+        mpp: Tuple[float, float] = (
+            self.microns_per_pixel or reader.microns_per_pixel or (1.0, 1.0)
+        )
+        self.validate_write_args(microns_per_pixel=mpp)
 
         if reader.codec != Codec.JPEG:
             raise ValueError(
@@ -1831,6 +1883,7 @@ class DICOMWSIWriter(Writer):
         meta, dataset = create_vl_wsi_dataset(
             size=(width, height),
             tile_size=self.tile_size,
+            microns_per_pixel=mpp,
             photometric_interpretation=photometric_interpretation,
         )
 
@@ -1859,6 +1912,24 @@ class DICOMWSIWriter(Writer):
                 yield reader.get_tile(xy, decode=False)
 
         append_frames(self.path, tile_generator(), tile_count)
+
+    @staticmethod
+    def validate_write_args(
+        microns_per_pixel: Optional[Tuple[float, float]],
+    ):
+        from wsic.validation import check_mpp
+
+        if microns_per_pixel is None:
+            warnings.warn(
+                "Resolution (PixelSpacing) is None but it is a required "
+                "(Type 1) attribute for DICOM VL Whole Slide Image files. "
+                "A default of (1.0, 1.0) microns-per-mm or "
+                "(1000, 1000) microns-per-pixel will be used.",
+                stacklevel=3,
+            )
+        else:
+            for r in microns_per_pixel:
+                check_mpp(r)
 
 
 def _cv2_downsample(image: np.ndarray, factor: int) -> np.ndarray:
