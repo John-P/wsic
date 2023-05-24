@@ -1,7 +1,7 @@
 import multiprocessing
 import warnings
 from abc import ABC, abstractmethod
-from contextlib import suppress
+from contextlib import nullcontext, suppress
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Tuple, Union
 
@@ -15,7 +15,9 @@ from wsic.magic import summon_file_types
 from wsic.metadata import ngff
 from wsic.typedefs import PathLike
 from wsic.utils import (
+    TimeoutWarning,
     block_downsample_shape,
+    main_process,
     mean_pool,
     mosaic_shape,
     ppu2mpp,
@@ -526,28 +528,24 @@ class DICOMWSIReader(Reader):
             path (Path):
                 Path to file.
         """
-        import threading
-
         from pydicom import Dataset
         from wsidicom import WsiDicom
 
         super().__init__(path)
 
-        # Set up a time to print a message if the file takes a while to open
-        timer = threading.Timer(
-            5,
-            lambda: print(
-                "Looks like this is taking a while..."
-                "if your DICOM file has a 'DimensionOrganizationType' "
-                "of 'TILED_SPARSE',  this may be causing it to be slow."
-            ),
+        # Set up a timeout warning for slow sparse tiled files
+        sparse_tiled_warning = TimeoutWarning(
+            "Looks like this is taking a while..."
+            "if your DICOM file has a 'DimensionOrganizationType' "
+            "of 'TILED_SPARSE',  this may be causing it to be slow.",
+            timeout=1,
         )
-        timer.start()
-        # Open the file, this will take a while if the file is sparse tiled
-        self.slide = WsiDicom.open(self.path)
-        # Cancel the timer if it hasn't already fired
-        timer.cancel()
-        self.performance_check()
+        context = sparse_tiled_warning if main_process() else nullcontext()
+
+        with context:
+            # Open the file, this will take a while if the file is sparse tiled
+            self.slide = WsiDicom.open(self.path)
+
         channels = len(self.slide.read_tile(0, (0, 0)).getbands())
         self.shape = (self.slide.size.height, self.slide.size.width, channels)
         self.dtype = np.uint8
@@ -811,9 +809,10 @@ class ZarrReader(Reader):
         self.zattrs = None
         if self.is_ngff:
             self.zattrs = self._load_zattrs()
-            self.axes = "".join(
-                multiscale.axis.name for multiscale in self.zattrs.multiscales
+            self.axes = "".join(  # noqa: ECE001
+                axis.name for axis in self.zattrs.multiscales[0].axes
             ).upper()
+            self.microns_per_pixel = self._get_mpp_ngff()
         # Use the given axes if not None
         self.axes = axes or self.axes
 
@@ -826,8 +825,9 @@ class ZarrReader(Reader):
 
     def _load_zattrs(self) -> ngff.Zattrs:
         """Load the zarr attrs dictionary into dataclasses."""
+        zattrs = self.zarr.attrs
         return ngff.Zattrs(
-            _creator=ngff.Creator(**self.zattrs.get("_creator")),
+            _creator=ngff.Creator(**zattrs.get("_creator")),
             multiscales=[
                 ngff.Multiscale(
                     axes=[ngff.Axis(**axis) for axis in multiscale.get("axes", [])],
@@ -854,7 +854,6 @@ class ZarrReader(Reader):
                 name=self.zarr.attrs.get("omero", {}).get("name"),
                 channels=[
                     ngff.Channel(
-                        name=channel.get("name"),
                         coefficient=channel.get("coefficient"),
                         color=channel.get("color"),
                         family=channel.get("family"),
@@ -862,7 +861,26 @@ class ZarrReader(Reader):
                         label=channel.get("label"),
                         window=ngff.Window(**channel.get("window", {})),
                     )
-                    for channel in self.zattrs.get("omero", {}).get("channels", [])
+                    for channel in zattrs.get("omero", {}).get("channels", [])
                 ],
             ),
         )
+
+    def _get_mpp_ngff(self) -> Optional[Tuple[float, float]]:
+        multiscale = self.zattrs.multiscales[0]
+        axes = multiscale.axes
+        units = [axis.unit for axis in axes]
+        space_axes = [axis.type == "space" for axis in axes]
+        dataset = multiscale.datasets[0]
+        transforms = dataset.coordinateTransformations
+        for transform in transforms:
+            if transform.type == "scale":
+                mpp = [
+                    ppu2mpp(float(value), units)
+                    for value, units, is_space in zip(
+                        transform.scale, units, space_axes
+                    )
+                    if is_space
+                ]
+                return tuple(mpp)
+        return None

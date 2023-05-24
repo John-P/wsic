@@ -6,11 +6,11 @@ from typing import Optional, Tuple
 
 try:
     import click
-except ImportError:
+except ImportError as error:
     raise ImportError(
         "Click is required to use wsic from the command line. "
         "Install with `pip install click` or `conda install click`."
-    )
+    ) from error
 
 import wsic
 from wsic import magic
@@ -21,8 +21,8 @@ class MutuallyExclusiveOption(click.Option):
 
     def __init__(self, *args, **kwargs):
         self.mutually_exclusive = set(kwargs.pop("mutually_exclusive", []))
-        mutually_exclusive_str = ", ".join(self.mutually_exclusive)
         if self.mutually_exclusive:
+            mutually_exclusive_str = ", ".join(self.mutually_exclusive)
             kwargs["help"] = kwargs.get("help", "") + (
                 " Note: This argument is mutually exclusive with "
                 f" arguments: [{mutually_exclusive_str}]."
@@ -71,9 +71,7 @@ def get_writer_class(out_path: Path, writer: str) -> wsic.writers.Writer:
         wsic.writers.Writer:
             Writer class.
     """
-    if writer == "auto":
-        return ext2writer[out_path.suffix]
-    return writers[writer]
+    return ext2writer[out_path.suffix] if writer == "auto" else writers[writer]
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -210,6 +208,11 @@ def convert(
     in_path = Path(in_path)
     out_path = Path(out_path)
     reader = wsic.readers.Reader.from_file(in_path)
+
+    # Special case for DICOMWSIReader
+    if isinstance(reader, wsic.readers.DICOMWSIReader):
+        reader.performance_check()
+
     writer_cls = get_writer_class(out_path, writer)
     writer = writer_cls(
         out_path,
@@ -263,6 +266,7 @@ def transcode(
         reader = wsic.readers.DICOMWSIReader(
             in_path,
         )
+        reader.performance_check()
     else:
         suffixes = "".join(in_path.suffixes)
         raise click.BadParameter(
@@ -355,11 +359,9 @@ def thumbnail(
     reader = wsic.readers.Reader.from_file(in_path)
     if downsample is not None:
         out_shape = tuple(x / downsample for x in reader.shape[:2])
-        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
     else:
         out_shape = size[::-1]
-        thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
-
+    thumbnail_image = reader.thumbnail(out_shape, approx_ok=approx_ok)
     with suppress(ImportError):
         import cv2
 
@@ -372,7 +374,7 @@ def thumbnail(
         PIL.Image.fromarray(thumbnail_image).save(out_path)
         return
 
-    raise Exception(
+    raise ImportError(
         "Failed to save thumbnail with any of: cv2, PIL. "
         "Please check your installation."
     )

@@ -1,5 +1,29 @@
 # History
 
+## 0.8.2 (2023-04-02)
+
+- Bug fixes:
+  - Fix issue where `DICOMWSIReader` required user input at init.
+  - Fix level offset when printing the level number during `TIFFWriter` pyramid building.
+  - Refactor slow `DICOMWSIReader` init warning and only warn from the main process.
+
+## 0.8.0 (2023-04-01)
+
+- Add DICOM writer.
+- Avoid decoding entire TIFF before conversion starts.
+- TIFFReader can now expose a dask array view (using tiffile Zarr view
+  underneath).
+- Add overwrite option to transcode CLI mode.
+- Refactor to use persistent worker subprocesses. This avoids recreating
+  the reader object for each region read. For some reader such as
+  DICOMWSIReader this significantly improves performance.
+- General refactoring and code cleanup.
+- Bug fixes:
+  - Fix writing MPP for SVSWriter.
+  - Remove OpenSlide thumbnail generation method. This would cause the
+    process to run out of memory for some files and the base
+    implementation works just as well without this memory issue.
+
 ## 0.7.0 (2022-12-15)
 
 - Normalise TIFF array axes (to YXC order) when reading using tiffile.

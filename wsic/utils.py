@@ -1,4 +1,5 @@
 import inspect
+import threading
 import warnings
 from contextlib import suppress
 from math import ceil, floor
@@ -152,9 +153,7 @@ def varnames(
     )
     if not squeeze or len(var_names) > 1:
         return var_names
-    if len(var_names) == 1:
-        return var_names[0]
-    return None
+    return var_names[0] if len(var_names) == 1 else None
 
 
 def warn_unused(
@@ -485,65 +484,13 @@ def resize_array(
         zoom_kwargs = {"mode": "reflect"}
 
     with suppress(ImportError):
-        import cv2
-
-        str_to_cv2_interpolation = {
-            "nearest": cv2.INTER_NEAREST,
-            "bilinear": cv2.INTER_LINEAR,
-            "bicubic": cv2.INTER_CUBIC,
-            "box": cv2.INTER_AREA,
-            "area": cv2.INTER_AREA,
-            "lanczos": cv2.INTER_LANCZOS4,
-        }
-        cv2_interpolation = str_to_cv2_interpolation[interpolation]
-
-        out_size = tuple(int(x) for x in shape[::-1])
-        return cv2.resize(
-            array, out_size, interpolation=cv2_interpolation, **(cv2_kwargs or {})
-        )
+        return cv2_resize(array, shape, interpolation, cv2_kwargs)
 
     with suppress(ImportError):
-        from PIL import Image
-
-        str_to_pillow_interpolation = {
-            "nearest": Image.Resampling.NEAREST,
-            "bilinear": Image.Resampling.BILINEAR,
-            "bicubic": Image.Resampling.BICUBIC,
-            "box": Image.Resampling.BOX,
-            "area": Image.Resampling.BOX,
-            "lanczos": Image.Resampling.LANCZOS,
-        }
-        pil_interpolation = str_to_pillow_interpolation[interpolation]
-
-        return np.array(
-            Image.fromarray(array).resize(
-                shape[::-1],
-                resample=pil_interpolation,
-                **(pil_kwargs or {}),
-            )
-        )
+        return pillow_resize(array, shape, interpolation, pil_kwargs)
 
     with suppress(ImportError):
-        from scipy import ndimage
-
-        str_to_order = {
-            "nearest": 0,
-            "bilinear": 1,
-            "bicubic": 3,
-            "box": 2,
-            "area": 2,
-            "lanczos": 4,
-        }
-        order = str_to_order[interpolation]
-        zoom = np.divide(shape, array.shape[:2])
-        zoom = np.append(zoom, 1)
-
-        return ndimage.zoom(
-            array,
-            zoom,
-            order=order,
-            **(zoom_kwargs or {}),
-        )
+        return scipy_resize(array, shape, interpolation, zoom_kwargs)
 
     warnings.warn(
         "Neither OpenCV nor scipy are installed for image resizing. "
@@ -554,3 +501,168 @@ def resize_array(
     y = np.linspace(0, array.shape[0], shape[0], endpoint=False).round().astype(int)
     x = np.linspace(0, array.shape[1], shape[1], endpoint=False).round().astype(int)
     return array[np.ix_(y, x)]
+
+
+def cv2_resize(
+    array: np.ndarray,
+    shape: Tuple[int, ...],
+    interpolation: str,
+    cv2_kwargs: Dict[str, Any],
+):
+    """Resize an array using `cv2.resize`.
+
+    Args:
+        array (np.ndarray):
+            The array to resize.
+        shape (Tuple[int, ...]):
+            The shape of the output array.
+        interpolation (str):
+            The interpolation method to use.
+        cv2_kwargs (Dict[str, Any]):
+            Keyword arguments to pass to `cv2.resize`.
+
+    Returns:
+        np.ndarray:
+            The resized array.
+    """
+    import cv2
+
+    str_to_cv2_interpolation = {
+        "nearest": cv2.INTER_NEAREST,
+        "bilinear": cv2.INTER_LINEAR,
+        "bicubic": cv2.INTER_CUBIC,
+        "box": cv2.INTER_AREA,
+        "area": cv2.INTER_AREA,
+        "lanczos": cv2.INTER_LANCZOS4,
+    }
+    cv2_interpolation = str_to_cv2_interpolation[interpolation]
+
+    out_size = tuple(int(x) for x in shape[::-1])
+    return cv2.resize(
+        array, out_size, interpolation=cv2_interpolation, **(cv2_kwargs or {})
+    )
+
+
+def pillow_resize(
+    array: np.ndarray,
+    shape: Tuple[int, ...],
+    interpolation: str,
+    pil_kwargs: Dict[str, Any],
+) -> np.ndarray:
+    """Resize an array using `PIL.Image.resize`.
+
+    Args:
+        array (np.ndarray):
+            The array to resize.
+        shape (Tuple[int, ...]):
+            The shape of the output array.
+        interpolation (str):
+            The interpolation method to use.
+        pil_kwargs (Dict[str, Any]):
+            Keyword arguments to pass to `PIL.Image.resize`.
+
+    Returns:
+        np.ndarray:
+            The resized array.
+    """
+    from PIL import Image
+
+    str_to_pillow_interpolation = {
+        "nearest": Image.NEAREST,
+        "bilinear": Image.BILINEAR,
+        "bicubic": Image.BICUBIC,
+        "box": Image.BOX,
+        "area": Image.BOX,
+        "lanczos": Image.LANCZOS,
+    }
+    pil_interpolation = str_to_pillow_interpolation[interpolation]
+
+    return np.array(
+        Image.fromarray(array).resize(
+            shape[::-1],
+            resample=pil_interpolation,
+            **(pil_kwargs or {}),
+        )
+    )
+
+
+def scipy_resize(
+    array: np.ndarray,
+    shape: Tuple[int, ...],
+    interpolation: str,
+    zoom_kwargs: Dict[str, Any],
+) -> np.ndarray:
+    """Resize an array using `scipy.ndimage.zoom`.
+
+    Args:
+        array (np.ndarray):
+            The array to resize.
+        shape (Tuple[int, ...]):
+            The shape of the output array.
+        interpolation (str):
+            The interpolation method to use.
+        zoom_kwargs (Dict[str, Any]):
+            Keyword arguments to pass to `scipy.ndimage.zoom`.
+            Defaults to `{"mode": "reflect"}`.
+
+    Returns:
+        np.ndarray:
+            The resized array.
+    """
+    from scipy import ndimage
+
+    str_to_order = {
+        "nearest": 0,
+        "bilinear": 1,
+        "bicubic": 3,
+        "box": 2,
+        "area": 2,
+        "lanczos": 4,
+    }
+    order = str_to_order[interpolation]
+    zoom = np.divide(shape, array.shape[:2])
+    zoom = np.append(zoom, 1)
+
+    return ndimage.zoom(
+        array,
+        zoom,
+        order=order,
+        **(zoom_kwargs or {}),
+    )
+
+
+class TimeoutWarning:
+    """Context manager that warns if the context takes too long to execute.
+
+    Args:
+        message (str):
+            The warning message to display.
+        timeout (float):
+            The timeout in seconds.
+        stacklevel (int):
+            The stacklevel to pass to `warnings.warn`.
+    """
+
+    def __init__(self, message: str, timeout: float = 0.1, stacklevel: int = 5):
+        self.timeout = timeout
+
+        def warning_callback():
+            """Deferred warning message."""
+            warnings.warn(message, RuntimeWarning, stacklevel=stacklevel)
+
+        self.timer = threading.Timer(self.timeout, warning_callback)
+
+    def __enter__(self):
+        """Start the timer."""
+        self.timer.start()
+
+    def __exit__(self, *args):
+        """Cancel the timer if the function finishes before the timeout."""
+        self.timer.cancel()
+
+
+def main_process() -> bool:
+    """Return whether the current process is the main process."""
+    import multiprocessing
+
+    return multiprocessing.current_process().name == "MainProcess"
