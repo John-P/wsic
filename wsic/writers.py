@@ -1259,8 +1259,7 @@ class ZarrWriter(Writer, Reader):
         # store has a path attr).
         elif path is not None and (not hasattr(store, "path") or path != store.path):
             raise ValueError(
-                "ZarrWriter path {path} not None and does not match "
-                f"store path {store.path}"
+                f"ZarrWriter path {path} not None and does not match " f"store {store}"
             )
         if store is None:
             raise ValueError("ZarrWriter requires either path or store")
