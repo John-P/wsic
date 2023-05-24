@@ -251,7 +251,7 @@ def convert(
 
     extra_kwargs = {}
     if isinstance(writer_cls, wsic.writers.ZarrWriter):
-        extra_kwargs["store"] = get_store(store)
+        extra_kwargs["store"] = get_store(store, path=out_path)
 
     writer = writer_cls(
         out_path,
