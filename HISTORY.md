@@ -1,5 +1,17 @@
 # History
 
+## 0.9.0 (2023-05-25)
+
+- Update documentation.
+- Bump dependencies.
+- Improved validation of TIFF write arguments.
+- Add ability to speciy store when writing Zarr e.g. zarr.SQliteStore.
+- Update CLI:
+  - New `-s` argment for `convert` to specify store for zarr.
+- Bug fixes:
+  - Fix MPP writing for .dcm files.
+  - Fix parsing of NGFF metadata (zattrs JSON), including getting MPP.
+
 ## 0.8.2 (2023-04-02)
 
 - Bug fixes:
