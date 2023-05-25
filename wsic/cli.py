@@ -177,7 +177,7 @@ def main(ctx):
 @click.option(
     "-ome",
     "--ome/--no-ome",
-    help="Save with OME-TIFF metadata (OME-XML).",
+    help="Save with OME-TIFF metadata (OME-TIFF and NGFF).",
     default=False,
 )
 @click.option(
