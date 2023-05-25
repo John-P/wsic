@@ -20,7 +20,7 @@ and breaking changes.**
 Provides a command line interface (CLI) for easy convertion between
 formats:
 
-```bash
+```
 Usage: wsic convert [OPTIONS]
 
   Convert a WSI.
@@ -54,6 +54,11 @@ Options:
 
 ![A demonstration of converting a JP2 file to a pyramid
 TIFF.](https://github.com/John-P/wsic/raw/main/docs/_static/wsic_convert_demo.gif)
+
+## Getting Started
+
+For basic usage see the documentation page ["How do
+I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
 
 ## Features
 
