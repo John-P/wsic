@@ -16,8 +16,9 @@ Extension  Format
 =========  ===========
 .tiff      Tiled TIFF
 .svs       Aperio SVS
-.zarr      Zarr
+.zarr      Zarr/NGFF
 .jp2       JPEG2000
+.dcm       DICOM
 =========  ===========
 
 You can also use the WSIC API to do this programmatically. For example:
