@@ -76,7 +76,7 @@ Codec       Level
 =========  ===========================
 JPEG       'Quality' (0-100)
 JPEG XL    'Effort' / Speed
-JPEG-LS    Max Mean Average Error (MAE)
+JPEG-LS    Maximum Absolute Error (MAE)
 JPEG 2000  PSNR (db)
 PNG        'Effort' / Speed
 Zstd       'Effort' / Speed
