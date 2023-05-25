@@ -110,8 +110,9 @@ I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
 
 # Notes & FAQs
 
-Python on Windows handles multiprocessing differenly to POSIX/UNIX-like
-systems. I suggest using the [Windows Subsystem for
+Python on [Windows handles multiprocessing
+differenly](https://docs.python.org/2/library/multiprocessing.html#windows)
+to POSIX/UNIX-like systems. I suggest using the [Windows Subsystem for
 Linux](https://learn.microsoft.com/en-us/windows/wsl/about) on windows
 to ensure that wsic functions correctly and efficiently.
 
