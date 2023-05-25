@@ -108,6 +108,13 @@ I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
 - Zarr (NGFF v0.4)
 - DICOM (.dcm)
 
+# Notes & FAQs
+
+Python on Windows handles multiprocessing differenly to POSIX/UNIX-like
+systems. I suggest using the [Windows Subsystem for
+Linux](https://learn.microsoft.com/en-us/windows/wsl/about) on windows
+to ensure that wsic functions correctly and efficiently.
+
 # Other Tools
 
 There are many other great tools in this space. Below are some other
