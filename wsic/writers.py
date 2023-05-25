@@ -86,7 +86,7 @@ class Writer(ABC):
 
     def __init__(
         self,
-        path: PathLike,
+        path: Optional[PathLike],
         shape: Tuple[int, int],
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
@@ -98,7 +98,7 @@ class Writer(ABC):
         overwrite: bool = False,
         verbose: bool = False,
     ):
-        self.path = Path(path)
+        self.path = Path(path) if path is not None else path
         self.shape = shape
         self.tile_size = tile_size
         self.dtype = dtype
@@ -112,7 +112,7 @@ class Writer(ABC):
         self.overwrite = overwrite
         self.verbose = verbose
 
-        if self.path.exists() and not self.overwrite:
+        if path is not None and self.path.exists() and not self.overwrite:
             raise FileExistsError(f"{self.path} already exists")
 
     def reader_tile_iterator(
@@ -1175,8 +1175,9 @@ class ZarrWriter(Writer, Reader):
     """Zarr reader and writer.
 
     Args:
-        path (PathLike):
-            Path to the output zarr.
+        path (PathLike, optional):
+            Path to the output zarr. May be None if `store` is
+            provided.
         shape (Tuple[int, int]):
             Shape of the output zarr.
         tile_size (Tuple[int, int], optional):
@@ -1206,12 +1207,19 @@ class ZarrWriter(Writer, Reader):
         ome (bool):
             Write OME-NGFF metadata. Defaults to False.
             Currently not implemented.
-
+        store (zarr.StoreLike, optional):
+            Zarr storage backend to use. Defaults to None, which passes
+            the `path` argument `zarr.open`. May be a string or a
+            zarr.StoreLike instance (e.g. MutableMapping). If None, the
+            path is passed to the `zarr.open` convenince function. See
+            https://zarr.readthedocs.io/en/stable/api/storage.html and
+            https://zarr.readthedocs.io/en/stable/api/convenience.html
+            for more information.
     """
 
     def __init__(
         self,
-        path: Path,
+        path: Optional[Path] = None,
         shape: Tuple[int, int] = None,
         tile_size: Tuple[int, int] = (256, 256),
         dtype: np.dtype = np.uint8,
@@ -1224,6 +1232,7 @@ class ZarrWriter(Writer, Reader):
         verbose: bool = False,
         *,
         ome: bool = False,
+        store: Optional[zarr.storage.StoreLike] = None,
     ) -> None:
         warn_unused(microns_per_pixel)
         super().__init__(
@@ -1243,7 +1252,18 @@ class ZarrWriter(Writer, Reader):
         self.overwrite = overwrite
         register_codecs()
         self.compressor = self.get_codec(codec, compression_level)
-        self.zarr = zarr.open(self.path, mode="a")
+        # If only path is given, pass this to zarr.open
+        if store is None:
+            store = path
+        # Else check that if path is not None, it matches store.path (if
+        # store has a path attr).
+        elif path is not None and (not hasattr(store, "path") or path != store.path):
+            raise ValueError(
+                f"ZarrWriter path {path} not None and does not match " f"store {store}"
+            )
+        if store is None:
+            raise ValueError("ZarrWriter requires either path or store")
+        self.zarr = zarr.open(store, mode="a")
         self.tile_shape = tile_size[::-1]
 
     @property
@@ -1598,6 +1618,11 @@ class ZarrWriter(Writer, Reader):
             "Currently only JPEG, J2K (JPEG-2000), and WebP compression "
             " are supported for transcoding."
         )
+
+    def close(self) -> None:
+        """Close the writer."""
+        if hasattr(self.zarr.store, "close"):
+            self.zarr.store.close()
 
 
 class ZarrIntermediate(Writer, Reader):
