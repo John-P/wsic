@@ -2,7 +2,7 @@
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import zarr
 
@@ -43,24 +43,40 @@ class MutuallyExclusiveOption(click.Option):
         return super(MutuallyExclusiveOption, self).handle_parse_result(ctx, opts, args)
 
 
-ext2writer = {
-    ".jp2": wsic.writers.JP2Writer,
-    ".tiff": wsic.writers.TIFFWriter,
-    ".zarr": wsic.writers.ZarrWriter,
-    ".svs": wsic.writers.SVSWriter,
-    ".dcm": wsic.writers.DICOMWSIWriter,
-}
+def infer_writer(path: Path) -> Tuple[wsic.writers.Writer, Dict[str, Any]]:
+    """Infer writer from output path.
 
-writers = {
-    "jp2": wsic.writers.JP2Writer,
-    "tiff": wsic.writers.TIFFWriter,
-    "zarr": wsic.writers.ZarrWriter,
-    "svs": wsic.writers.SVSWriter,
-    "dcm": wsic.writers.DICOMWSIWriter,
-}
+    Args:
+        path: Output path.
+
+    Returns:
+        Writer class and kwargs.
+    """
+    suffixes = [part.lower() for part in path.suffixes]
+
+    if suffixes[-2:] in ([".ome", ".tiff"], [".ome", ".tif"]):
+        return wsic.writers.TIFFReader, {"ome": True}
+    if suffixes[-2:] == [".zarr", ".zip"]:
+        return wsic.writers.ZarrWriter, {"store": get_store("zip", path)}
+
+    if suffixes[-1] == ".jp2":
+        return wsic.writers.JP2Writer, {}
+    if suffixes[-1] == ".svs":
+        return wsic.writers.SVSWriter, {}
+    if suffixes[-1] == ".dcm":
+        return wsic.writers.DICOMWSIWriter, {}
+    if suffixes[-1] == ".zarr":
+        return wsic.writers.ZarrWriter, {"store": get_store("ndir", path)}
+    if suffixes[-1] == ".ngff":
+        return wsic.writers.ZarrWriter, {"ome": True, "store": get_store("ndir", path)}
+    if suffixes[-1] in (".tif", ".tiff"):
+        return wsic.writers.TIFFWriter, {}
+    raise ValueError(f"Unknown output path {path}")
 
 
-def get_writer_class(out_path: Path, writer: str) -> wsic.writers.Writer:
+def get_writer_class(
+    out_path: Path, writer: str
+) -> Tuple[wsic.writers.Writer, Dict[str, Any]]:
     """Get writer class for given extension and writer.
 
     Args:
@@ -70,10 +86,16 @@ def get_writer_class(out_path: Path, writer: str) -> wsic.writers.Writer:
             Writer.
 
     Returns:
-        wsic.writers.Writer:
-            Writer class.
+        Writer class and kwargs.
     """
-    return ext2writer[out_path.suffix] if writer == "auto" else writers[writer]
+    writers = {
+        "dcm": wsic.writers.DICOMWSIWriter,
+        "jp2": wsic.writers.JP2Writer,
+        "svs": wsic.writers.SVSWriter,
+        "tiff": wsic.writers.TIFFWriter,
+        "zarr": wsic.writers.ZarrWriter,
+    }
+    return infer_writer(out_path) if writer == "auto" else (writers[writer], {})
 
 
 def get_store(
@@ -177,7 +199,7 @@ def main(ctx):
 @click.option(
     "-ome",
     "--ome/--no-ome",
-    help="Save with OME-TIFF metadata (OME-XML).",
+    help="Save with OME-TIFF metadata (OME-TIFF and NGFF).",
     default=False,
 )
 @click.option(
@@ -219,7 +241,7 @@ def main(ctx):
             "sqlite",
         ]
     ),
-    default="ndir",
+    default=None,
 )
 def convert(
     in_path: str,
@@ -235,7 +257,7 @@ def convert(
     overwrite: bool,
     timeout: float,
     writer: str,
-    store: str,
+    store: Optional[str],
 ):
     """Convert a WSI."""
     in_path = Path(in_path)
@@ -246,10 +268,8 @@ def convert(
     if isinstance(reader, wsic.readers.DICOMWSIReader):
         reader.performance_check()
 
-    writer_cls = get_writer_class(out_path, writer)
-
-    extra_kwargs = {}
-    if isinstance(writer_cls, wsic.writers.ZarrWriter):
+    writer_cls, extra_kwargs = get_writer_class(out_path, writer)
+    if isinstance(writer_cls, wsic.writers.ZarrWriter) and store is not None:
         extra_kwargs["store"] = get_store(store, path=out_path)
 
     writer = writer_cls(
@@ -267,6 +287,9 @@ def convert(
     writer.copy_from_reader(
         reader, read_tile_size=read_tile_size, num_workers=workers, timeout=timeout
     )
+    # Important to close for some writers e.g. zarr zips
+    if hasattr(writer, "close"):
+        writer.close()
 
 
 @main.command(no_args_is_help=True)

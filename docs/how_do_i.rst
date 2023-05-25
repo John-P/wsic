@@ -71,16 +71,16 @@ JP2     JPEG2000
 Interpretation of Level Option
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-========  =================
-Codec      Level
-========  =================
-JPEG      'Quality' (0-100)
-JPEG XL   'Effort' / Speed
-JPEG-LS   Max MAE
-JPEG2000  PSNR (db)
-PNG       'Effort' / Speed
-Zstd      'Effort' / Speed
-========  =================
+=========  ===========================
+Codec       Level
+=========  ===========================
+JPEG       'Quality' (0-100)
+JPEG XL    'Effort' / Speed
+JPEG-LS    Maximum Absolute Error (MAE)
+JPEG 2000  PSNR (db)
+PNG        'Effort' / Speed
+Zstd       'Effort' / Speed
+=========  ===========================
 
 
 ...add pyramid/resolution levels?

@@ -1257,7 +1257,9 @@ class ZarrWriter(Writer, Reader):
             store = path
         # Else check that if path is not None, it matches store.path (if
         # store has a path attr).
-        elif path is not None and (not hasattr(store, "path") or path != store.path):
+        elif path is not None and (
+            not hasattr(store, "path") or Path(path) != Path(store.path)
+        ):
             raise ValueError(
                 f"ZarrWriter path {path} not None and does not match " f"store {store}"
             )
