@@ -37,7 +37,7 @@ class Reader(ABC):
             path (PathLike):
                 Path to file.
         """
-        self.path = Path(path)
+        self.path = path
 
     @abstractmethod
     def __getitem__(self, index: Tuple[Union[int, slice], ...]) -> np.ndarray:
@@ -773,10 +773,12 @@ class OpenSlideReader(Reader):
 class ZarrReader(Reader):
     """Reader for zarr files."""
 
-    def __init__(self, path: PathLike, axes: Optional[str] = None) -> None:
+    def __init__(
+        self, path: Union[PathLike, zarr.storage.StoreLike], axes: Optional[str] = None
+    ) -> None:
         super().__init__(path)
         register_codecs()
-        self.zarr = zarr.open(str(path), mode="r")
+        self.zarr = zarr.open(path, mode="r")
         # Currently mpp not stored in zarr, could use xarray metadata
         # for this or custom wsic metadata
         self.microns_per_pixel = None
