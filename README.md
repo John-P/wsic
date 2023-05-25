@@ -40,7 +40,8 @@ Options:
   -d, --downsample INTEGER        The downsample factor to use.
   -mpp, --microns-per-pixel <FLOAT FLOAT>...
                                   The microns per pixel to use.
-  -ome, --ome / --no-ome          Save with OME-TIFF metadata (OME-XML).
+  -ome, --ome / --no-ome          Save with OME-TIFF metadata (OME-TIFF and
+                                  NGFF).
   --overwrite / --no-overwrite    Whether to overwrite the output file.
   -to, --timeout FLOAT            Timeout in seconds for reading a tile.
   -W, --writer [auto|jp2|svs|tiff|zarr]
