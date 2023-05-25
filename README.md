@@ -53,12 +53,12 @@ Options:
 ![A demonstration of converting a JP2 file to a pyramid
 TIFF.](https://github.com/John-P/wsic/raw/main/docs/_static/wsic_convert_demo.gif)
 
-## Getting Started
+# Getting Started
 
 For basic usage see the documentation page ["How do
 I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
 
-## Features
+# Features
 
 - Reading and writing several container formats.
 - Support for a wide range of compression codecs.
@@ -69,7 +69,7 @@ I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
   - Generic Tiled TIFF (JPEG, JPEG2000, and WebP compressed)
   - DICOM WSI (JPEG and JPEG2000 (J2K) compressed)
 
-### Read Container Formats
+## Read Container Formats
 
 - [OpenSlide](https://openslide.org/) Formats:
   - Aperio SVS (.svs)
@@ -98,7 +98,7 @@ I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
   [wsidicom](https://github.com/imi-bigpicture/wsidicom))
   - [DICOM VL Whole Slide Image IODs](https://dicom.innolitics.com/ciods/vl-whole-slide-microscopy-image).
 
-### Write Container Formats
+## Write Container Formats
 
 - TIFF
   - Generic Tiled / Pyramid TIFF
@@ -108,37 +108,37 @@ I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
 - Zarr (NGFF v0.4)
 - DICOM (.dcm)
 
-## Other Tools
+# Other Tools
 
 There are many other great tools in this space. Below are some other
 tools for converting WSIs.
 
-### bfconvert
+## bfconvert
 
 Part of the Bio-Formats command line tools. Uses bioformats to convert
 from many formats to OME-TIFF.
 
 <https://www.openmicroscopy.org/bio-formats/downloads/>
 
-### biofromats2raw
+## biofromats2raw
 
 Convert from Bio-Formats formats to zarr.
 
 <https://github.com/glencoesoftware/bioformats2raw>
 
-### isyntax2raw
+## isyntax2raw
 
 Convert from Philips' iSyntax format to a zarr.
 
 <https://github.com/glencoesoftware/isyntax2raw>
 
-### wsidicomiser
+## wsidicomiser
 
 Convert OpenSlide images to WSI DICOM.
 
 <https://github.com/sectra-medical/wsidicomizer>
 
-## Credits
+# Credits
 
 This package was created with
 [Cookiecutter](https://github.com/audreyr/cookiecutter) and the
