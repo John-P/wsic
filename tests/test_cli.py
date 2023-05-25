@@ -180,3 +180,22 @@ def test_transcode_bad_output_file_ext(samples_path, tmp_path):
             catch_exceptions=False,
         )
     assert result.exit_code == 2
+
+
+def test_convert_svs_to_zarr_zip(samples_path, tmp_path):
+    """Test the CLI for converting SVS to zipped zarr."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
+        in_path = str(samples_path / "CMU-1-Small-Region.svs")
+        out_path = str(Path(td) / "CMU-1-Small-Region.zarr.zip")
+        result = runner.invoke(
+            cli.convert,
+            ["-i", in_path, "-o", out_path, "-s", "zip"],
+            catch_exceptions=False,
+        )
+    assert result.exit_code == 0
+
+    import zipfile
+
+    with zipfile.ZipFile(out_path, "r") as zf:
+        zf.testzip()
