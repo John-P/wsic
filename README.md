@@ -17,7 +17,7 @@ Whole Slide Image (WSI) conversion for brightfield histology images.
 Provides a command line interface (CLI) for easy convertion between
 formats:
 
-```bash
+```
 Usage: wsic convert [OPTIONS]
 
   Convert a WSI.
