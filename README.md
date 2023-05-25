@@ -40,17 +40,26 @@ Options:
   -d, --downsample INTEGER        The downsample factor to use.
   -mpp, --microns-per-pixel <FLOAT FLOAT>...
                                   The microns per pixel to use.
-  -ome, --ome / --no-ome          Save with OME-TIFF metadata (OME-XML).
+  -ome, --ome / --no-ome          Save with OME-TIFF metadata (OME-TIFF and
+                                  NGFF).
   --overwrite / --no-overwrite    Whether to overwrite the output file.
   -to, --timeout FLOAT            Timeout in seconds for reading a tile.
   -W, --writer [auto|jp2|svs|tiff|zarr]
                                   The writer to use. Overrides writer detected
                                   by output file extension.
+  -s, --store [dir|ndir|zip|sqlite]
+                                  The store to use (zarr/NGFF only). Defaults
+                                  to ndir (nested directory).
   -h, --help                      Show this message and exit.
 ```
 
 ![A demonstration of converting a JP2 file to a pyramid
 TIFF.](https://github.com/John-P/wsic/raw/main/docs/_static/wsic_convert_demo.gif)
+
+## Getting Started
+
+For basic usage see the documentation page ["How do
+I...?"](https://wsic.readthedocs.io/en/latest/how_do_i.html).
 
 ## Features
 
