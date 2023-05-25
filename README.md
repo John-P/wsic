@@ -46,6 +46,9 @@ Options:
   -W, --writer [auto|jp2|svs|tiff|zarr]
                                   The writer to use. Overrides writer detected
                                   by output file extension.
+  -s, --store [dir|ndir|zip|sqlite]
+                                  The store to use (zarr/NGFF only). Defaults
+                                  to ndir (nested directory).
   -h, --help                      Show this message and exit.
 ```
 
