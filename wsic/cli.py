@@ -114,22 +114,6 @@ def get_store(
     raise ValueError(f"Unknown store {store}")
 
 
-def get_store(
-    store: str,
-    path: Union[str, Path],
-    **store_kwargs,
-) -> zarr.storage.StoreLike:
-    if store == "dir":
-        return zarr.DirectoryStore(path, **store_kwargs)
-    if store == "ndir":
-        return zarr.NestedDirectoryStore(path, **store_kwargs)
-    if store == "zip":
-        return zarr.ZipStore(path, **store_kwargs)
-    if store == "sqlite":
-        return zarr.SQLiteStore(path, **store_kwargs)
-    raise ValueError(f"Unknown store {store}")
-
-
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(wsic.__version__)
 @click.pass_context
