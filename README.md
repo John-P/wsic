@@ -20,7 +20,7 @@ and breaking changes.**
 Provides a command line interface (CLI) for easy convertion between
 formats:
 
-```
+```bash
 Usage: wsic convert [OPTIONS]
 
   Convert a WSI.
