@@ -167,6 +167,18 @@ FILE_INCANTATIONS = {
             Spell(b"DICM", 128),
         ],
     ),
+    ("zip",): Incantation(
+        spells=[
+            # ZIP signature
+            Spell(b"PK\x03\x04"),
+        ],
+    ),
+    ("sqlite3",): Incantation(
+        spells=[
+            # SQLite3 signature
+            Spell(b"SQLite format 3\x00"),
+        ],
+    ),
 }
 
 
@@ -187,8 +199,9 @@ def _perform_dir_incantations(path: Path):
         if sub_path.is_dir():
             continue
         with sub_path.open("rb") as file_handle:
+            # DCM has a 128 byte pre-amble followed by "DICM"
             header = file_handle.read(128 + 4)
-        if Spell(b"DICM", 128).perform(header):
+        if Spell(b"DICM", offset=128).perform(header):
             return [("dicom",)]
     return []
 
@@ -222,7 +235,7 @@ def summon_file_types(
 ) -> List[Tuple[str, ...]]:
     """Perform a series of incantations to determine the file types.
 
-    A list of types is returned becuse the file may contain multiple
+    A list of types is returned because the file may contain multiple
     magic numbers or patterns. E.g. a file may be
 
     Args:
