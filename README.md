@@ -121,30 +121,13 @@ to ensure that wsic functions correctly and efficiently.
 There are many other great tools in this space. Below are some other
 tools for converting WSIs.
 
-## bfconvert
-
+1. **[bfconvert](https://www.openmicroscopy.org/bio-formats/downloads/)**
 Part of the Bio-Formats command line tools. Uses bioformats to convert
 from many formats to OME-TIFF.
-
-<https://www.openmicroscopy.org/bio-formats/downloads/>
-
-## biofromats2raw
-
+1. **[biofromats2raw](https://github.com/glencoesoftware/bioformats2raw)**
 Convert from Bio-Formats formats to zarr.
-
-<https://github.com/glencoesoftware/bioformats2raw>
-
-## isyntax2raw
-
-Convert from Philips' iSyntax format to a zarr.
-
-<https://github.com/glencoesoftware/isyntax2raw>
-
-## wsidicomiser
-
-Convert OpenSlide images to WSI DICOM.
-
-<https://github.com/sectra-medical/wsidicomizer>
+1. **[isyntax2raw](https://github.com/glencoesoftware/isyntax2raw)** Convert from Philips' iSyntax format to a zarr using Philips' SDK.
+1. **[wsidicomiser](https://github.com/sectra-medical/wsidicomizer)** Convert OpenSlide images to WSI DICOM.
 
 # Credits
 
