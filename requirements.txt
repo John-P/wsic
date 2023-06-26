@@ -11,7 +11,7 @@ numpy>=1.21.5
 opencv-python>=4.5.5
 openslide-python>=1.1.2
 pip==23.1.2
-pytest==7.3.1
+pytest==7.4.0
 pytest-cov>=3.0.0
 pytest-timeout
 scipy>=1.7.3
