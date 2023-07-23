@@ -9,6 +9,8 @@
 Status](https://readthedocs.org/projects/pip/badge/?version=stable)](https://wsic.readthedocs.io/en/latest/)
 
 [![image](https://img.shields.io/pypi/v/wsic)](https://pypi.org/project/wsic/)
+[![pypi Downloads](https://static.pepy.tech/personalized-badge/wsic?period=total&units=international_system&left_color=grey&right_color=green&left_text=downloads)](https://pepy.tech/project/wsic)
+
 [![image](https://codecov.io/gh/John-P/wsic/branch/main/graph/badge.svg?token=ICCWDKJG5J)](https://codecov.io/gh/John-P/wsic)
 [![image](https://deepsource.io/gh/John-P/wsic.svg/?label=active+issues&show_trend=true&token=D-sO1mhzQv1n9FPl0RFaAfGt)](https://deepsource.io/gh/John-P/wsic/?ref=repository-badge)
 
