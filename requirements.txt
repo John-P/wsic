@@ -22,4 +22,4 @@ watchdog==3.0.0
 wheel==0.40.0
 wsidicom>=0.4.0
 xarray
-zarr==2.14.2
+zarr==2.16.1
