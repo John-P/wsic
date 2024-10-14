@@ -1,4 +1,5 @@
 """Detect file type by searching for signatures (magic numbers)."""
+
 import mmap
 import re
 from dataclasses import dataclass
