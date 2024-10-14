@@ -1,4 +1,5 @@
 """Tests for the color space enum."""
+
 import pytest
 
 import wsic

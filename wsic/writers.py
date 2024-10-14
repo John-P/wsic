@@ -1395,18 +1395,20 @@ class ZarrWriter(Writer, Reader):
                     datasets=[
                         ngff.Dataset(
                             path=str(level),
-                            coordinateTransformations=[
-                                ngff.CoordinateTransformation(
-                                    "scale",
-                                    [
-                                        mpp[0] * downsample,
-                                        mpp[1] * downsample,
-                                        1,
-                                    ],
-                                )
-                            ]
-                            if mpp is not None
-                            else [ngff.CoordinateTransformation("identity")],
+                            coordinateTransformations=(
+                                [
+                                    ngff.CoordinateTransformation(
+                                        "scale",
+                                        [
+                                            mpp[0] * downsample,
+                                            mpp[1] * downsample,
+                                            1,
+                                        ],
+                                    )
+                                ]
+                                if mpp is not None
+                                else [ngff.CoordinateTransformation("identity")]
+                            ),
                         )
                         for level, downsample in enumerate(
                             [1] + self.pyramid_downsamples
