@@ -31,7 +31,9 @@ from wsic.codecs import register_codecs
 from wsic.enums import Codec, ColorSpace
 from wsic.metadata import ngff
 from wsic.readers import DICOMWSIReader, Reader, TIFFReader
-from wsic.tile_iterators import DaskTileIterator
+from wsic.tile_iterators import (
+    DaskTileIterator,
+)
 from wsic.tile_iterators import (
     PersistentMultiProcessTileIterator as MultiProcessTileIterator,
 )
@@ -1395,18 +1397,20 @@ class ZarrWriter(Writer, Reader):
                     datasets=[
                         ngff.Dataset(
                             path=str(level),
-                            coordinateTransformations=[
-                                ngff.CoordinateTransformation(
-                                    "scale",
-                                    [
-                                        mpp[0] * downsample,
-                                        mpp[1] * downsample,
-                                        1,
-                                    ],
-                                )
-                            ]
-                            if mpp is not None
-                            else [ngff.CoordinateTransformation("identity")],
+                            coordinateTransformations=(
+                                [
+                                    ngff.CoordinateTransformation(
+                                        "scale",
+                                        [
+                                            mpp[0] * downsample,
+                                            mpp[1] * downsample,
+                                            1,
+                                        ],
+                                    )
+                                ]
+                                if mpp is not None
+                                else [ngff.CoordinateTransformation("identity")]
+                            ),
                         )
                         for level, downsample in enumerate(
                             [1] + self.pyramid_downsamples
