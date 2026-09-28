@@ -1,4 +1,5 @@
 """Console script for wsic."""
+
 import sys
 from contextlib import suppress
 from pathlib import Path

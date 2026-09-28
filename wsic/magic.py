@@ -1,4 +1,5 @@
 """Detect file type by searching for signatures (magic numbers)."""
+
 import mmap
 import re
 from dataclasses import dataclass
@@ -277,8 +278,7 @@ def summon_file_types(
 
 def pentagram() -> None:
     """Print a pentagram."""
-    print(
-        """
+    print("""
             @@@@@@@@@@@@
         @@@@            @@@@
       @@ ##              ## @@
@@ -299,5 +299,4 @@ def pentagram() -> None:
       @@        #  #        @@
         @@@@     ##     @@@@
             @@@@@@@@@@@@
-    """
-    )
+    """)
