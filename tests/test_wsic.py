@@ -1,4 +1,5 @@
 """Tests for `wsic` package."""
+
 import sys
 import warnings
 from pathlib import Path
@@ -1230,12 +1231,14 @@ class TestConvertScenarios:
             out_path,
             shape=reader.shape,
             codec=codec,
-            compression_level=4
-            if codec
-            in {
-                "blosc",
-            }
-            else 100,
+            compression_level=(
+                4
+                if codec
+                in {
+                    "blosc",
+                }
+                else 100
+            ),
         )
         writer.copy_from_reader(
             reader,
