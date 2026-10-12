@@ -1,4 +1,5 @@
 """Enumerated types used by wsic."""
+
 from enum import Enum
 from numbers import Number
 from typing import Any, Dict, Optional, Tuple
