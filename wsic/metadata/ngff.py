@@ -3,6 +3,7 @@
 Based on version 0.4 of the specification:
 https://ngff.openmicroscopy.org/0.4/
 """
+
 import sys
 from dataclasses import dataclass, field
 from numbers import Number
